@@ -52,7 +52,7 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
   const { project, visible, derived, exportExcel } = useApp();
   const [scope, setScope] = useState<'selected' | 'shown' | 'all'>(project.selection.length ? 'selected' : 'shown');
   const [graphIds, setGraphIds] = useState(project.graphs.filter((g) => g.cycleIds.length).map((g) => g.id));
-  const [processed, setProcessed] = useState(project.view === 'processed' || project.view === 'compare');
+  const [processed, setProcessed] = useState(project.settings.exclusionRule !== 'keepAll' || Object.keys(project.excludedPoints).length > 0);
   const ids =
     scope === 'selected' ? project.selection.filter((id) => derived.results.has(id)) : scope === 'shown' ? visible.map((r) => r.cycle.cycleId) : derived.ordered.map((r) => r.cycle.cycleId);
   const points = ids.reduce((s, id) => s + (derived.results.get(id)?.cycle.force_gf.length ?? 0), 0);
@@ -156,7 +156,7 @@ export function Header() {
         title="Clear every manual exclusion and set the automatic rule to Keep all points"
         onClick={() => {
           if (window.confirm('Restore original data? All manual exclusions are cleared and the automatic rule is set to “Keep all points”. Raw data were never changed.')) {
-            update((p) => ({ ...p, runOverrides: {}, excludedPoints: {}, settings: { ...p.settings, exclusionRule: 'keepAll' }, view: 'raw' }));
+            update((p) => ({ ...p, runOverrides: {}, excludedPoints: {}, settings: { ...p.settings, exclusionRule: 'keepAll' } }));
           }
         }}
       >

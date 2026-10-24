@@ -5,8 +5,50 @@ import { AppProvider, useApp } from './state/AppContext';
 import { Header } from './components/Header';
 import { Navigator } from './components/Navigator';
 import { GraphPanel } from './components/GraphPanel';
-import { AnalysisPanel } from './components/AnalysisPanel';
-import { BottomPanel } from './components/BottomPanel';
+import { DataAnalysis } from './components/DataAnalysis';
+import { DataSummary } from './components/DataSummary';
+import { SettingsPanel } from './components/SettingsPanel';
+import { ImportStatus } from './components/FilesTab';
+import type { MainTab } from './types';
+
+const TABS: { id: MainTab; label: string; minor?: boolean }[] = [
+  { id: 'graph', label: 'Graph' },
+  { id: 'analysis', label: 'Data analysis' },
+  { id: 'summary', label: 'Data summary' },
+  { id: 'settings', label: 'Settings' },
+  { id: 'files', label: 'Files', minor: true },
+];
+
+function MainArea() {
+  const { project, update, files } = useApp();
+  const tab = project.mainTab;
+  const problems = files.filter((f) => f.parsed.status !== 'ok').length;
+  return (
+    <section className="main-area">
+      <div className="main-tabs" role="tablist" aria-label="Views">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`tab ${tab === t.id ? 'active' : ''} ${t.minor ? 'minor' : ''}`}
+            onClick={() => update((p) => ({ ...p, mainTab: t.id }))}
+          >
+            {t.label}
+            {t.id === 'files' && files.length > 0 && <span className={`count ${problems ? 'warn' : ''}`}>{problems || files.length}</span>}
+          </button>
+        ))}
+      </div>
+      <div className={`main-body tab-${tab}`} role="tabpanel">
+        {tab === 'graph' && <GraphPanel />}
+        {tab === 'analysis' && <DataAnalysis />}
+        {tab === 'summary' && <DataSummary />}
+        {tab === 'settings' && <SettingsPanel />}
+        {tab === 'files' && <ImportStatus />}
+      </div>
+    </section>
+  );
+}
 
 /** Read dropped folders recursively (Chrome, Edge, Firefox, Safari). */
 async function filesFromDrop(e: DragEvent): Promise<File[]> {
@@ -34,7 +76,7 @@ async function filesFromDrop(e: DragEvent): Promise<File[]> {
 }
 
 function Shell() {
-  const { busy, notices, dismiss, restorable, restoreSession, discardSession, importFiles, ui } = useApp();
+  const { busy, notices, dismiss, restorable, restoreSession, discardSession, importFiles } = useApp();
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
     // Load all code up front: afterwards the page needs no network at all.
@@ -43,7 +85,7 @@ function Shell() {
   }, []);
   return (
     <div
-      className={`app ${ui.bottomOpen ? '' : 'bottom-closed'}`}
+      className="app"
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
       onDrop={async (e) => {
@@ -65,11 +107,7 @@ function Shell() {
       )}
       <main className="workspace">
         <Navigator />
-        <div className="center">
-          <GraphPanel />
-          <BottomPanel />
-        </div>
-        <AnalysisPanel />
+        <MainArea />
       </main>
       <div className="notices" aria-live="polite">
         {notices.map((n) => (

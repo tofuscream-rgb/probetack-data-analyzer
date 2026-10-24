@@ -7,7 +7,7 @@
  *   README.txt        what the file contains
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { GroupKey, ProjectState, RunOverride, SourceFileRecord } from '../types';
+import type { GroupKey, MainTab, ProjectState, RunOverride, SourceFileRecord } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
 import { defaultProject, defaultSettings } from '../state/defaults';
 
@@ -63,6 +63,7 @@ export function saveProjectZip(
 
 // The gel option was removed from the interface; older projects may still group or compare by it.
 const withoutGel = (keys: GroupKey[]) => keys.filter((k) => k !== 'gel');
+const MAIN_TABS: MainTab[] = ['graph', 'analysis', 'summary', 'settings', 'files'];
 
 /** Merge a possibly older/partial state with current defaults so new fields always exist. */
 export function migrateState(raw: Partial<ProjectState>): ProjectState {
@@ -90,7 +91,8 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
     overrides: raw.overrides ?? {},
     runOverrides,
     excludedPoints: raw.excludedPoints ?? {},
-    graphs: Array.isArray(raw.graphs) && raw.graphs.length ? raw.graphs : d.graphs,
+    graphs: Array.isArray(raw.graphs) && raw.graphs.length ? raw.graphs.map((g) => ({ ...g, showExcluded: g.showExcluded ?? true })) : d.graphs,
+    mainTab: raw.mainTab && MAIN_TABS.includes(raw.mainTab) ? raw.mainTab : 'graph',
     selection: Array.isArray(raw.selection) ? raw.selection : [],
     groupBy: groupBy.length ? groupBy : d.groupBy,
   };

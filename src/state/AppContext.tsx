@@ -22,12 +22,8 @@ export interface Notice {
 export interface UiState {
   filters: Filters;
   search: string;
+  /** Run shown in the detail pane of the Data analysis tab. */
   focusId: string | null;
-  bottomTab: 'import' | 'cycles' | 'stats' | 'data';
-  rightTab: 'cycle' | 'settings' | 'metadata';
-  bottomOpen: boolean;
-  plotTool: 'zoom' | 'excludePoints' | 'baseline';
-  dataView: 'raw' | 'flagged' | 'processed';
 }
 
 interface Ctx {
@@ -106,11 +102,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     filters: {},
     search: '',
     focusId: null,
-    bottomTab: 'import',
-    rightTab: 'cycle',
-    bottomOpen: true,
-    plotTool: 'zoom',
-    dataView: 'raw',
   });
   const noticeId = useRef(1);
   const filesRef = useRef<LoadedFile[]>([]);
@@ -242,9 +233,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         `Imported ${out.length} file(s) with ${nCycles} run(s).` +
           (bad ? ` ${bad} file(s) had no usable data.` : '') +
           (warn ? ` ${warn} file(s) have warnings.` : '') +
-          ' See Import status.',
+          ' See the Files tab.',
       );
-      setUi((u) => ({ bottomTab: 'import', bottomOpen: true, focusId: u.focusId ?? out.find((l) => l.cycles.length)?.cycles[0]?.cycleId ?? null }));
+      if (bad || warn) setProject((p) => ({ ...p, mainTab: 'files' }));
+      setUi((u) => ({ focusId: u.focusId ?? out.find((l) => l.cycles.length)?.cycles[0]?.cycleId ?? null }));
       setBusy(null);
       setTimeout(() => persistFiles(merged), 0);
     },

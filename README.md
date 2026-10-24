@@ -13,12 +13,15 @@ No installation, account, Python or server is needed. Collaborators only need th
 ## Using the website
 
 1. Open the website and click **Open folder** (or drag the folder onto the page). You can also pick individual **TXT files** or a **ZIP archive**. Use **Try it with synthetic example data** to explore without your own files.
-2. Check **Import status** at the bottom. Every file is listed as OK, with warnings, or without usable data (for example a file that contains only the `<Mach-1 File>` header). Nothing is skipped silently.
-3. Check the metadata. Charge ratio, substrate, holding time and repeat number are read from folder and file names (see below). A concentration shown with an asterisk or the word *default* was not found in the names and is assumed to be 2.1 M. Correct it under **Metadata**, for one file or for a whole folder at once.
-4. Use the **filters** and tick runs, whole files or whole groups in the navigator. Click **Add to graph**, or **New graph** to start another comparison.
-5. Choose the axes (force vs displacement by default), and switch between **Raw**, **Flagged**, **Processed** and **Compare** views.
-6. Click a run to see its values and quality checks in the right-hand panel. Exclude points or runs there, always with a reason, or with the **Exclude** tool on the graph. Every exclusion is reversible. **Restore original data** clears them all.
-7. **Export Excel** writes the eight-sheet workbook. **Save project** downloads a project file to continue later. The page also autosaves in your browser.
+2. Check the small **Files** tab (top right). Every file is listed as OK, with warnings, or without usable data (for example a file that contains only the `<Mach-1 File>` header). Nothing is skipped silently; the tab opens by itself when an import has problems.
+3. Use the **navigator** on the left: search, **filters** (charge ratio, concentration, substrate, holding time, repeat, flag) and the tree of conditions → files → runs. The filters decide which runs the Data analysis and Data summary tabs show. Each file has a ribbon with one tick per run, coloured by flag: filled = included in the processed statistics, hollow = excluded (automatically or by hand). Click a run to open its details.
+4. Work through the four main tabs. The page remembers the selected tab in the project.
+
+   - **Graph**: tick runs, whole files or whole groups in the navigator and click **Add to graph** (or **New graph** for another comparison). Choose the axes (force vs displacement by default) or **Swap axes**, show or hide single curves, and drag to zoom (**Reset zoom** or a double-click resets). **Min marker** marks each run’s minimum force (▼). With **Show excluded runs** (on by default), excluded runs are drawn as thin grey dashed lines; otherwise they are hidden. Export the graph as **PNG**, **SVG** or **XLSX** (its data with an editable chart).
+   - **Data analysis**: the filtered runs as a table grouped by condition (charge ratio, concentration, substrate, holding time). Each group shows its processed mean ± SD (n). Each row shows the repeat, run, minimum force, flag colour, the reason for the flag (hover for the full text) and the status. Under **Decision**, choose **Automatic** (follow the rule in Settings), **Keep anyway** or **Exclude anyway**. Keep and Exclude ask for an optional reason, which is saved and exported. Excluded rows are greyed and their value struck through. Click a row to open its details beside the table: the force-vs-displacement curve, metadata (with **Correct metadata** for one file or a whole folder, e.g. when the concentration is only the 2.1 M default), all flag messages and notes, measured values and the point data.
+   - **Data summary**: one block per charge ratio + concentration + substrate, one row per holding time. **Raw** lists every run’s value with mean ± SD and n; **Flagged** shows the same values coloured by flag (struck through when excluded); **Processed** gives mean ± SD and n after exclusions and how many runs were excluded. The chart below plots mean ± SD against holding time, one line per block, as **Raw**, **Processed** or **Both** (processed solid, raw dashed). Tick **Also show repeat-level statistics** to average each repeat first.
+   - **Settings**: **Processed data** chooses which flag colours are excluded automatically (red and orange by default; manual Keep/Exclude always wins). **Run screening thresholds** holds the Level B settings, and **Force and displacement** the peak metric, unit, displacement definition and baseline. **Advanced** (collapsed) holds single-point screening, which finds one-point recording glitches inside a curve, and the point exclusion rule.
+5. **Restore original data** (header) clears every manual run decision and point exclusion. **Export Excel** writes the eight-sheet workbook. **Save project** downloads a project file to continue later. The page also autosaves in your browser.
 
 ### How folder and file names are read
 
@@ -48,7 +51,7 @@ Minimum, maximum and absolute peak force; mean; SD (n − 1); number of points; 
 - **Peak metric** (Settings): minimum (default; adhesion appears as negative force), maximum, maximum absolute, or baseline-corrected minimum.
 - **Units:** gf or N, with 1 gf = 0.00980665 N. Calculations are always done in gf and converted for display. The load-cell calibration factor is applied by the instrument and is unrelated.
 - **Relative displacement:** z − z₀, |z − z₀| or z₀ − z, where z₀ is the first z of the movement. This definition has **not** yet been checked against Mach-1 Analysis.
-- **Baseline correction** is off by default and never chosen automatically. You can use the mean of the last N s of the preceding hold, or the mean of a time interval you pick (type it in, or drag across a force-vs-time graph with **Baseline**).
+- **Baseline correction** is off by default and never chosen automatically. You can use the mean of the last N s of the preceding hold, or the mean of a time interval you type in under **Settings → Force and displacement**.
 - **No smoothing or extra low-pass filtering is applied.** The files report the instrument’s 3 Hz low-pass filter; whether exported values already include it has not been independently confirmed.
 
 ### Level A: point screening within a curve
@@ -76,7 +79,7 @@ Each run is compared only with runs under the same conditions (selectable; defau
   - a repeat differing from the other repeats by more than 30%;
   - force not back at the reference level when the movement ended (specimen possibly still attached).
 
-A single inconsistent run never invalidates its file. Runs are only flagged, and you decide what to exclude.
+A single inconsistent run never invalidates its file. By default, red and orange runs are left out of the processed statistics. You can change which colours are excluded under Settings and override any single run with Keep anyway / Exclude anyway. Flags are always computed the same way, whatever is excluded.
 
 ### Statistics
 
@@ -123,7 +126,8 @@ Project files carry a schema version, the app and algorithm versions, and are va
 | Folder, multi-file, ZIP and drag-and-drop import | Implemented. Folder picker tested in Chromium; drag-and-drop not automatically tested |
 | Peak extraction, units, displacement, baseline | Implemented and tested |
 | Level A and Level B screening | Implemented and tested; thresholds are starting points to tune on your data |
-| Raw / Flagged / Processed / Compare views, manual exclusions | Implemented, tested (logic) and exercised in the browser |
+| Automatic run exclusion, Keep/Exclude overrides, raw vs processed statistics | Implemented, tested (logic) and exercised in the browser |
+| Tabbed interface (Graph, Data analysis, Data summary, Settings, Files) | Implemented; exercised in Chromium at 1280 px width |
 | Grouped statistics with run- and repeat-level variation | Implemented and tested |
 | Excel export with native charts | Implemented and tested; **verify in Microsoft Excel** |
 | PNG / SVG / graph-data export | Implemented; exercised in the browser |
@@ -131,7 +135,6 @@ Project files carry a schema version, the app and algorithm versions, and are va
 | No network transmission of data | CSP enforced; browser test confirmed only the site’s own host is contacted |
 | GitHub Pages subdirectory build | Implemented; build checked in CI |
 | **Equivalence with Mach-1 Analysis plots** | **Not validated.** Compare axis definitions and values on a few curves before relying on it |
-| Interactive baseline picking on graphs | Implemented (force-vs-time graphs only) |
 | Tested browsers | Chromium (automated). Safari and Firefox: please check manually |
 
 ---

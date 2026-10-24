@@ -74,6 +74,17 @@ describe('project save and load', () => {
     expect(lp.warnings.join(' ')).toMatch(/algorithm version 1.0.0/);
   });
 
+  it('remembers the selected main tab and fills in graph options missing from older projects', () => {
+    expect(defaultProject().mainTab).toBe('graph');
+    expect(defaultProject().graphs[0].showExcluded).toBe(true);
+    const old = migrateState({ graphs: [{ id: 'g1', title: 'G', x: 'disp_mm', y: 'force', cycleIds: ['a#c1'], hidden: [], showMarkers: false } as never] });
+    expect(old.mainTab).toBe('graph');
+    expect(old.graphs[0].showExcluded).toBe(true);
+    expect(old.graphs[0].showMarkers).toBe(false);
+    expect(migrateState({ mainTab: 'summary' }).mainTab).toBe('summary');
+    expect(migrateState({ mainTab: 'bogus' as never }).mainTab).toBe('graph');
+  });
+
   it('removes the retired gel option from grouping and comparison keys of older projects', () => {
     const ds = defaultSettings();
     const s = migrateState({

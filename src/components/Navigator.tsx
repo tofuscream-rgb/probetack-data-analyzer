@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { filterValue, useApp, useGraphActions, type FilterKey } from '../state/AppContext';
-import { isIncluded, type CycleResult } from '../analysis/engine';
+import { STATUS_LABEL, isIncluded, type CycleResult } from '../analysis/engine';
+import { QC_LABEL } from '../analysis/pointOutliers';
+import { useOpenRun } from './common';
 import { QC_COLORS } from '../plotting/colors';
 
 const FILTERS: { key: FilterKey; label: string; unit?: string }[] = [
@@ -37,9 +39,9 @@ interface GroupNode {
 
 export function QcRibbon({ cycles }: { cycles: CycleResult[] }) {
   return (
-    <span className="ribbon" aria-label="Run QC summary">
+    <span className="ribbon" aria-label="Runs: colour = flag; filled = included, hollow = excluded">
       {cycles.map((c) => (
-        <i key={c.cycle.cycleId} style={{ background: isIncluded(c) ? QC_COLORS[c.qc] : 'transparent', borderColor: QC_COLORS[c.qc] }} title={`Run ${c.cycle.cycleNumber}: ${c.qc}${isIncluded(c) ? '' : ' (excluded)'}`} />
+        <i key={c.cycle.cycleId} style={{ background: isIncluded(c) ? QC_COLORS[c.qc] : 'transparent', borderColor: QC_COLORS[c.qc] }} title={`Run ${c.cycle.cycleNumber}: ${QC_LABEL[c.qc]} (${c.qc}). ${STATUS_LABEL[c.status]}${isIncluded(c) ? ' in processed statistics' : ' from processed statistics'}.`} />
       ))}
     </span>
   );
@@ -48,6 +50,7 @@ export function QcRibbon({ cycles }: { cycles: CycleResult[] }) {
 export function Navigator() {
   const { derived, visible, ui, setUi, project, update, files, pending, importFiles, loadExample } = useApp();
   const { addToActive, newGraphWith, active } = useGraphActions();
+  const openRun = useOpenRun();
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const folderInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -220,7 +223,7 @@ export function Navigator() {
                           <button className="disclose" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [f.fileId]: !isOpen }))}>
                             {isOpen ? '▾' : '▸'} {f.name}
                           </button>
-                          {f.status !== 'ok' && <span className={`status ${f.status}`} title="See Import status">!</span>}
+                          {f.status !== 'ok' && <span className={`status ${f.status}`} title="See the Files tab">!</span>}
                           <QcRibbon cycles={f.cycles} />
                         </div>
                         {isOpen && (
@@ -228,7 +231,7 @@ export function Navigator() {
                             {f.cycles.map((c) => (
                               <li key={c.cycle.cycleId} className={ui.focusId === c.cycle.cycleId ? 'focus' : ''}>
                                 <input type="checkbox" checked={selected.has(c.cycle.cycleId)} onChange={(e) => setSel([c.cycle.cycleId], e.target.checked)} aria-label={`Select run ${c.cycle.cycleNumber}`} />
-                                <button className="link" onClick={() => setUi({ focusId: c.cycle.cycleId, rightTab: 'cycle' })}>
+                                <button className="link" onClick={() => openRun(c.cycle.cycleId)} title="Open in Data analysis">
                                   Run {c.cycle.cycleNumber}
                                 </button>
                                 <span className="num">{Number.isFinite(c.peakProcessed) ? c.peakProcessed.toFixed(1) : '—'} gf</span>
@@ -255,7 +258,11 @@ export function Navigator() {
               </div>
             )}
           </div>
-          <p className="hint">* concentration is the default 2.1 M, not read from the folder name. Correct it under Metadata.</p>
+          <p className="hint ribbon-legend">
+            <span className="ribbon"><i style={{ background: QC_COLORS.green, borderColor: QC_COLORS.green }} /><i style={{ background: 'transparent', borderColor: QC_COLORS.red }} /></span>
+            One tick per run, coloured by flag: filled = included in processed statistics, hollow = excluded (automatic or manual).
+          </p>
+          <p className="hint">* concentration is the default 2.1 M, not read from the folder name. Correct it in the run details (Data analysis tab).</p>
         </>
       )}
     </nav>

@@ -179,10 +179,14 @@ export interface GraphConfig {
   y: AxisVar;
   cycleIds: string[];
   hidden: string[];
+  /** Marks each run's minimum force (▼). */
   showMarkers: boolean;
+  /** Draw excluded runs as thin grey dashed lines (otherwise they are hidden). */
+  showExcluded: boolean;
 }
 
 export type ViewMode = 'raw' | 'flagged' | 'processed' | 'compare';
+export type MainTab = 'graph' | 'analysis' | 'summary' | 'settings' | 'files';
 
 export interface ProjectState {
   schemaVersion: number;
@@ -196,7 +200,9 @@ export interface ProjectState {
   excludedPoints: Record<string, Record<string, ManualExclusion>>;
   graphs: GraphConfig[];
   activeGraphId: string;
+  /** Legacy: graph view of version 1.x; no longer shown. */
   view: ViewMode;
+  mainTab: MainTab;
   selection: string[];
   groupBy: GroupKey[];
 }

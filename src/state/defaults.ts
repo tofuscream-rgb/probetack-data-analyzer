@@ -36,6 +36,7 @@ export function newGraph(n: number, cycleIds: string[] = []): GraphConfig {
     cycleIds,
     hidden: [],
     showMarkers: true,
+    showExcluded: true,
   };
 }
 
@@ -51,6 +52,7 @@ export function defaultProject(): ProjectState {
     graphs: [g],
     activeGraphId: g.id,
     view: 'raw',
+    mainTab: 'graph',
     selection: [],
     groupBy: ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'],
   };

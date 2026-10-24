@@ -38,7 +38,7 @@ describe.skipIf(!have)('real Mach-1 files (private-data/)', () => {
         `${r.file.name} c${r.cycle.cycleNumber} hold=${r.holdTimeS} amp=${r.cycle.amplitudeMm} min=${r.raw.min.toFixed(2)} pts[y/o/r]=${r.points.counts.slice(1).join('/')} qc=${r.qc} modZ=${r.modZ?.toFixed(2)} :: ${r.flags.map((f) => f.code).join(',')}`,
       );
     }
-    for (const g of d.groups) console.log(`GROUP ${g.key}: n=${g.nCycles} runs=${g.nRuns} mean=${g.mean.toFixed(2)} median=${g.median.toFixed(2)} sd=${g.sd.toFixed(2)}`);
+    for (const g of d.groups) console.log(`GROUP ${g.key}: raw n=${g.raw.n} mean=${g.raw.mean.toFixed(2)} sd=${g.raw.sd.toFixed(2)} | processed n=${g.processed.n} repeats=${g.processed.nRepeats} mean=${g.processed.mean.toFixed(2)} median=${g.processed.median.toFixed(2)} sd=${g.processed.sd.toFixed(2)}`);
     expect(loaded.length).toBeGreaterThan(0);
   });
 });

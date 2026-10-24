@@ -22,7 +22,8 @@ export function defaultSettings(): AnalysisSettings {
       startOffsetMm: 1.0,
       compareBy: ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'],
     },
-    exclusionRule: 'keepAll',
+    runExclusion: { excludeClasses: ['red', 'orange'] },
+    exclusionRule: 'keepAll', // advanced: point-level exclusion inside a run
   };
 }
 
@@ -45,7 +46,7 @@ export function defaultProject(): ProjectState {
     name: 'Hydrogel_Analysis_Project',
     settings: defaultSettings(),
     overrides: {},
-    excludedCycles: {},
+    runOverrides: {},
     excludedPoints: {},
     graphs: [g],
     activeGraphId: g.id,

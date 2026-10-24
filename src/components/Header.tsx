@@ -135,7 +135,7 @@ export function Header() {
   const { project, update, files, loadProject, storageNote } = useApp();
   const [dialog, setDialog] = useState<'save' | 'export' | 'privacy' | null>(null);
   const projectInput = useRef<HTMLInputElement>(null);
-  const hasExclusions = Object.keys(project.excludedCycles).length + Object.keys(project.excludedPoints).length > 0 || project.settings.exclusionRule !== 'keepAll';
+  const hasExclusions = Object.keys(project.runOverrides).length + Object.keys(project.excludedPoints).length > 0 || project.settings.exclusionRule !== 'keepAll';
   return (
     <header className="app-header">
       <div className="brand">
@@ -156,7 +156,7 @@ export function Header() {
         title="Clear every manual exclusion and set the automatic rule to Keep all points"
         onClick={() => {
           if (window.confirm('Restore original data? All manual exclusions are cleared and the automatic rule is set to “Keep all points”. Raw data were never changed.')) {
-            update((p) => ({ ...p, excludedCycles: {}, excludedPoints: {}, settings: { ...p.settings, exclusionRule: 'keepAll' }, view: 'raw' }));
+            update((p) => ({ ...p, runOverrides: {}, excludedPoints: {}, settings: { ...p.settings, exclusionRule: 'keepAll' }, view: 'raw' }));
           }
         }}
       >

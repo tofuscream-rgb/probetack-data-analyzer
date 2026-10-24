@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Data, Layout } from 'plotly.js';
 import { useApp, useGraphActions } from '../state/AppContext';
-import { GROUP_LABEL, groupValue, type CycleResult } from '../analysis/engine';
+import { GROUP_LABEL, STATUS_LABEL, groupValue, isIncluded, type CycleResult } from '../analysis/engine';
 import { unitFactor } from '../analysis/cycleMetrics';
 import { QC_ORDER } from '../analysis/pointOutliers';
 import { PlotlyChart } from '../plotting/PlotlyChart';
@@ -95,7 +95,7 @@ function CycleTable() {
   );
   const toggle = (id: string, on: boolean) =>
     update((p) => ({ ...p, selection: on ? [...new Set([...p.selection, id])] : p.selection.filter((x) => x !== id) }));
-  const redIds = rows.filter((r) => r.qc === 'red' && !r.cycleExcluded).map((r) => r.cycle.cycleId);
+  const redIds = rows.filter((r) => r.qc === 'red' && !r.override).map((r) => r.cycle.cycleId);
 
   return (
     <div className="cycle-table">
@@ -108,10 +108,10 @@ function CycleTable() {
           title="Records a manual exclusion for every red run shown. Reversible."
           onClick={() =>
             update((p) => {
-              const ec = { ...p.excludedCycles };
+              const ro = { ...p.runOverrides };
               const at = new Date().toISOString();
-              for (const id of redIds) ec[id] = { reason: 'Bulk exclusion of red (QC) runs after review', at };
-              return { ...p, excludedCycles: ec };
+              for (const id of redIds) ro[id] = { action: 'exclude', reason: 'Bulk exclusion of red (QC) runs after review', at };
+              return { ...p, runOverrides: ro };
             })
           }
         >
@@ -139,7 +139,7 @@ function CycleTable() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.cycle.cycleId} className={`${ui.focusId === r.cycle.cycleId ? 'focus' : ''} ${r.cycleExcluded ? 'excluded' : ''}`} onClick={() => setUi({ focusId: r.cycle.cycleId, rightTab: 'cycle' })}>
+              <tr key={r.cycle.cycleId} className={`${ui.focusId === r.cycle.cycleId ? 'focus' : ''} ${isIncluded(r) ? '' : 'excluded'}`} onClick={() => setUi({ focusId: r.cycle.cycleId, rightTab: 'cycle' })}>
                 <td onClick={(e) => e.stopPropagation()}>
                   <input type="checkbox" checked={sel.has(r.cycle.cycleId)} onChange={(e) => toggle(r.cycle.cycleId, e.target.checked)} aria-label="Select" />
                 </td>
@@ -158,7 +158,7 @@ function CycleTable() {
                 <td className="num strong">{fmt(r.peakProcessed * f, u === 'N' ? 4 : 2)}</td>
                 <td className="num">{fmt(r.cycleScore)}</td>
                 <td><span className={`qc-pill ${r.qc}`}>{r.qc}</span></td>
-                <td>{r.cycleExcluded ? 'Excluded' : 'Included'}</td>
+                <td title={r.statusReason}>{STATUS_LABEL[r.status]}</td>
               </tr>
             ))}
           </tbody>
@@ -183,9 +183,10 @@ function StatsTab() {
       const name = keys.filter((k) => k !== xKey).map((k) => `${GROUP_LABEL[k]} ${g.label[k]}`).join(', ') || 'All';
       const s = m.get(name) ?? { x: [], y: [], e: [], n: [] };
       s.x.push(g.label[xKey]);
-      s.y.push((level === 'run' ? g.runMean : g.mean) * f);
-      s.e.push(((level === 'run' ? g.runSD : g.sd) || 0) * f);
-      s.n.push(level === 'run' ? g.nRuns : g.nCycles);
+      const st = g.processed;
+      s.y.push((level === 'run' ? st.repeatMean : st.mean) * f);
+      s.e.push(((level === 'run' ? st.repeatSD : st.sd) || 0) * f);
+      s.n.push(level === 'run' ? st.nRepeats : st.n);
       m.set(name, s);
     }
     return m;
@@ -243,15 +244,15 @@ function StatsTab() {
               {derived.groups.map((g) => (
                 <tr key={g.key}>
                   {keys.map((k) => <td key={k}>{g.label[k]}</td>)}
-                  <td className="num">{g.nCycles}</td>
-                  <td className="num">{fmt(g.mean * f, 3)}</td>
-                  <td className="num">{fmt(g.median * f, 3)}</td>
-                  <td className="num">{fmt(g.sd * f, 3)}</td>
-                  <td className="num">{fmt(g.cv * 100, 1)}%</td>
-                  <td className="num">{g.nRuns}</td>
-                  <td className="num">{fmt(g.runMean * f, 3)}</td>
-                  <td className="num" title={g.nRuns < 2 ? 'Only one repeat' : ''}>{fmt(g.runSD * f, 3)}</td>
-                  <td className="num">{Number.isFinite(g.runCV) ? `${fmt(g.runCV * 100, 1)}%` : '—'}</td>
+                  <td className="num">{g.processed.n}</td>
+                  <td className="num">{fmt(g.processed.mean * f, 3)}</td>
+                  <td className="num">{fmt(g.processed.median * f, 3)}</td>
+                  <td className="num">{fmt(g.processed.sd * f, 3)}</td>
+                  <td className="num">{fmt(g.processed.cv * 100, 1)}%</td>
+                  <td className="num">{g.processed.nRepeats}</td>
+                  <td className="num">{fmt(g.processed.repeatMean * f, 3)}</td>
+                  <td className="num" title={g.processed.nRepeats < 2 ? 'Only one repeat' : ''}>{fmt(g.processed.repeatSD * f, 3)}</td>
+                  <td className="num">{Number.isFinite(g.processed.repeatCV) ? `${fmt(g.processed.repeatCV * 100, 1)}%` : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -280,7 +281,7 @@ function DataTab() {
   const rows: number[] = [];
   for (let i = 0; i < n && rows.length < LIMIT; i++) {
     if (ui.dataView === 'flagged' && r.points.cls[i] === 0) continue;
-    if (ui.dataView === 'processed' && (!r.include[i] || r.cycleExcluded)) continue;
+    if (ui.dataView === 'processed' && (!r.include[i] || !isIncluded(r))) continue;
     rows.push(i);
   }
   const extra = Object.keys(c.extra);

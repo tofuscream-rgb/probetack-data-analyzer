@@ -1,9 +1,10 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
-export const ALGORITHM_VERSION = '1.0.0';
-export const PROJECT_SCHEMA_VERSION = 1;
+export const ALGORITHM_VERSION = '1.1.0';
+/** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
+export const PROJECT_SCHEMA_VERSION = 2;
 export const GF_TO_N = 0.00980665;
 export const DEFAULT_CONCENTRATION_M = 2.1;
 
@@ -127,6 +128,11 @@ export interface CycleOutlierSettings {
   compareBy: GroupKey[];
 }
 
+/** Runs whose QC class is listed here are excluded from processed results unless kept manually. */
+export interface RunExclusionSettings {
+  excludeClasses: QCClass[];
+}
+
 export interface AnalysisSettings {
   peakMetric: PeakMetric;
   forceUnit: ForceUnit;
@@ -136,6 +142,8 @@ export interface AnalysisSettings {
   baselineInterval: [number, number];
   point: PointOutlierSettings;
   cycle: CycleOutlierSettings;
+  runExclusion: RunExclusionSettings;
+  /** Advanced: automatic exclusion of individual points inside a run. */
   exclusionRule: ExclusionRule;
 }
 
@@ -152,6 +160,15 @@ export interface ManualExclusion {
   reason: string;
   at: string;
 }
+
+/** A manual decision about one run; it always wins over the automatic rule. */
+export interface RunOverride {
+  action: 'include' | 'exclude';
+  reason: string;
+  at: string;
+}
+
+export type RunStatus = 'included' | 'excludedAuto' | 'excludedManual' | 'keptManual';
 
 export type AxisVar = string;
 
@@ -172,7 +189,10 @@ export interface ProjectState {
   name: string;
   settings: AnalysisSettings;
   overrides: Record<string, MetaOverride>;
-  excludedCycles: Record<string, ManualExclusion>;
+  /** Keyed by cycleId. */
+  runOverrides: Record<string, RunOverride>;
+  /** Legacy (schema 1): manual run exclusions. Converted to runOverrides by migrateState. */
+  excludedCycles?: Record<string, ManualExclusion>;
   excludedPoints: Record<string, Record<string, ManualExclusion>>;
   graphs: GraphConfig[];
   activeGraphId: string;

@@ -74,10 +74,10 @@ function CycleTab({ r }: { r: CycleResult }) {
 
   const toggleCycle = () =>
     update((p) => {
-      const ec = { ...p.excludedCycles };
-      if (ec[id]) delete ec[id];
-      else ec[id] = { reason: reason.trim() || 'Excluded after review', at: new Date().toISOString() };
-      return { ...p, excludedCycles: ec };
+      const ro = { ...p.runOverrides };
+      if (ro[id]?.action === 'exclude') delete ro[id];
+      else ro[id] = { action: 'exclude', reason: reason.trim() || 'Excluded after review', at: new Date().toISOString() };
+      return { ...p, runOverrides: ro };
     });
   const togglePoint = (i: number) =>
     update((p) => {
@@ -127,13 +127,14 @@ function CycleTab({ r }: { r: CycleResult }) {
       </ul>
 
       <div className="exclude-box">
-        {r.cycleExcluded ? (
+        {r.override?.action === 'exclude' ? (
           <>
-            <p>Excluded from statistics: <em>{r.cycleExcluded.reason}</em></p>
+            <p>Excluded from statistics: <em>{r.override.reason}</em></p>
             <button onClick={toggleCycle}>Include this run again</button>
           </>
         ) : (
           <>
+            {r.status !== 'included' && <p>{r.statusReason}</p>}
             <input placeholder="Reason (recorded in exports)" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Exclusion reason" />
             <button onClick={toggleCycle}>Exclude this run</button>
           </>

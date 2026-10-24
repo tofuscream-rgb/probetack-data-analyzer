@@ -8,10 +8,11 @@ import type {
   Cycle,
   ExperimentMeta,
   GroupKey,
-  ManualExclusion,
   ParsedFile,
   ProjectState,
   QCClass,
+  RunOverride,
+  RunStatus,
 } from '../types';
 import { computeBaseline, computeMetrics, peakValue, referenceLevel, type Metrics } from './cycleMetrics';
 import { QC_ORDER, scorePoints, type PointScores } from './pointOutliers';
@@ -38,7 +39,11 @@ export interface CycleResult {
   include: Uint8Array; // 1 = retained in processed data
   excludedByRule: number;
   excludedManual: number;
-  cycleExcluded: ManualExclusion | null;
+  /** Manual decision for this run, if any. */
+  override: RunOverride | null;
+  /** Whether the run enters processed results; set after all flags are computed. */
+  status: RunStatus;
+  statusReason: string;
   flags: CycleFlag[];
   qc: QCClass;
   cycleScore: number;
@@ -47,21 +52,42 @@ export interface CycleResult {
   travelFraction: number | null;
 }
 
+/** Summary of one set of run peaks. Repeat-level values average each file (repeat) first. */
+export interface SummaryStats {
+  n: number;
+  mean: number;
+  sd: number;
+  median: number;
+  cv: number;
+  nRepeats: number;
+  repeatMean: number;
+  repeatSD: number;
+  repeatCV: number;
+}
+
 export interface GroupStats {
   key: string;
   label: Record<GroupKey, string>;
+  /** Every run in the group (raw). */
   cycleIds: string[];
-  nCycles: number;
-  mean: number;
-  median: number;
-  sd: number;
-  cv: number;
-  nRuns: number;
-  runMean: number;
-  runSD: number;
-  runCV: number;
+  /** Runs that enter processed results (included or kept manually). */
+  includedCycleIds: string[];
+  /** All runs with a finite raw peak, whatever their status. */
+  raw: SummaryStats;
+  /** Included and manually kept runs only, using their processed peaks. */
+  processed: SummaryStats;
   mixedConcentration: boolean;
 }
+
+export const STATUS_LABEL: Record<RunStatus, string> = {
+  included: 'Included',
+  excludedAuto: 'Excluded (automatic)',
+  excludedManual: 'Excluded (manual)',
+  keptManual: 'Kept (manual)',
+};
+
+/** True when the run enters processed results. */
+export const isIncluded = (r: Pick<CycleResult, 'status'>): boolean => r.status === 'included' || r.status === 'keptManual';
 
 export interface Derived {
   files: ParsedFile[];
@@ -119,7 +145,7 @@ export function computeDerived(
   files: ParsedFile[],
   cyclesByFile: Map<string, Cycle[]>,
   metaByFile: Map<string, ExperimentMeta>,
-  project: Pick<ProjectState, 'settings' | 'excludedCycles' | 'excludedPoints' | 'groupBy'>,
+  project: Pick<ProjectState, 'settings' | 'runOverrides' | 'excludedPoints' | 'groupBy'>,
 ): Derived {
   const s = project.settings;
   const results = new Map<string, CycleResult>();
@@ -163,7 +189,9 @@ export function computeDerived(
         include,
         excludedByRule: byRule,
         excludedManual: byManual,
-        cycleExcluded: project.excludedCycles[cycle.cycleId] ?? null,
+        override: project.runOverrides[cycle.cycleId] ?? null,
+        status: 'included',
+        statusReason: '',
         flags: [],
         qc: 'green',
         cycleScore: 0,
@@ -182,9 +210,32 @@ export function computeDerived(
   applyStartPositionFlags(ordered, s);
   for (const r of ordered) {
     r.qc = r.flags.reduce<QCClass>((acc, f) => worst(acc, f.cls), 'green');
+    applyStatus(r, s);
   }
   const groups = computeGroups(ordered, project.groupBy);
   return { files, results, ordered, groups };
+}
+
+/**
+ * Decides whether a run enters processed results. Runs only after every flag is
+ * final, so the automatic rule never feeds back into the flags themselves.
+ */
+function applyStatus(r: CycleResult, s: AnalysisSettings) {
+  const o = r.override;
+  if (o?.action === 'exclude') {
+    r.status = 'excludedManual';
+    r.statusReason = `Excluded manually: ${o.reason}`;
+  } else if (o?.action === 'include') {
+    r.status = 'keptManual';
+    r.statusReason = `Kept manually (QC ${r.qc}): ${o.reason}`;
+  } else if (s.runExclusion.excludeClasses.includes(r.qc)) {
+    r.status = 'excludedAuto';
+    const reasons = r.flags.filter((f) => f.cls === r.qc).map((f) => f.message);
+    r.statusReason = `Excluded automatically: QC ${r.qc} is set to be excluded. ${reasons.join(' ')}`.trim();
+  } else {
+    r.status = 'included';
+    r.statusReason = r.qc === 'green' ? 'Included' : `Included: QC ${r.qc} is not set to be excluded`;
+  }
 }
 
 function severityScore(cls: QCClass): number {
@@ -258,7 +309,8 @@ function applyIntrinsicFlags(r: CycleResult, s: AnalysisSettings) {
 function applyGroupFlags(all: CycleResult[], s: AnalysisSettings) {
   const byCond = new Map<string, CycleResult[]>();
   for (const r of all) {
-    if (r.cycleExcluded || !Number.isFinite(r.peakProcessed)) continue;
+    // Only manual exclusions are left out here; the automatic rule is applied after flagging.
+    if (r.override?.action === 'exclude' || !Number.isFinite(r.peakProcessed)) continue;
     const list = byCond.get(r.conditionKey) ?? [];
     list.push(r);
     byCond.set(r.conditionKey, list);
@@ -366,12 +418,36 @@ function applyStartPositionFlags(all: CycleResult[], s: AnalysisSettings) {
   }
 }
 
+/** Run-level and repeat-level summary of (run, peak) pairs. */
+function summarize(items: { r: CycleResult; peak: number }[]): SummaryStats {
+  const peaks = items.map((x) => x.peak);
+  const byFile = new Map<string, number[]>();
+  for (const { r, peak } of items) byFile.set(r.file.fileId, [...(byFile.get(r.file.fileId) ?? []), peak]);
+  const repeatMeans = [...byFile.values()].map((v) => mean(v));
+  return {
+    n: peaks.length,
+    mean: mean(peaks),
+    sd: sampleSD(peaks),
+    median: median(peaks),
+    cv: coefficientOfVariation(peaks),
+    nRepeats: byFile.size,
+    repeatMean: mean(repeatMeans),
+    repeatSD: sampleSD(repeatMeans),
+    repeatCV: coefficientOfVariation(repeatMeans),
+  };
+}
+
+/**
+ * Groups runs and reports raw statistics (every run with a finite raw peak,
+ * whatever its status) next to processed statistics (included and manually kept
+ * runs, using their processed peaks).
+ */
 export function computeGroups(all: CycleResult[], groupBy: GroupKey[]): GroupStats[] {
   // Concentration is always part of the key so different concentrations are never merged silently.
   const keys: GroupKey[] = groupBy.includes('concentrationM') ? groupBy : [...groupBy, 'concentrationM'];
   const map = new Map<string, CycleResult[]>();
   for (const r of all) {
-    if (r.cycleExcluded || !Number.isFinite(r.peakProcessed)) continue;
+    if (!Number.isFinite(r.peakRaw) && !(isIncluded(r) && Number.isFinite(r.peakProcessed))) continue;
     const key = keys.map((k) => groupValue(r, k)).join(' | ');
     const list = map.get(key) ?? [];
     list.push(r);
@@ -379,14 +455,8 @@ export function computeGroups(all: CycleResult[], groupBy: GroupKey[]): GroupSta
   }
   const out: GroupStats[] = [];
   for (const [key, list] of map) {
-    const peaks = list.map((r) => r.peakProcessed);
-    const byFile = new Map<string, number[]>();
-    for (const r of list) {
-      const arr = byFile.get(r.file.fileId) ?? [];
-      arr.push(r.peakProcessed);
-      byFile.set(r.file.fileId, arr);
-    }
-    const runMeans = [...byFile.values()].map((v) => mean(v));
+    const raw = list.filter((r) => Number.isFinite(r.peakRaw)).map((r) => ({ r, peak: r.peakRaw }));
+    const included = list.filter((r) => isIncluded(r) && Number.isFinite(r.peakProcessed));
     const label = Object.fromEntries(
       (Object.keys(GROUP_LABEL) as GroupKey[]).map((k) => [k, keys.includes(k) ? groupValue(list[0], k) : '(pooled)']),
     ) as Record<GroupKey, string>;
@@ -395,15 +465,9 @@ export function computeGroups(all: CycleResult[], groupBy: GroupKey[]): GroupSta
       key,
       label,
       cycleIds: list.map((r) => r.cycle.cycleId),
-      nCycles: list.length,
-      mean: mean(peaks),
-      median: median(peaks),
-      sd: sampleSD(peaks),
-      cv: coefficientOfVariation(peaks),
-      nRuns: byFile.size,
-      runMean: mean(runMeans),
-      runSD: sampleSD(runMeans),
-      runCV: coefficientOfVariation(runMeans),
+      includedCycleIds: included.map((r) => r.cycle.cycleId),
+      raw: summarize(raw),
+      processed: summarize(included.map((r) => ({ r, peak: r.peakProcessed }))),
       mixedConcentration: concs.size > 1,
     });
   }

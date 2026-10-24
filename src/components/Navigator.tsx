@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { filterValue, useApp, useGraphActions, type FilterKey } from '../state/AppContext';
-import type { CycleResult } from '../analysis/engine';
+import { isIncluded, type CycleResult } from '../analysis/engine';
 import { QC_COLORS } from '../plotting/colors';
 
 const FILTERS: { key: FilterKey; label: string; unit?: string }[] = [
@@ -39,7 +39,7 @@ export function QcRibbon({ cycles }: { cycles: CycleResult[] }) {
   return (
     <span className="ribbon" aria-label="Run QC summary">
       {cycles.map((c) => (
-        <i key={c.cycle.cycleId} style={{ background: c.cycleExcluded ? 'transparent' : QC_COLORS[c.qc], borderColor: QC_COLORS[c.qc] }} title={`Run ${c.cycle.cycleNumber}: ${c.qc}${c.cycleExcluded ? ' (excluded)' : ''}`} />
+        <i key={c.cycle.cycleId} style={{ background: isIncluded(c) ? QC_COLORS[c.qc] : 'transparent', borderColor: QC_COLORS[c.qc] }} title={`Run ${c.cycle.cycleNumber}: ${c.qc}${isIncluded(c) ? '' : ' (excluded)'}`} />
       ))}
     </span>
   );
@@ -233,7 +233,7 @@ export function Navigator() {
                                 </button>
                                 <span className="num">{Number.isFinite(c.peakProcessed) ? c.peakProcessed.toFixed(1) : '—'} gf</span>
                                 <span className={`qc-dot ${c.qc}`} title={c.qc} />
-                                {c.cycleExcluded && <span className="tag">excluded</span>}
+                                {!isIncluded(c) && <span className="tag">excluded</span>}
                               </li>
                             ))}
                           </ul>

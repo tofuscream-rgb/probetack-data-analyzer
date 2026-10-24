@@ -2,7 +2,7 @@
 import type { GraphConfig, ProjectState } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, GF_TO_N } from '../types';
 import type { CycleResult, Derived } from '../analysis/engine';
-import { GROUP_LABEL } from '../analysis/engine';
+import { GROUP_LABEL, STATUS_LABEL, isIncluded, type SummaryStats } from '../analysis/engine';
 import { PEAK_LABEL, DISPLACEMENT_LABEL, displacement } from '../analysis/cycleMetrics';
 import { QC_ORDER, explainPoint } from '../analysis/pointOutliers';
 import { axisLabel, axisValues, curveLabel } from '../plotting/axes';
@@ -55,12 +55,12 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
       'File path', 'File name', 'Import status', 'Charge ratio', 'Charge ratio source', 'Concentration (M)', 'Concentration source',
       'Substrate', 'Nominal hold (s)', 'Repeat number', 'Runs in file', 'Test date', 'First run time',
       'Load cell', 'Calibration factor', 'Load cell offset', 'Low-pass filter', 'Filter order', 'Filter cutoff (Hz)',
-      `Median peak (${u})`, 'SHA-256', 'Notes and warnings',
+      `Median processed peak (${u})`, 'SHA-256', 'Notes and warnings',
     ],
   ];
   for (const r of files) {
     const cyc = selected.filter((x) => x.file.fileId === r.file.fileId);
-    const peaks = cyc.filter((x) => !x.cycleExcluded).map((x) => x.peakProcessed).filter(Number.isFinite).sort((a, b) => a - b);
+    const peaks = cyc.filter(isIncluded).map((x) => x.peakProcessed).filter(Number.isFinite).sort((a, b) => a - b);
     const med = peaks.length ? (peaks.length % 2 ? peaks[peaks.length >> 1] : (peaks[peaks.length / 2 - 1] + peaks[peaks.length / 2]) / 2) : NaN;
     const h = r.file.header;
     const m = r.meta;
@@ -87,7 +87,7 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     'Time at min (s)', 'Time at max (s)', 'Z at min (mm)', 'Z at max (mm)', 'Displacement at min (mm)', 'Displacement at max (mm)',
     `Baseline (${u})`, `Baseline-corrected min (${u})`, `Processed peak (${u})`, 'Processed points', 'Points excluded by rule',
     'Points excluded manually', 'Run anomaly score', 'Max point score', 'Modified Z', 'QC classification', 'QC reasons',
-    'Exclusion status', 'Exclusion reason',
+    'Status', 'Status reason',
   ]];
   for (const r of selected) {
     const m = r.meta;
@@ -100,7 +100,7 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
       num(r.raw.baselineMin === null ? null : r.raw.baselineMin * uf), num(r.peakProcessed * uf), r.processed.n, r.excludedByRule,
       r.excludedManual, num(r.cycleScore), num(r.points.maxScore), num(r.modZ), r.qc,
       r.flags.filter((f) => f.cls !== 'green').map((f) => f.message).join(' | '),
-      r.cycleExcluded ? 'Excluded (manual)' : 'Included', r.cycleExcluded?.reason ?? '',
+      STATUS_LABEL[r.status], r.statusReason,
     ]);
   }
 
@@ -124,7 +124,7 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
         ...common, num(r.points.localMedian[i]), num(r.points.z[i]), num(r.points.score[i]), cls,
         cls === 'green' ? '' : explainPoint(r.points, i, c.force_gf, s.point), exclusion,
       ]);
-      if (r.include[i] && !r.cycleExcluded) {
+      if (r.include[i] && isIncluded(r)) {
         procRows.push([...common, num(r.baseline === null ? null : (c.force_gf[i] - r.baseline) * uf)]);
       }
     }
@@ -132,21 +132,23 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
 
   // ---- Sheet 6: Statistical Summary --------------------------------------------------
   const s6: CellValue[][] = [
-    ['Grouped statistics of the selected peak metric. Manually excluded runs are omitted. Concentration is always part of the grouping key.'],
+    ['Grouped statistics of the selected peak metric. Concentration is always part of the grouping key.'],
+    ['Raw: every run with a peak, whatever its QC class or status (raw peaks). Processed: only included and manually kept runs (processed peaks); automatically and manually excluded runs are omitted.'],
     ['Run-level statistics treat every movement (run) as one value; runs from the same specimen are NOT independent replicates.'],
     ['Repeat-level statistics first average the runs of each file (repeat), then summarize across repeats.'],
     [],
-    [...project.groupBy.map((k) => GROUP_LABEL[k]), ...(project.groupBy.includes('concentrationM') ? [] : [GROUP_LABEL.concentrationM]),
-      'Runs (n)', `Run mean (${u})`, `Run median (${u})`, `Run SD (${u})`, 'Run CV', 'Repeats (n)', `Repeat mean (${u})`, `Repeat SD (${u})`, 'Repeat CV', 'Warning'],
   ];
   const keys = project.groupBy.includes('concentrationM') ? project.groupBy : [...project.groupBy, 'concentrationM' as const];
+  const runCols = (t: string) => [`${t} runs (n)`, `${t} run mean (${u})`, `${t} run SD (${u})`, `${t} run median (${u})`, `${t} run CV`];
+  const repeatCols = (t: string) => [`${t} repeats (n)`, `${t} repeat mean (${u})`, `${t} repeat SD (${u})`, `${t} repeat CV`];
+  const runVals = (st: SummaryStats) => [st.n, num(st.mean * uf), num(st.sd * uf), num(st.median * uf), num(st.cv)];
+  const repeatVals = (st: SummaryStats) => [st.nRepeats, num(st.repeatMean * uf), num(st.repeatSD * uf), num(st.repeatCV)];
+  s6.push([...keys.map((k) => GROUP_LABEL[k]), ...runCols('Raw'), ...runCols('Processed'), ...repeatCols('Raw'), ...repeatCols('Processed'), 'Warning']);
   const selectedSet = new Set(opts.cycleIds);
   for (const g of derived.groups) {
     if (!g.cycleIds.some((id) => selectedSet.has(id))) continue;
-    s6.push([
-      ...keys.map((k) => g.label[k]), g.nCycles, num(g.mean * uf), num(g.median * uf), num(g.sd * uf), num(g.cv), g.nRuns,
-      num(g.runMean * uf), num(g.runSD * uf), num(g.runCV), g.nRuns < 2 ? 'Only one repeat: no between-repeat variation available' : '',
-    ]);
+    const warn = g.processed.n === 0 ? 'All runs excluded: no processed values' : g.processed.nRepeats < 2 ? 'Only one repeat: no between-repeat variation available' : '';
+    s6.push([...keys.map((k) => g.label[k]), ...runVals(g.raw), ...runVals(g.processed), ...repeatVals(g.raw), ...repeatVals(g.processed), warn]);
   }
 
   // ---- Sheet 7: Charts (native scatter charts + their data) --------------------------
@@ -227,6 +229,7 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     ['Scale floor (gf)', p.scaleFloorGf === 0 ? 'auto (force resolution of each run)' : p.scaleFloorGf, ''],
     ['zHalf', p.zHalf, 'Robust z at which the score is 0.5.'],
     ['Yellow / orange / red score thresholds', `${p.yellow} / ${p.orange} / ${p.red}`, ''],
+    ['Automatic run exclusion (QC classes)', s.runExclusion.excludeClasses.join(', ') || 'none', 'Runs with these QC classes are left out of processed results unless kept manually. Flags are always computed from all runs except manually excluded ones.'],
     ['Run comparison grouping', cy.compareBy.map((k) => GROUP_LABEL[k]).join(', '), 'Runs are compared only with runs sharing these values.'],
     ['Modified Z thresholds (yellow / orange / red)', `${cy.modZYellow} / ${cy.modZOrange} / ${cy.modZRed}`, 'Modified Z = 0.6745 (x − median) / MAD.'],
     ['Minimum group size for modified Z', cy.minGroupSize, ''],
@@ -235,11 +238,11 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     ['Incomplete-travel fraction', cy.completeFraction, ''],
     ['Repeat-difference fraction', cy.repeatDiffFraction, ''],
     ['Start-position difference (mm)', cy.startOffsetMm, 'Start of each movement compared with the previous movement in the same file (travel direction only).'],
-    ['Point exclusion rule (processed data)', s.exclusionRule, 'keepAll = no automatic exclusion; excludeRed = red points; excludeYellowUp = yellow, orange and red points.'],
+    ['Point exclusion rule (advanced)', s.exclusionRule, 'keepAll = no automatic exclusion; excludeRed = red points; excludeYellowUp = yellow, orange and red points.'],
     [],
-    ['Manually excluded runs'],
-    ['Run ID', 'Reason', 'Decided at'],
-    ...Object.entries(project.excludedCycles).map(([id, e]) => [id, e.reason, e.at]),
+    ['Manual run overrides (always win over the automatic rule)'],
+    ['Run ID', 'Action', 'Reason', 'Decided at'],
+    ...Object.entries(project.runOverrides).map(([id, o]) => [id, o.action === 'exclude' ? 'Exclude' : 'Keep (include)', o.reason, o.at]),
     [],
     ['Manually excluded points'],
     ['Run ID', 'Point index', 'Reason', 'Decided at'],

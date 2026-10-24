@@ -4,7 +4,9 @@ import { scorePoints } from '../src/analysis/pointOutliers';
 import { modifiedZScores, median, mad, resolutionStep, sampleSD } from '../src/analysis/stats';
 import { displacement } from '../src/analysis/cycleMetrics';
 import { defaultProject, defaultSettings } from '../src/state/defaults';
-import { GF_TO_N } from '../src/types';
+import { GF_TO_N, type QCClass, type RunStatus } from '../src/types';
+import { computeGroups, type CycleResult } from '../src/analysis/engine';
+import { inferMetadata } from '../src/parser/pathMetadata';
 import { axisValues } from '../src/plotting/axes';
 import { derive, enc, loadSynthetic, miniFile } from './helpers';
 
@@ -193,17 +195,20 @@ describe('processed data, exclusions and reproducibility', () => {
     expect(Array.from(l.cycles[0].force_gf)).toEqual(before);
   });
 
-  it('removes manually excluded cycles from group statistics and restores them', async () => {
+  it('removes manually excluded runs from processed statistics only, and restores them', async () => {
     const l = await load([curve(40), curve(42), curve(41), curve(5)]);
     const p = defaultProject();
+    p.settings.runExclusion.excludeClasses = []; // isolate the manual decision
     const all = derive([l], p).groups[0];
-    expect(all.nCycles).toBe(4);
-    p.excludedCycles = { [l.cycles[3].cycleId]: { reason: 'missed contact', at: 'now' } };
+    expect(all.processed.n).toBe(4);
+    p.runOverrides = { [l.cycles[3].cycleId]: { action: 'exclude', reason: 'missed contact', at: 'now' } };
     const ex = derive([l], p).groups[0];
-    expect(ex.nCycles).toBe(3);
-    expect(ex.mean).toBeLessThan(all.mean);
-    p.excludedCycles = {};
-    expect(derive([l], p).groups[0].nCycles).toBe(4);
+    expect(ex.processed.n).toBe(3);
+    expect(ex.processed.mean).toBeLessThan(all.processed.mean);
+    expect(ex.raw.n).toBe(4);
+    expect(ex.raw.mean).toBe(all.raw.mean);
+    p.runOverrides = {};
+    expect(derive([l], p).groups[0].processed.n).toBe(4);
   });
 
   it('never merges different concentrations into one group', async () => {
@@ -220,9 +225,11 @@ describe('processed data, exclusions and reproducibility', () => {
     const a = await parseSource({ path: '0.5/Glass/30s.txt', bytes: enc(miniFile([curve(40), curve(42)])) });
     const b = await parseSource({ path: '0.5/Glass/30s-2.txt', bytes: enc(miniFile([curve(50), curve(52), curve(51)])) });
     const g = derive([a, b]).groups[0];
-    expect(g.nCycles).toBe(5);
-    expect(g.nRuns).toBe(2);
-    expect(Number.isFinite(g.runSD)).toBe(true);
+    for (const st of [g.raw, g.processed]) {
+      expect(st.n).toBe(5);
+      expect(st.nRepeats).toBe(2);
+      expect(Number.isFinite(st.repeatSD)).toBe(true);
+    }
   });
 
   it('gives identical results for repeated analyses', async () => {
@@ -269,5 +276,106 @@ describe('repeat-file differences', () => {
     const d = derive([a, b]);
     expect(d.ordered.every((r) => r.flags.some((f) => f.code === 'repeatDiff'))).toBe(true);
     expect(d.ordered.every((r) => r.qc === 'green')).toBe(true);
+  });
+});
+
+describe('run-level exclusion', () => {
+  const weakAmongNine = () => load([...[40, 41, 39, 40.5, 39.5, 40, 42, 38.5].map((p) => curve(p)), curve(3)]);
+
+  it('excludes red and orange runs automatically by default and keeps yellow and green runs', async () => {
+    expect(defaultSettings().runExclusion.excludeClasses).toEqual(['red', 'orange']);
+    const d = derive([await weakAmongNine()]);
+    const red = d.ordered[8];
+    expect(red.qc).toBe('red');
+    expect(red.status).toBe('excludedAuto');
+    expect(red.statusReason).toMatch(/Excluded automatically: QC red/);
+    expect(d.ordered.slice(0, 8).every((r) => r.status === 'included')).toBe(true);
+    expect(d.groups[0].raw.n).toBe(9);
+    expect(d.groups[0].processed.n).toBe(8);
+    expect(d.groups[0].includedCycleIds).not.toContain(red.cycle.cycleId);
+
+    const l = await load([curve(40), curve(41), curve(39), curve(40)]);
+    l.cycles[2].z_mm = l.cycles[2].z_mm.map((z) => z - 2.3); // start-position flag (orange)
+    const orange = derive([l]).ordered[2];
+    expect(orange.qc).toBe('orange');
+    expect(orange.status).toBe('excludedAuto');
+
+    const f = curve(40);
+    f[70] += 15; // isolated spike: yellow run
+    const yellow = derive([await load([f])]).ordered[0];
+    expect(yellow.qc).toBe('yellow');
+    expect(yellow.status).toBe('included');
+  });
+
+  it("keeps a red run when it has an 'include' override", async () => {
+    const l = await weakAmongNine();
+    const p = defaultProject();
+    p.runOverrides = { [l.cycles[8].cycleId]: { action: 'include', reason: 'checked: real weak bond', at: 'now' } };
+    const d = derive([l], p);
+    expect(d.ordered[8].qc).toBe('red');
+    expect(d.ordered[8].status).toBe('keptManual');
+    expect(d.ordered[8].statusReason).toContain('checked: real weak bond');
+    expect(d.groups[0].processed.n).toBe(9);
+  });
+
+  it("removes a green run when it has an 'exclude' override", async () => {
+    const l = await weakAmongNine();
+    const p = defaultProject();
+    p.runOverrides = { [l.cycles[0].cycleId]: { action: 'exclude', reason: 'bubble seen', at: 'now' } };
+    const d = derive([l], p);
+    expect(d.ordered[0].status).toBe('excludedManual');
+    expect(d.ordered[0].statusReason).toBe('Excluded manually: bubble seen');
+    expect(d.groups[0].raw.n).toBe(9);
+    expect(d.groups[0].processed.n).toBe(7); // the green run and the automatically excluded red run
+  });
+
+  it('reports raw and processed group statistics side by side (hand-made example)', () => {
+    const meta = inferMetadata('0.5/Glass/30s.txt');
+    const run = (fileId: string, n: number, peak: number, status: RunStatus) =>
+      ({ cycle: { cycleId: `${fileId}#c${n}`, amplitudeMm: -2.5, velocityMmS: 10 }, meta, file: { fileId }, holdTimeS: 30, peakRaw: peak, peakProcessed: peak, status }) as unknown as CycleResult;
+    const runs = [
+      run('A', 1, -10, 'included'),
+      run('A', 2, -12, 'keptManual'),
+      run('B', 1, -14, 'included'),
+      run('B', 2, -40, 'excludedAuto'),
+      run('B', 3, -20, 'excludedManual'),
+    ];
+    const [g] = computeGroups(runs, ['chargeRatio', 'substrate', 'holdTimeS']);
+    expect(g.raw.n).toBe(5);
+    expect(g.raw.mean).toBeCloseTo(-19.2, 10);
+    expect(g.raw.sd).toBeCloseTo(sampleSD([-10, -12, -14, -40, -20]), 10);
+    expect(g.raw.sd).toBeCloseTo(Math.sqrt(596.8 / 4), 10);
+    expect(g.raw.median).toBe(-14);
+    expect(g.raw.nRepeats).toBe(2);
+    expect(g.raw.repeatMean).toBeCloseTo((-11 + -74 / 3) / 2, 10);
+    expect(g.processed.n).toBe(3);
+    expect(g.processed.mean).toBeCloseTo(-12, 10);
+    expect(g.processed.sd).toBeCloseTo(2, 10);
+    expect(g.processed.median).toBe(-12);
+    expect(g.processed.cv).toBeCloseTo(2 / 12, 10);
+    expect(g.processed.nRepeats).toBe(2);
+    expect(g.processed.repeatMean).toBeCloseTo((-11 + -14) / 2, 10);
+    expect(g.includedCycleIds).toEqual(['A#c1', 'A#c2', 'B#c1']);
+    expect(g.label.concentrationM).toBe('2.1'); // concentration is always part of the key
+  });
+
+  it('computes identical flags whatever the automatic exclusion setting', async () => {
+    const loaded = await loadSynthetic();
+    const snapshot = (classes: QCClass[]) => {
+      const p = defaultProject();
+      p.settings.runExclusion.excludeClasses = classes;
+      const d = derive(loaded, p);
+      return {
+        flags: d.ordered.map((r) => [r.cycle.cycleId, r.qc, r.cycleScore, r.modZ, r.flags.map((f) => `${f.code}:${f.cls}:${f.message}`)]),
+        statuses: d.ordered.map((r) => r.status),
+      };
+    };
+    const none = snapshot([]);
+    const dflt = snapshot(['red', 'orange']);
+    const strict = snapshot(['red', 'orange', 'yellow']);
+    expect(dflt.flags).toEqual(none.flags);
+    expect(strict.flags).toEqual(none.flags);
+    expect(none.statuses.every((s) => s === 'included')).toBe(true);
+    expect(dflt.statuses).toContain('excludedAuto');
   });
 });

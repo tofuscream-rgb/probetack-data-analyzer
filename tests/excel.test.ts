@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
 import { buildWorkbook } from '../src/export/workbook';
+import { isIncluded } from '../src/analysis/engine';
 import { colName, safeSheetName } from '../src/export/xlsxWriter';
 import { defaultProject } from '../src/state/defaults';
 import { derive, loadSynthetic } from './helpers';
@@ -13,7 +14,7 @@ describe('Excel export', () => {
     const ids = d.ordered.filter((r) => r.file.path.includes('0.25 (2.5M)')).map((r) => r.cycle.cycleId);
     p.graphs[0].cycleIds = ids.slice(0, 3);
     p.graphs[0].title = 'Repeat overlay';
-    p.excludedCycles[ids[1]] = { reason: 'test exclusion', at: '2026-10-23T00:00:00Z' };
+    p.runOverrides[ids[1]] = { action: 'exclude', reason: 'test exclusion', at: '2026-10-23T00:00:00Z' };
     const d2 = derive(loaded, p);
     const bytes = buildWorkbook(d2, p, { cycleIds: ids, graphs: p.graphs, useProcessedForCharts: false });
     const z = unzipSync(bytes);
@@ -41,6 +42,21 @@ describe('Excel export', () => {
     expect(runSheet).toContain('Run number');
     expect(runSheet).toContain('Maximum force'); // hidden on screen, kept in the export
     expect(runSheet).not.toContain('>Gel<');
+    expect(runSheet).toContain('>Status<');
+    expect(runSheet).toContain('Status reason');
+    expect(runSheet).toContain('Excluded manually: test exclusion');
+    const stats = strFromU8(z['xl/worksheets/sheet6.xml']);
+    for (const h of ['Raw runs (n)', 'Raw run mean (gf)', 'Raw run SD (gf)', 'Raw run median (gf)', 'Raw run CV', 'Processed runs (n)', 'Processed run mean (gf)', 'Processed run SD (gf)', 'Processed run median (gf)', 'Processed run CV', 'Raw repeats (n)', 'Processed repeat mean (gf)']) {
+      expect(stats).toContain(h);
+    }
+    expect(settings).toContain('Automatic run exclusion (QC classes)');
+    expect(settings).toContain('red, orange');
+    expect(settings).toContain('Manual run overrides');
+    // Processed Data holds only points of runs that are included or kept manually
+    const included = ids.filter((id) => isIncluded(d2.results.get(id)!));
+    expect(included.length).toBeLessThan(ids.length);
+    const nIncluded = included.reduce((s, id) => s + d2.results.get(id)!.processed.n, 0);
+    expect(strFromU8(z['xl/worksheets/sheet5.xml']).match(/<row /g)).toHaveLength(nIncluded + 1);
     // Raw Data rows = header + every point of the exported cycles
     const nPoints = ids.reduce((s, id) => s + d2.results.get(id)!.cycle.force_gf.length, 0);
     const raw = strFromU8(z['xl/worksheets/sheet3.xml']);

@@ -144,7 +144,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         project,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [files, meta, project.settings, project.excludedCycles, project.excludedPoints, project.groupBy],
+    [files, meta, project.settings, project.runOverrides, project.excludedPoints, project.groupBy],
   );
 
   const visible = useMemo(() => {

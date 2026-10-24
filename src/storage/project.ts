@@ -7,7 +7,7 @@
  *   README.txt        what the file contains
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { GroupKey, ProjectState, SourceFileRecord } from '../types';
+import type { GroupKey, ProjectState, RunOverride, SourceFileRecord } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
 import { defaultProject, defaultSettings } from '../state/defaults';
 
@@ -71,6 +71,11 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
   const s = raw.settings ?? ds;
   const compareBy = Array.isArray(s.cycle?.compareBy) ? withoutGel(s.cycle.compareBy) : ds.cycle.compareBy;
   const groupBy = Array.isArray(raw.groupBy) ? withoutGel(raw.groupBy) : [];
+  const excludeClasses = s.runExclusion?.excludeClasses;
+  // Schema 1 stored manual run exclusions in excludedCycles; they become 'exclude' overrides.
+  const runOverrides: Record<string, RunOverride> = {};
+  for (const [id, e] of Object.entries(raw.excludedCycles ?? {})) runOverrides[id] = { action: 'exclude', reason: e.reason, at: e.at };
+  Object.assign(runOverrides, raw.runOverrides ?? {});
   const state: ProjectState = {
     ...d,
     ...raw,
@@ -80,14 +85,16 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
       ...s,
       point: { ...ds.point, ...(s.point ?? {}) },
       cycle: { ...ds.cycle, ...(s.cycle ?? {}), compareBy },
+      runExclusion: { excludeClasses: Array.isArray(excludeClasses) ? excludeClasses : ds.runExclusion.excludeClasses },
     },
     overrides: raw.overrides ?? {},
-    excludedCycles: raw.excludedCycles ?? {},
+    runOverrides,
     excludedPoints: raw.excludedPoints ?? {},
     graphs: Array.isArray(raw.graphs) && raw.graphs.length ? raw.graphs : d.graphs,
     selection: Array.isArray(raw.selection) ? raw.selection : [],
     groupBy: groupBy.length ? groupBy : d.groupBy,
   };
+  delete state.excludedCycles;
   if (!state.graphs.some((g) => g.id === state.activeGraphId)) state.activeGraphId = state.graphs[0].id;
   return state;
 }
@@ -166,7 +173,7 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
   return {
     ...state,
     overrides: remapKeys(state.overrides, (k) => idMap.get(k) ?? k),
-    excludedCycles: remapKeys(state.excludedCycles, mapCycle),
+    runOverrides: remapKeys(state.runOverrides, mapCycle),
     excludedPoints: remapKeys(state.excludedPoints, mapCycle),
     selection: state.selection.map(mapCycle),
     graphs: state.graphs.map((g) => ({ ...g, cycleIds: g.cycleIds.map(mapCycle), hidden: g.hidden.map(mapCycle) })),

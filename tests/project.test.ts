@@ -18,7 +18,7 @@ describe('project save and load', () => {
     p.settings.peakMetric = 'absmax';
     p.settings.point.zHalf = 7;
     p.overrides[loaded[0].parsed.fileId] = { concentrationM: 2.5 };
-    p.excludedCycles[loaded[1].cycles[0]?.cycleId ?? 'x#c1'] = { reason: 'bubble', at: '2026-10-23T00:00:00Z' };
+    p.runOverrides[loaded[1].cycles[0]?.cycleId ?? 'x#c1'] = { action: 'exclude', reason: 'bubble', at: '2026-10-23T00:00:00Z' };
     p.graphs[0].cycleIds = loaded[1].cycles.map((c) => c.cycleId);
     const zip = saveProjectZip(p, loaded.map(record), 'settings', new Map());
     const back = loadProjectZip(zip);
@@ -27,7 +27,8 @@ describe('project save and load', () => {
     expect(back.json.state.settings.peakMetric).toBe('absmax');
     expect(back.json.state.settings.point.zHalf).toBe(7);
     expect(back.json.state.overrides).toEqual(p.overrides);
-    expect(back.json.state.excludedCycles).toEqual(p.excludedCycles);
+    expect(back.json.state.runOverrides).toEqual(p.runOverrides);
+    expect(back.json.state.excludedCycles).toBeUndefined();
     expect(back.json.state.graphs[0].cycleIds).toEqual(p.graphs[0].cycleIds);
     expect(back.json.sources.map((s) => s.sha256)).toEqual(loaded.map((l) => l.parsed.sha256));
   });
@@ -53,6 +54,24 @@ describe('project save and load', () => {
     expect(s.settings.peakMetric).toBe('max');
     expect(s.settings.point.halfWindow).toBe(5);
     expect(s.graphs.length).toBe(1);
+  });
+
+  it('converts old excludedCycles into exclude overrides and keeps accepting schema-1 projects', () => {
+    const s = migrateState({
+      excludedCycles: { 'f1#c2': { reason: 'missed contact', at: '2026-01-02T03:04:05Z' }, 'f1#c3': { reason: 'old', at: 't0' } },
+      runOverrides: { 'f1#c3': { action: 'include', reason: 'newer decision', at: 't1' } },
+    });
+    expect(s.runOverrides['f1#c2']).toEqual({ action: 'exclude', reason: 'missed contact', at: '2026-01-02T03:04:05Z' });
+    expect(s.runOverrides['f1#c3'].action).toBe('include'); // an explicit override wins over the legacy entry
+    expect(s.excludedCycles).toBeUndefined();
+    expect(s.settings.runExclusion.excludeClasses).toEqual(['red', 'orange']);
+
+    const old = { format: 'mach1-analyzer-project', schemaVersion: 1, appVersion: '1.1.0', algorithmVersion: '1.0.0', savedAt: 't', mode: 'settings', sources: [],
+      state: { name: 'old', excludedCycles: { 'f1#c1': { reason: 'bubble', at: 't' } }, settings: { peakMetric: 'min' } } };
+    const lp = loadProjectZip(zipSync({ 'project.json': strToU8(JSON.stringify(old)) }));
+    expect(lp.json.state.runOverrides).toEqual({ 'f1#c1': { action: 'exclude', reason: 'bubble', at: 't' } });
+    expect(lp.json.state.schemaVersion).toBe(PROJECT_SCHEMA_VERSION);
+    expect(lp.warnings.join(' ')).toMatch(/algorithm version 1.0.0/);
   });
 
   it('removes the retired gel option from grouping and comparison keys of older projects', () => {
@@ -84,12 +103,12 @@ describe('project save and load', () => {
     expect(m.changed.map((x) => x.fileId)).toEqual(['old3']);
 
     const p = defaultProject();
-    p.excludedCycles['old1#c2'] = { reason: 'r', at: 't' };
+    p.runOverrides['old1#c2'] = { action: 'exclude', reason: 'r', at: 't' };
     p.excludedPoints['old1#c1'] = { '5': { reason: 'spike', at: 't' } };
     p.overrides.old1 = { substrate: 'Glass' };
     p.selection = ['old1#c1'];
     const r = remapState(p, m.idMap);
-    expect(Object.keys(r.excludedCycles)).toEqual(['new1#c2']);
+    expect(Object.keys(r.runOverrides)).toEqual(['new1#c2']);
     expect(Object.keys(r.excludedPoints)).toEqual(['new1#c1']);
     expect(Object.keys(r.overrides)).toEqual(['new1']);
     expect(r.selection).toEqual(['new1#c1']);

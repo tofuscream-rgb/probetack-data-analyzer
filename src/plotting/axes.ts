@@ -66,15 +66,14 @@ export function isForceAxis(id: string): boolean {
   return id.startsWith('force');
 }
 
-/** Legend text identifying conditions, file and cycle. */
+/** Legend text identifying conditions, file, repeat and run. */
 export function curveLabel(r: CycleResult): string {
   const m = r.meta;
   const parts = [
     m.chargeRatio.value !== null ? `CR ${m.chargeRatio.value}` : null,
     m.concentrationM.value !== null ? `${m.concentrationM.value} M` : null,
-    m.gel.value,
     m.substrate.value,
     r.holdTimeS !== null ? `${r.holdTimeS} s hold` : null,
   ].filter(Boolean);
-  return `${parts.join(', ')} | ${r.file.name} c${r.cycle.cycleNumber}`;
+  return `${parts.join(', ')} | ${r.file.name} – Repeat ${m.repeat.value}, Run ${r.cycle.cycleNumber}`;
 }

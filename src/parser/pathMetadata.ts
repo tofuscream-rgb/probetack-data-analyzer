@@ -122,7 +122,7 @@ export function inferMetadata(path: string): ExperimentMeta {
 
   const { base, repeat, explicit } = splitRepeat(stem);
   const hold = findHoldTime(base);
-  if (hold === null) notes.push('No holding time found in the file name; the Wait duration recorded in the file is used per cycle.');
+  if (hold === null) notes.push('No holding time found in the file name; the Wait duration recorded in the file is used per run.');
 
   return {
     chargeRatio,

@@ -30,13 +30,11 @@ function MetricsTable({ raw, proc, u }: { raw: Metrics; proc: Metrics; u: 'gf' |
   const f = unitFactor(u);
   const rows: [string, number | null, number | null, number?][] = [
     [`Minimum (${u})`, raw.min * f, proc.min * f],
-    [`Maximum (${u})`, raw.max * f, proc.max * f],
     [`Peak magnitude (${u})`, raw.absPeak * f, proc.absPeak * f],
     [`Mean (${u})`, raw.mean * f, proc.mean * f],
     [`SD (${u})`, raw.sd * f, proc.sd * f],
     ['Points', raw.n, proc.n, 0],
     ['Time at min (s)', raw.tAtMin, proc.tAtMin],
-    ['Time at max (s)', raw.tAtMax, proc.tAtMax],
     ['Z at min (mm)', raw.zAtMin, proc.zAtMin, 4],
     ['Displacement at min (mm)', raw.dispAtMin, proc.dispAtMin, 4],
     [`Baseline (${u})`, raw.baseline === null ? null : raw.baseline * f, proc.baseline === null ? null : proc.baseline * f],
@@ -94,16 +92,15 @@ function CycleTab({ r }: { r: CycleResult }) {
   return (
     <div className="cycle-tab">
       <h3 className="cycle-title">
-        {r.file.name} <span>cycle {r.cycle.cycleNumber}</span> <span className={`qc-pill ${r.qc}`}>{QC_LABEL[r.qc]}</span>
+        {r.file.name} <span>Repeat {m.repeat.value}, Run {r.cycle.cycleNumber}</span> <span className={`qc-pill ${r.qc}`}>{QC_LABEL[r.qc]}</span>
       </h3>
       <p className="path">{r.file.path}</p>
       <dl className="meta-grid">
         <dt>Charge ratio</dt><dd>{m.chargeRatio.value ?? '—'} <small>{m.chargeRatio.source}</small></dd>
         <dt>Concentration</dt><dd>{m.concentrationM.value} M <small className={m.concentrationM.source === 'default' ? 'warn' : ''}>{m.concentrationM.source}</small></dd>
-        <dt>Gel</dt><dd>{m.gel.value ?? '—'}</dd>
         <dt>Substrate</dt><dd>{m.substrate.value ?? '—'} <small>{m.substrate.source}</small></dd>
         <dt>Holding time</dt><dd>{r.holdTimeS ?? '—'} s <small>{r.cycle.holdTimeS !== null ? 'from Wait block' : 'from file name'}</small></dd>
-        <dt>Repeat file</dt><dd>{m.repeat.value}</dd>
+        <dt>Repeat</dt><dd>{m.repeat.value}</dd>
         <dt>Movement</dt><dd>{r.cycle.operation}, {r.cycle.amplitudeMm ?? '—'} mm at {r.cycle.velocityMmS ?? '—'} mm/s</dd>
         <dt>Recorded</dt><dd>{r.cycle.date}, {r.cycle.time}</dd>
         <dt>Load cell</dt><dd>{h['Load Cell Name'] ?? '—'}, calibration factor {h['Load Cell Calibration Factor'] ?? '—'}</dd>
@@ -120,7 +117,7 @@ function CycleTab({ r }: { r: CycleResult }) {
       <p className="note">{r.baselineNote}</p>
 
       <h4>Quality checks</h4>
-      {r.flags.filter((f) => f.cls !== 'green').length === 0 && <p className="note ok">No issues found for this cycle.{r.flags.length ? ' Notes:' : ''}</p>}
+      {r.flags.filter((f) => f.cls !== 'green').length === 0 && <p className="note ok">No issues found for this run.{r.flags.length ? ' Notes:' : ''}</p>}
       <ul className="flags">
         {r.flags.map((f, i) => (
           <li key={i} className={f.cls}>
@@ -133,12 +130,12 @@ function CycleTab({ r }: { r: CycleResult }) {
         {r.cycleExcluded ? (
           <>
             <p>Excluded from statistics: <em>{r.cycleExcluded.reason}</em></p>
-            <button onClick={toggleCycle}>Include this cycle again</button>
+            <button onClick={toggleCycle}>Include this run again</button>
           </>
         ) : (
           <>
             <input placeholder="Reason (recorded in exports)" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Exclusion reason" />
-            <button onClick={toggleCycle}>Exclude this cycle</button>
+            <button onClick={toggleCycle}>Exclude this run</button>
           </>
         )}
       </div>
@@ -169,7 +166,7 @@ function CycleTab({ r }: { r: CycleResult }) {
   );
 }
 
-const COMPARE_KEYS: GroupKey[] = ['chargeRatio', 'concentrationM', 'gel', 'substrate', 'holdTimeS', 'amplitudeMm', 'velocityMmS'];
+const COMPARE_KEYS: GroupKey[] = ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS', 'amplitudeMm', 'velocityMmS'];
 
 function SettingsTab() {
   const { project, update } = useApp();
@@ -233,8 +230,8 @@ function SettingsTab() {
           <Num label="Red ≥" value={s.point.red} step={0.05} min={0} max={1} onChange={(v) => setP({ red: v })} />
         </div>
       </Section>
-      <Section title="Cycle screening (Level B)">
-        <p className="note">Cycles are compared with others that share these conditions:</p>
+      <Section title="Run screening (Level B)">
+        <p className="note">Runs are compared with others that share these conditions:</p>
         <div className="chips">
           {COMPARE_KEYS.map((k) => (
             <button key={k} className={`chip ${s.cycle.compareBy.includes(k) ? 'on' : ''}`} onClick={() => setC({ compareBy: s.cycle.compareBy.includes(k) ? s.cycle.compareBy.filter((x) => x !== k) : [...s.cycle.compareBy, k] })}>
@@ -248,7 +245,7 @@ function SettingsTab() {
           <Num label="red" value={s.cycle.modZRed} step={0.5} onChange={(v) => setC({ modZRed: v })} />
         </div>
         <div className="pair">
-          <Num label="Min. cycles for mod. Z" value={s.cycle.minGroupSize} step={1} min={3} onChange={(v) => setC({ minGroupSize: Math.round(v) })} />
+          <Num label="Min. runs for mod. Z" value={s.cycle.minGroupSize} step={1} min={3} onChange={(v) => setC({ minGroupSize: Math.round(v) })} />
           <Num label="Weak if below (fraction)" value={s.cycle.weakFraction} step={0.05} min={0} max={1} onChange={(v) => setC({ weakFraction: v })} />
         </div>
         <div className="pair">
@@ -279,7 +276,7 @@ function SettingsTab() {
 function MetadataTab({ r }: { r: CycleResult | null }) {
   const { project, update, files, meta } = useApp();
   const [scope, setScope] = useState<'file' | 'folder'>('file');
-  if (!r) return <p className="note">Select a cycle to edit the metadata of its file.</p>;
+  if (!r) return <p className="note">Select a run to edit the metadata of its file.</p>;
   const m = meta.get(r.file.fileId)!;
   const folder = r.file.path.split('/').slice(0, -1).join('/');
   const targets = scope === 'file' ? [r.file.fileId] : files.filter((l) => l.parsed.path.split('/').slice(0, -1).join('/') === folder).map((l) => l.parsed.fileId);
@@ -301,7 +298,6 @@ function MetadataTab({ r }: { r: CycleResult | null }) {
   const rows: [keyof MetaOverride, string, boolean][] = [
     ['chargeRatio', 'Charge ratio', true],
     ['concentrationM', 'Total monomer concentration (M)', true],
-    ['gel', 'Gel / formulation', false],
     ['substrate', 'Substrate', false],
     ['nominalHoldS', 'Nominal holding time (s)', true],
     ['repeat', 'Repeat number', true],
@@ -344,12 +340,12 @@ export function AnalysisPanel() {
       <div className="panel-tabs" role="tablist">
         {(['cycle', 'settings', 'metadata'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={ui.rightTab === t} className={ui.rightTab === t ? 'tab active' : 'tab'} onClick={() => setUi({ rightTab: t })}>
-            {t === 'cycle' ? 'Cycle' : t === 'settings' ? 'Settings' : 'Metadata'}
+            {t === 'cycle' ? 'Run' : t === 'settings' ? 'Settings' : 'Metadata'}
           </button>
         ))}
       </div>
       <div className="panel-body">
-        {ui.rightTab === 'cycle' && (r ? <CycleTab r={r} /> : <p className="note">Click a cycle in the navigator, the graph or the cycle table to see its values and quality checks.</p>)}
+        {ui.rightTab === 'cycle' && (r ? <CycleTab r={r} /> : <p className="note">Click a run in the navigator, the graph or the run summary to see its values and quality checks.</p>)}
         {ui.rightTab === 'settings' && <SettingsTab />}
         {ui.rightTab === 'metadata' && <MetadataTab r={r} />}
       </div>

@@ -153,7 +153,7 @@ export function GraphPanel() {
         }
         return { ...pr, excludedPoints: ep, view: pr.view === 'raw' || pr.view === 'flagged' ? 'compare' : pr.view };
       });
-      notify('info', `${n} point(s) manually excluded. Undo in the Cycle panel or with Restore original data.`);
+      notify('info', `${n} point(s) manually excluded. Undo in the Run panel or with Restore original data.`);
     } else if (ui.plotTool === 'baseline') {
       if (active.x !== 'time_s') {
         notify('warning', 'To pick a baseline interval, set the X axis to Time (s) first.');
@@ -298,7 +298,7 @@ export function GraphPanel() {
       {curves.length === 0 ? (
         <div className="empty-plot">
           <p>This graph has no curves yet.</p>
-          <p>Tick cycles in the navigator on the left, then choose “Add to graph”.</p>
+          <p>Tick runs in the navigator on the left, then choose “Add to graph”.</p>
         </div>
       ) : (
         <PlotlyChart
@@ -329,7 +329,7 @@ export function GraphPanel() {
                 <button className="link curve-name" onClick={() => setUi({ focusId: r.cycle.cycleId, rightTab: 'cycle' })}>
                   {curveLabel(r)}
                 </button>
-                <span className={`qc-dot ${r.qc}`} title={`Cycle QC: ${r.qc}`} />
+                <span className={`qc-dot ${r.qc}`} title={`Run QC: ${r.qc}`} />
                 <button className="icon" title="Remove from this graph" onClick={() => removeFromActive([r.cycle.cycleId])}>
                   ×
                 </button>

@@ -59,10 +59,10 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog title="Export to Excel" onClose={onClose}>
       <fieldset>
-        <legend>Cycles for the data sheets</legend>
-        <label className="radio"><input type="radio" checked={scope === 'selected'} onChange={() => setScope('selected')} /> Selected cycles ({project.selection.length})</label>
-        <label className="radio"><input type="radio" checked={scope === 'shown'} onChange={() => setScope('shown')} /> Cycles matching the current filters ({visible.length})</label>
-        <label className="radio"><input type="radio" checked={scope === 'all'} onChange={() => setScope('all')} /> All imported cycles ({derived.ordered.length})</label>
+        <legend>Runs for the data sheets</legend>
+        <label className="radio"><input type="radio" checked={scope === 'selected'} onChange={() => setScope('selected')} /> Selected runs ({project.selection.length})</label>
+        <label className="radio"><input type="radio" checked={scope === 'shown'} onChange={() => setScope('shown')} /> Runs matching the current filters ({visible.length})</label>
+        <label className="radio"><input type="radio" checked={scope === 'all'} onChange={() => setScope('all')} /> All imported runs ({derived.ordered.length})</label>
         <p className="note">{points.toLocaleString()} measurement points will be written to each of the Raw, Flagged and Processed sheets.</p>
       </fieldset>
       <fieldset>
@@ -78,7 +78,7 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
         </label>
       </fieldset>
       <p className="note">
-        Sheets: Experiment Summary, Cycle Summary, Raw Data, Flagged Data, Processed Data, Statistical Summary, Charts, Analysis Settings. The file is
+        Sheets: Experiment Summary, Run Summary, Raw Data, Flagged Data, Processed Data, Statistical Summary, Charts, Analysis Settings. The file is
         built in this browser and downloaded directly.
       </p>
       <div className="dialog-actions">

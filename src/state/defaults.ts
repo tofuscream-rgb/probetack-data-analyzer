@@ -20,7 +20,7 @@ export function defaultSettings(): AnalysisSettings {
       completeFraction: 0.95,
       repeatDiffFraction: 0.3,
       startOffsetMm: 1.0,
-      compareBy: ['chargeRatio', 'concentrationM', 'gel', 'substrate', 'holdTimeS'],
+      compareBy: ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'],
     },
     exclusionRule: 'keepAll',
   };
@@ -51,6 +51,6 @@ export function defaultProject(): ProjectState {
     activeGraphId: g.id,
     view: 'raw',
     selection: [],
-    groupBy: ['chargeRatio', 'concentrationM', 'gel', 'substrate', 'holdTimeS'],
+    groupBy: ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'],
   };
 }

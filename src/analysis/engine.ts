@@ -291,7 +291,7 @@ function applyGroupFlags(all: CycleResult[], s: AnalysisSettings) {
         addFlag(r, {
           code: 'smallGroup',
           cls: 'green',
-          message: `Only ${list.length} cycle(s) in this condition; modified Z-scores need at least ${s.cycle.minGroupSize}.`,
+          message: `Only ${list.length} run(s) in this condition; modified Z-scores need at least ${s.cycle.minGroupSize}.`,
         });
       }
     } else {
@@ -330,7 +330,7 @@ function applyGroupFlags(all: CycleResult[], s: AnalysisSettings) {
           addFlag(r, {
             code: 'repeatDiff',
             cls: 'green',
-            message: `Repeat file "${r.file.name}" has median peak ${fm.toFixed(2)} gf, ${(rel * 100).toFixed(0)}% different from the other repeat file(s) in this condition (median ${others.toFixed(2)} gf).`,
+            message: `Repeat "${r.file.name}" has median peak ${fm.toFixed(2)} gf, ${(rel * 100).toFixed(0)}% different from the other repeat(s) in this condition (median ${others.toFixed(2)} gf).`,
           });
         }
       }
@@ -359,7 +359,7 @@ function applyStartPositionFlags(all: CycleResult[], s: AnalysisSettings) {
         addFlag(r, {
           code: 'startOffset',
           cls: 'orange',
-          message: `Movement started at z = ${r.cycle.z_mm[0].toFixed(3)} mm, ${Math.abs(d).toFixed(2)} mm beyond the previous cycle's start (${prev.cycle.z_mm[0].toFixed(3)} mm) in the travel direction. The probe may not have re-approached the specimen.`,
+          message: `Movement started at z = ${r.cycle.z_mm[0].toFixed(3)} mm, ${Math.abs(d).toFixed(2)} mm beyond the previous run's start (${prev.cycle.z_mm[0].toFixed(3)} mm) in the travel direction. The probe may not have re-approached the specimen.`,
         });
       }
     }

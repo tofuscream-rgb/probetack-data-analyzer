@@ -7,7 +7,7 @@
  *   README.txt        what the file contains
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { ProjectState, SourceFileRecord } from '../types';
+import type { GroupKey, ProjectState, SourceFileRecord } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
 import { defaultProject, defaultSettings } from '../state/defaults';
 
@@ -61,11 +61,16 @@ export function saveProjectZip(
   return zipSync(entries, { level: 6 });
 }
 
+// The gel option was removed from the interface; older projects may still group or compare by it.
+const withoutGel = (keys: GroupKey[]) => keys.filter((k) => k !== 'gel');
+
 /** Merge a possibly older/partial state with current defaults so new fields always exist. */
 export function migrateState(raw: Partial<ProjectState>): ProjectState {
   const d = defaultProject();
   const ds = defaultSettings();
   const s = raw.settings ?? ds;
+  const compareBy = Array.isArray(s.cycle?.compareBy) ? withoutGel(s.cycle.compareBy) : ds.cycle.compareBy;
+  const groupBy = Array.isArray(raw.groupBy) ? withoutGel(raw.groupBy) : [];
   const state: ProjectState = {
     ...d,
     ...raw,
@@ -74,14 +79,14 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
       ...ds,
       ...s,
       point: { ...ds.point, ...(s.point ?? {}) },
-      cycle: { ...ds.cycle, ...(s.cycle ?? {}) },
+      cycle: { ...ds.cycle, ...(s.cycle ?? {}), compareBy },
     },
     overrides: raw.overrides ?? {},
     excludedCycles: raw.excludedCycles ?? {},
     excludedPoints: raw.excludedPoints ?? {},
     graphs: Array.isArray(raw.graphs) && raw.graphs.length ? raw.graphs : d.graphs,
     selection: Array.isArray(raw.selection) ? raw.selection : [],
-    groupBy: Array.isArray(raw.groupBy) && raw.groupBy.length ? raw.groupBy : d.groupBy,
+    groupBy: groupBy.length ? groupBy : d.groupBy,
   };
   if (!state.graphs.some((g) => g.id === state.activeGraphId)) state.activeGraphId = state.graphs[0].id;
   return state;

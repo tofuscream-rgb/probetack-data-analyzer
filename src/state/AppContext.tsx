@@ -6,7 +6,7 @@ import { parseInBackground } from '../parser/workerClient';
 import { applyOverride, inferMetadata } from '../parser/pathMetadata';
 import { computeDerived, groupValue, type CycleResult, type Derived } from '../analysis/engine';
 import { defaultProject, newGraph } from './defaults';
-import { loadProjectZip, matchSources, remapState, saveProjectZip } from '../storage/project';
+import { loadProjectZip, matchSources, migrateState, remapState, saveProjectZip } from '../storage/project';
 import { clearSession, isQuotaError, loadSession, saveSessionFiles, saveSessionState, type StoredSession } from '../storage/idb';
 import { buildWorkbook } from '../export/workbook';
 
@@ -239,7 +239,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const warn = out.filter((l) => l.parsed.status === 'warning').length;
       notify(
         bad || warn ? 'warning' : 'success',
-        `Imported ${out.length} file(s) with ${nCycles} movement cycle(s).` +
+        `Imported ${out.length} file(s) with ${nCycles} run(s).` +
           (bad ? ` ${bad} file(s) had no usable data.` : '') +
           (warn ? ` ${warn} file(s) have warnings.` : '') +
           ' See Import status.',
@@ -297,7 +297,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!session) return;
       setRestorable(null);
       autosaveReady.current = true;
-      setProject(session.state);
+      setProject(migrateState(session.state));
       if (stored.length) {
         const out: LoadedFile[] = [];
         for (const f of stored) out.push(await parseInBackground({ path: f.path, bytes: f.bytes }));
@@ -373,7 +373,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const bytes = buildWorkbook(derived, project, { cycleIds, graphs, useProcessedForCharts: processed });
           const safe = project.name.replace(/[^\w.-]+/g, '_') || 'Mach1_Analysis';
           download(bytes, `${safe}_${new Date().toISOString().slice(0, 10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-          notify('success', `Excel workbook created with ${cycleIds.length} cycle(s) and ${graphs.length} chart(s).`);
+          notify('success', `Excel workbook created with ${cycleIds.length} run(s) and ${graphs.length} chart(s).`);
         } catch (e) {
           notify('error', `Excel export failed: ${(e as Error).message}`);
         } finally {

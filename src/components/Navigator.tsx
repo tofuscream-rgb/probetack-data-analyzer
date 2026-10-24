@@ -6,12 +6,11 @@ import { QC_COLORS } from '../plotting/colors';
 const FILTERS: { key: FilterKey; label: string; unit?: string }[] = [
   { key: 'chargeRatio', label: 'Charge ratio' },
   { key: 'concentrationM', label: 'Concentration', unit: 'M' },
-  { key: 'gel', label: 'Gel' },
   { key: 'substrate', label: 'Substrate' },
   { key: 'holdTimeS', label: 'Holding time', unit: 's' },
-  { key: 'repeat', label: 'Repeat file' },
+  { key: 'repeat', label: 'Repeat' },
   { key: 'date', label: 'Test date' },
-  { key: 'qc', label: 'Cycle QC' },
+  { key: 'qc', label: 'Run QC' },
 ];
 
 function TriCheck({ state, onChange, label }: { state: 'all' | 'some' | 'none'; onChange: () => void; label: string }) {
@@ -38,9 +37,9 @@ interface GroupNode {
 
 export function QcRibbon({ cycles }: { cycles: CycleResult[] }) {
   return (
-    <span className="ribbon" aria-label="Cycle QC summary">
+    <span className="ribbon" aria-label="Run QC summary">
       {cycles.map((c) => (
-        <i key={c.cycle.cycleId} style={{ background: c.cycleExcluded ? 'transparent' : QC_COLORS[c.qc], borderColor: QC_COLORS[c.qc] }} title={`c${c.cycle.cycleNumber}: ${c.qc}${c.cycleExcluded ? ' (excluded)' : ''}`} />
+        <i key={c.cycle.cycleId} style={{ background: c.cycleExcluded ? 'transparent' : QC_COLORS[c.qc], borderColor: QC_COLORS[c.qc] }} title={`Run ${c.cycle.cycleNumber}: ${c.qc}${c.cycleExcluded ? ' (excluded)' : ''}`} />
       ))}
     </span>
   );
@@ -68,13 +67,13 @@ export function Navigator() {
     const groups = new Map<string, GroupNode>();
     for (const r of visible) {
       const m = r.meta;
-      const key = `${m.concentrationM.value}|${m.chargeRatio.value}|${m.gel.value}|${m.substrate.value}`;
+      const key = `${m.concentrationM.value}|${m.chargeRatio.value}|${m.substrate.value}`;
       let g = groups.get(key);
       if (!g) {
         g = {
           key,
           title: `${m.chargeRatio.value !== null ? `Charge ratio ${m.chargeRatio.value}` : 'Charge ratio unknown'}, ${m.concentrationM.value} M${m.concentrationM.source === 'default' ? '*' : ''}`,
-          subtitle: [m.gel.value, m.substrate.value ?? 'substrate unknown'].filter(Boolean).join(', '),
+          subtitle: m.substrate.value ?? 'substrate unknown',
           files: [],
         };
         groups.set(key, g);
@@ -228,9 +227,9 @@ export function Navigator() {
                           <ul className="tf-cycles">
                             {f.cycles.map((c) => (
                               <li key={c.cycle.cycleId} className={ui.focusId === c.cycle.cycleId ? 'focus' : ''}>
-                                <input type="checkbox" checked={selected.has(c.cycle.cycleId)} onChange={(e) => setSel([c.cycle.cycleId], e.target.checked)} aria-label={`Select cycle ${c.cycle.cycleNumber}`} />
+                                <input type="checkbox" checked={selected.has(c.cycle.cycleId)} onChange={(e) => setSel([c.cycle.cycleId], e.target.checked)} aria-label={`Select run ${c.cycle.cycleNumber}`} />
                                 <button className="link" onClick={() => setUi({ focusId: c.cycle.cycleId, rightTab: 'cycle' })}>
-                                  Cycle {c.cycle.cycleNumber}
+                                  Run {c.cycle.cycleNumber}
                                 </button>
                                 <span className="num">{Number.isFinite(c.peakProcessed) ? c.peakProcessed.toFixed(1) : '—'} gf</span>
                                 <span className={`qc-dot ${c.qc}`} title={c.qc} />
@@ -247,7 +246,7 @@ export function Navigator() {
             })}
             {emptyFiles.length > 0 && (
               <div className="tree-group muted">
-                <div className="tg-title">Files without cycles</div>
+                <div className="tg-title">Files without runs</div>
                 {emptyFiles.map((l) => (
                   <div key={l.parsed.fileId} className="tf-head">
                     <span className={`status ${l.parsed.status}`}>!</span> {l.parsed.path}

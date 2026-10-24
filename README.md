@@ -1,6 +1,6 @@
 # Mach-1 Analyzer
 
-A browser-based tool for analysing Biomomentum Mach-1 mechanical test files (TXT exports from Mach-1 Motion). It imports whole experiment folders, separates every movement cycle, extracts peak forces, screens for outliers, compares conditions, exports Excel workbooks with editable charts, and saves projects.
+A browser-based tool for analysing Biomomentum Mach-1 mechanical test files (TXT exports from Mach-1 Motion). It imports whole experiment folders, separates every movement (run), extracts peak forces, screens for outliers, compares conditions, exports Excel workbooks with editable charts, and saves projects.
 
 **Website:** https://tofuscream-rgb.github.io/mach1-analyzer/
 
@@ -15,23 +15,23 @@ No installation, account, Python or server is needed. Collaborators only need th
 1. Open the website and click **Open folder** (or drag the folder onto the page). You can also pick individual **TXT files** or a **ZIP archive**. Use **Try it with synthetic example data** to explore without your own files.
 2. Check **Import status** at the bottom. Every file is listed as OK, with warnings, or without usable data (for example a file that contains only the `<Mach-1 File>` header). Nothing is skipped silently.
 3. Check the metadata. Charge ratio, substrate, holding time and repeat number are read from folder and file names (see below). A concentration shown with an asterisk or the word *default* was not found in the names and is assumed to be 2.1 M. Correct it under **Metadata**, for one file or for a whole folder at once.
-4. Use the **filters** and tick cycles, whole files or whole groups in the navigator. Click **Add to graph**, or **New graph** to start another comparison.
+4. Use the **filters** and tick runs, whole files or whole groups in the navigator. Click **Add to graph**, or **New graph** to start another comparison.
 5. Choose the axes (force vs displacement by default), and switch between **Raw**, **Flagged**, **Processed** and **Compare** views.
-6. Click a cycle to see its values and quality checks in the right-hand panel. Exclude points or cycles there, always with a reason, or with the **Exclude** tool on the graph. Every exclusion is reversible. **Restore original data** clears them all.
+6. Click a run to see its values and quality checks in the right-hand panel. Exclude points or runs there, always with a reason, or with the **Exclude** tool on the graph. Every exclusion is reversible. **Restore original data** clears them all.
 7. **Export Excel** writes the eight-sheet workbook. **Save project** downloads a project file to continue later. The page also autosaves in your browser.
 
 ### How folder and file names are read
 
 | Example path | Read as |
 |---|---|
-| `0.25/Glass/60s-2.txt` | charge ratio 0.25, substrate Glass, hold 60 s, repeat file 2 |
+| `0.25/Glass/60s-2.txt` | charge ratio 0.25, substrate Glass, hold 60 s, Repeat 2 |
 | `0.25 (2.5M)/Glass/30s.txt` or `2.5 M/0.25/Glass/30s.txt` | concentration 2.5 M |
-| `CR 0.75/Gel B/PTFE/1s-3.txt` | charge ratio 0.75, gel “Gel B”, substrate PTFE, repeat 3 |
-| `60s.txt` | repeat 1. `60s-2.txt`, `60s-3.txt` are separate repeat runs, never merged. |
+| `CR 0.75/Gel B/PTFE/1s-3.txt` | charge ratio 0.75, substrate PTFE, Repeat 3 |
+| `60s.txt` | Repeat 1. `60s-2.txt`, `60s-3.txt` are separate repeats (Repeat 2, Repeat 3), never merged. |
 
 Concentration must be written with a capital **M** or as **mol/L** (so “mm” and “min” are never mistaken for it). If no concentration is found, 2.1 M is assumed and clearly labelled as a default. Groups with different concentrations are never merged in statistics.
 
-Holding time per cycle comes from the `Wait` duration recorded in the file. The file name is only a fallback.
+Holding time per run comes from the `Wait` duration recorded in the file. The file name is only a fallback.
 
 ---
 
@@ -39,11 +39,11 @@ Holding time per cycle comes from the `Wait` duration recorded in the file. The 
 
 ### Parsing
 
-Each Mach-1 operation is a block: `<INFO>` (date, time, instrument, load cell, calibration, filter settings) → operation tag (`<Wait>`, `<Move Relative>`, …) with its parameters → a tab-separated `<DATA>` table. A **cycle** is one movement block, paired with the `Wait` (hold) immediately before it. Each cycle keeps its source file, sequence number, hold time, commanded amplitude and velocity, timestamp and original values. Unknown sections are kept and reported. Malformed rows and missing `<END DATA>` tags are counted and reported, never silently dropped.
+Each Mach-1 operation is a block: `<INFO>` (date, time, instrument, load cell, calibration, filter settings) → operation tag (`<Wait>`, `<Move Relative>`, …) with its parameters → a tab-separated `<DATA>` table. A **run** is one movement block, paired with the `Wait` (hold) immediately before it. Each file is one **repeat** (`60s.txt` is Repeat 1, `60s-2.txt` is Repeat 2), and the runs inside it are numbered Run 1, Run 2, … Each run keeps its source file, sequence number, hold time, commanded amplitude and velocity, timestamp and original values. Unknown sections are kept and reported. Malformed rows and missing `<END DATA>` tags are counted and reported, never silently dropped.
 
-### Per-cycle values
+### Per-run values
 
-Minimum, maximum and absolute peak force; mean; SD (n − 1); number of points; time, z position and displacement at the minimum and maximum; optional baseline and baseline-corrected minimum.
+Minimum, maximum and absolute peak force; mean; SD (n − 1); number of points; time, z position and displacement at the minimum and maximum; optional baseline and baseline-corrected minimum. Maximum force and time at maximum are written to the Excel export but are not shown on screen.
 
 - **Peak metric** (Settings): minimum (default; adhesion appears as negative force), maximum, maximum absolute, or baseline-corrected minimum.
 - **Units:** gf or N, with 1 gf = 0.00980665 N. Calculations are always done in gf and converted for display. The load-cell calibration factor is applied by the instrument and is unrelated.
@@ -63,27 +63,27 @@ This is a Hampel-type method with an isolation check:
 
 A point must stand out from the local median *and* from its immediate neighbours. Broad adhesion peaks and sharp detachment steps therefore score near zero, while isolated spikes score high. The score (0–1) is a **severity index for review, not a probability**. The defaults are green < 0.3 ≤ yellow < 0.6 ≤ orange < 0.8 ≤ red. Every flag shows why it was raised.
 
-### Level B: cycle screening
+### Level B: run screening
 
-Each cycle is compared only with cycles under the same conditions (selectable; default charge ratio, concentration, gel, substrate and hold time).
+Each run is compared only with runs under the same conditions (selectable; default charge ratio, concentration, substrate and hold time).
 
-- **Modified Z-score** of the peak, 0.6745 (x − median) / MAD, only when at least 4 cycles are available. It falls back to the mean absolute deviation if MAD = 0.
+- **Modified Z-score** of the peak, 0.6745 (x − median) / MAD, only when at least 4 runs are available. It falls back to the mean absolute deviation if MAD = 0.
 - **Positive-only response** (force never negative) and **missing peak** (minimum within 3 resolution steps of the reference level).
 - **Weak response** (peak depth below 25% of the condition median).
 - **Incomplete movement** (stage travel below 95% of the commanded amplitude).
-- **Start position**: the movement started more than 1 mm beyond the previous cycle’s start, in the travel direction. This suggests the probe did not re-approach the specimen.
+- **Start position**: the movement started more than 1 mm beyond the previous run’s start, in the travel direction. This suggests the probe did not re-approach the specimen.
 - Informational notes (do not change the QC colour):
-  - a repeat file differing from the other repeat files by more than 30%;
+  - a repeat differing from the other repeats by more than 30%;
   - force not back at the reference level when the movement ended (specimen possibly still attached).
 
-A single inconsistent cycle never invalidates its file. Cycles are only flagged, and you decide what to exclude.
+A single inconsistent run never invalidates its file. Runs are only flagged, and you decide what to exclude.
 
 ### Statistics
 
 Statistics are grouped by the variables you choose; concentration is always included. Results are reported at two levels:
 
-- **Cycle level** treats each movement as one value. Cycles on the same specimen are **not** independent replicates.
-- **Run level** averages each file (repeat run) first, then summarises across runs.
+- **Run level** treats each movement (run) as one value. Runs on the same specimen are **not** independent replicates.
+- **Repeat level** averages each file (repeat) first, then summarises across repeats.
 
 ---
 
@@ -92,7 +92,7 @@ Statistics are grouped by the variables you choose; concentration is always incl
 The workbook is generated in the browser and contains eight sheets:
 
 1. Experiment Summary
-2. Cycle Summary
+2. Run Summary
 3. Raw Data
 4. Flagged Data (score, class and reason per point)
 5. Processed Data (retained points)
@@ -118,13 +118,13 @@ Project files carry a schema version, the app and algorithm versions, and are va
 
 | Area | Status |
 |---|---|
-| TXT parsing, cycle detection, error reporting | Implemented and tested (synthetic + real sample files) |
+| TXT parsing, run detection, error reporting | Implemented and tested (synthetic + real sample files) |
 | Folder/file metadata inference, 2.1 M default, overrides | Implemented and tested |
 | Folder, multi-file, ZIP and drag-and-drop import | Implemented. Folder picker tested in Chromium; drag-and-drop not automatically tested |
 | Peak extraction, units, displacement, baseline | Implemented and tested |
 | Level A and Level B screening | Implemented and tested; thresholds are starting points to tune on your data |
 | Raw / Flagged / Processed / Compare views, manual exclusions | Implemented, tested (logic) and exercised in the browser |
-| Grouped statistics with cycle- and run-level variation | Implemented and tested |
+| Grouped statistics with run- and repeat-level variation | Implemented and tested |
 | Excel export with native charts | Implemented and tested; **verify in Microsoft Excel** |
 | PNG / SVG / graph-data export | Implemented; exercised in the browser |
 | Autosave (IndexedDB), project save/load, file reconnection | Implemented and tested |
@@ -142,7 +142,7 @@ The code is TypeScript + React, built with Vite. Main parts:
 
 ```
 src/parser/      Mach-1 parser, folder-name metadata, ZIP import, hashing, Web Worker
-src/analysis/    statistics, per-cycle metrics, point and cycle screening, grouping
+src/analysis/    statistics, per-run metrics, point and run screening, grouping
 src/plotting/    Plotly wrapper, axis definitions, colours, display-only downsampling
 src/export/      XLSX writer with native charts, workbook builder
 src/storage/     IndexedDB autosave, project files

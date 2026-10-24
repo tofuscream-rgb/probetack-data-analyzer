@@ -30,7 +30,7 @@ describe('folder and file name metadata', () => {
     expect(m.chargeRatio.value).toBe(0.25);
   });
 
-  it('distinguishes repeat files from cycles', () => {
+  it('distinguishes repeats from runs', () => {
     expect(splitRepeat('60s')).toEqual({ base: '60s', repeat: 1, explicit: false });
     expect(splitRepeat('60s-2')).toEqual({ base: '60s', repeat: 2, explicit: true });
     expect(splitRepeat('60s-3')).toEqual({ base: '60s', repeat: 3, explicit: true });

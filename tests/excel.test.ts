@@ -20,7 +20,7 @@ describe('Excel export', () => {
     const wb = strFromU8(z['xl/workbook.xml']);
     const names = [...wb.matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]);
     expect(names).toEqual([
-      'Experiment Summary', 'Cycle Summary', 'Raw Data', 'Flagged Data', 'Processed Data', 'Statistical Summary', 'Charts', 'Analysis Settings',
+      'Experiment Summary', 'Run Summary', 'Raw Data', 'Flagged Data', 'Processed Data', 'Statistical Summary', 'Charts', 'Analysis Settings',
     ]);
     const chart = strFromU8(z['xl/charts/chart1.xml']);
     expect(chart).toContain('<c:scatterChart>');
@@ -29,12 +29,18 @@ describe('Excel export', () => {
     expect(chart).toContain('Relative Z displacement (mm)');
     expect(chart).toContain('Force Fz (gf)');
     expect(strFromU8(z['[Content_Types].xml'])).toContain('drawingml.chart+xml');
-    expect(strFromU8(z['xl/worksheets/sheet1.xml'])).toContain('only the Mach-1 header');
+    const summary = strFromU8(z['xl/worksheets/sheet1.xml']);
+    expect(summary).toContain('only the Mach-1 header');
+    expect(summary).toContain('Runs exported');
+    expect(summary).not.toContain('>Gel<');
     const settings = strFromU8(z['xl/worksheets/sheet8.xml']);
     expect(settings).toContain('test exclusion');
     expect(settings).toContain('Algorithm version');
-    const cycleSheet = strFromU8(z['xl/worksheets/sheet2.xml']);
-    expect(cycleSheet).toContain('Excluded (manual)');
+    const runSheet = strFromU8(z['xl/worksheets/sheet2.xml']);
+    expect(runSheet).toContain('Excluded (manual)');
+    expect(runSheet).toContain('Run number');
+    expect(runSheet).toContain('Maximum force'); // hidden on screen, kept in the export
+    expect(runSheet).not.toContain('>Gel<');
     // Raw Data rows = header + every point of the exported cycles
     const nPoints = ids.reduce((s, id) => s + d2.results.get(id)!.cycle.force_gf.length, 0);
     const raw = strFromU8(z['xl/worksheets/sheet3.xml']);

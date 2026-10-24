@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { loadProjectZip, matchSources, migrateState, remapState, saveProjectZip } from '../src/storage/project';
 import { clearSession, loadSession, saveSessionFiles, saveSessionState } from '../src/storage/idb';
-import { defaultProject } from '../src/state/defaults';
+import { defaultProject, defaultSettings } from '../src/state/defaults';
 import { PROJECT_SCHEMA_VERSION, type SourceFileRecord } from '../src/types';
 import { zipSync, strToU8 } from 'fflate';
 import { loadSynthetic } from './helpers';
@@ -53,6 +53,19 @@ describe('project save and load', () => {
     expect(s.settings.peakMetric).toBe('max');
     expect(s.settings.point.halfWindow).toBe(5);
     expect(s.graphs.length).toBe(1);
+  });
+
+  it('removes the retired gel option from grouping and comparison keys of older projects', () => {
+    const ds = defaultSettings();
+    const s = migrateState({
+      groupBy: ['chargeRatio', 'gel', 'substrate'],
+      settings: { ...ds, cycle: { ...ds.cycle, compareBy: ['chargeRatio', 'concentrationM', 'gel', 'substrate', 'holdTimeS'] } },
+    });
+    expect(s.groupBy).toEqual(['chargeRatio', 'substrate']);
+    expect(s.settings.cycle.compareBy).toEqual(['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS']);
+    expect(migrateState({ groupBy: ['gel'] }).groupBy).toEqual(defaultProject().groupBy);
+    expect(defaultProject().groupBy).not.toContain('gel');
+    expect(ds.cycle.compareBy).not.toContain('gel');
   });
 
   it('reconnects re-selected files by SHA-256 even if they were moved, and reports missing/changed files', () => {

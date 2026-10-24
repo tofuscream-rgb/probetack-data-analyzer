@@ -280,7 +280,7 @@ export function parseMach1Text(text: string, path: string, sha256: string, sizeB
   if (unrecognized.size > 0) {
     issues.push({
       severity: 'info',
-      message: `Unrecognized section(s) kept but not analysed as movement cycles: ${[...unrecognized].join(', ')}.`,
+      message: `Unrecognized section(s) kept but not analysed as runs: ${[...unrecognized].join(', ')}.`,
     });
   }
   const totalRows = blocks.reduce((s, b) => s + (b.data?.rowCount ?? 0), 0);
@@ -294,7 +294,7 @@ export function parseMach1Text(text: string, path: string, sha256: string, sizeB
     });
   }
   if (blocks.length > 0 && !blocks.some((b) => /^move/i.test(b.type))) {
-    issues.push({ severity: 'warning', message: 'No movement (Move) operations were found, so there are no cycles to analyse.' });
+    issues.push({ severity: 'warning', message: 'No movement (Move) operations were found, so there are no runs to analyse.' });
   }
 
   const status = issues.some((x) => x.severity === 'error')

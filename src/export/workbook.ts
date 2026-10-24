@@ -11,7 +11,7 @@ import { buildXlsx, cellRef, type CellValue, type ChartSpec, type SheetSpec } fr
 const MAX_ROWS = 1_000_000;
 
 export interface ExportOptions {
-  cycleIds: string[]; // cycles to include in data sheets
+  cycleIds: string[]; // runs to include in data sheets
   graphs: GraphConfig[]; // graphs to draw as native charts
   useProcessedForCharts: boolean;
 }
@@ -48,12 +48,12 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     ['Algorithm version', ALGORITHM_VERSION],
     ['Peak metric', PEAK_LABEL[s.peakMetric]],
     ['Force unit', u],
-    ['Cycles exported', selected.length],
+    ['Runs exported', selected.length],
     ['Files exported', files.length],
     [],
     [
       'File path', 'File name', 'Import status', 'Charge ratio', 'Charge ratio source', 'Concentration (M)', 'Concentration source',
-      'Gel', 'Substrate', 'Nominal hold (s)', 'Repeat number', 'Cycles in file', 'Test date', 'First cycle time',
+      'Substrate', 'Nominal hold (s)', 'Repeat number', 'Runs in file', 'Test date', 'First run time',
       'Load cell', 'Calibration factor', 'Load cell offset', 'Low-pass filter', 'Filter order', 'Filter cutoff (Hz)',
       `Median peak (${u})`, 'SHA-256', 'Notes and warnings',
     ],
@@ -66,7 +66,7 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     const m = r.meta;
     s1.push([
       r.file.path, r.file.name, r.file.status, num(m.chargeRatio.value), m.chargeRatio.source, num(m.concentrationM.value), m.concentrationM.source,
-      m.gel.value, m.substrate.value, num(m.nominalHoldS.value), num(m.repeat.value), cyc.length, h['Date'] ?? '', cyc[0]?.cycle.time ?? '',
+      m.substrate.value, num(m.nominalHoldS.value), num(m.repeat.value), cyc.length, h['Date'] ?? '', cyc[0]?.cycle.time ?? '',
       h['Load Cell Name'] ?? '', num(Number(h['Load Cell Calibration Factor'])), num(Number(h['Load Cell Offset'])),
       h['Load Cell Low-pass filter'] ?? '', h['Load Cell Low-pass filter Order'] ?? '', h['Load Cell Low-pass filter Cutoff frequency (Hz)'] ?? '',
       num(med * uf), r.file.sha256, [...m.notes, ...r.file.issues.map((i) => `${i.severity}: ${i.message}`)].join(' | '),
@@ -75,24 +75,24 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
 
   const noCycles = derived.files.filter((f) => !derived.ordered.some((r) => r.file.fileId === f.fileId));
   if (noCycles.length) {
-    s1.push([], ['Imported files without usable movement cycles (not included in any calculation)']);
-    for (const f of noCycles) s1.push([f.path, f.name, f.status, ...Array(20).fill(null), f.issues.map((i) => `${i.severity}: ${i.message}`).join(' | ')]);
+    s1.push([], ['Imported files without usable runs (not included in any calculation)']);
+    for (const f of noCycles) s1.push([f.path, f.name, f.status, ...Array(18).fill(null), f.issues.map((i) => `${i.severity}: ${i.message}`).join(' | ')]);
   }
 
-  // ---- Sheet 2: Cycle Summary ------------------------------------------------------
+  // ---- Sheet 2: Run Summary --------------------------------------------------------
   const s2: CellValue[][] = [[
-    'Cycle ID', 'Charge ratio', 'Concentration (M)', 'Gel', 'Substrate', 'Holding time (s)', 'File name', 'File path', 'Repeat number',
-    'Cycle number', 'Operation', 'Amplitude (mm)', 'Velocity (mm/s)', 'Test date', 'Test time', `Peak (${PEAK_LABEL[s.peakMetric]}) (${u})`,
+    'Run ID', 'Charge ratio', 'Concentration (M)', 'Substrate', 'Holding time (s)', 'File name', 'File path', 'Repeat number',
+    'Run number', 'Operation', 'Amplitude (mm)', 'Velocity (mm/s)', 'Test date', 'Test time', `Peak (${PEAK_LABEL[s.peakMetric]}) (${u})`,
     `Minimum force (${u})`, `Maximum force (${u})`, `Peak force magnitude (${u})`, `Mean force (${u})`, `SD (${u})`, 'Points',
     'Time at min (s)', 'Time at max (s)', 'Z at min (mm)', 'Z at max (mm)', 'Displacement at min (mm)', 'Displacement at max (mm)',
     `Baseline (${u})`, `Baseline-corrected min (${u})`, `Processed peak (${u})`, 'Processed points', 'Points excluded by rule',
-    'Points excluded manually', 'Cycle anomaly score', 'Max point score', 'Modified Z', 'QC classification', 'QC reasons',
+    'Points excluded manually', 'Run anomaly score', 'Max point score', 'Modified Z', 'QC classification', 'QC reasons',
     'Exclusion status', 'Exclusion reason',
   ]];
   for (const r of selected) {
     const m = r.meta;
     s2.push([
-      r.cycle.cycleId, num(m.chargeRatio.value), num(m.concentrationM.value), m.gel.value, m.substrate.value, num(r.holdTimeS), r.file.name,
+      r.cycle.cycleId, num(m.chargeRatio.value), num(m.concentrationM.value), m.substrate.value, num(r.holdTimeS), r.file.name,
       r.file.path, num(m.repeat.value), r.cycle.cycleNumber, r.cycle.operation, num(r.cycle.amplitudeMm), num(r.cycle.velocityMmS),
       r.cycle.date, r.cycle.time, num(r.peakRaw * uf), num(r.raw.min * uf), num(r.raw.max * uf),
       num(r.raw.absPeak * uf), num(r.raw.mean * uf), num(r.raw.sd * uf), r.raw.n, num(r.raw.tAtMin), num(r.raw.tAtMax), num(r.raw.zAtMin),
@@ -106,7 +106,7 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
 
   // ---- Sheets 3–5: point-level data --------------------------------------------------
   const extraCols = [...new Set(selected.flatMap((r) => Object.keys(r.cycle.extra)))];
-  const rawHeader = ['Cycle ID', 'File name', 'Cycle number', 'Point index', 'Time (s)', 'Position z (mm)', 'Displacement (mm)', 'Fz (gf)', 'Fz (N)', ...extraCols];
+  const rawHeader = ['Run ID', 'File name', 'Run number', 'Point index', 'Time (s)', 'Position z (mm)', 'Displacement (mm)', 'Fz (gf)', 'Fz (N)', ...extraCols];
   const rawRows: CellValue[][] = [];
   const flagRows: CellValue[][] = [];
   const procRows: CellValue[][] = [];
@@ -132,12 +132,12 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
 
   // ---- Sheet 6: Statistical Summary --------------------------------------------------
   const s6: CellValue[][] = [
-    ['Grouped statistics of the selected peak metric. Manually excluded cycles are omitted. Concentration is always part of the grouping key.'],
-    ['Cycle-level statistics treat every movement cycle as one value; cycles from the same specimen are NOT independent replicates.'],
-    ['Run-level statistics first average the cycles of each file (repeat run), then summarize across runs.'],
+    ['Grouped statistics of the selected peak metric. Manually excluded runs are omitted. Concentration is always part of the grouping key.'],
+    ['Run-level statistics treat every movement (run) as one value; runs from the same specimen are NOT independent replicates.'],
+    ['Repeat-level statistics first average the runs of each file (repeat), then summarize across repeats.'],
     [],
     [...project.groupBy.map((k) => GROUP_LABEL[k]), ...(project.groupBy.includes('concentrationM') ? [] : [GROUP_LABEL.concentrationM]),
-      'Cycles (n)', `Cycle mean (${u})`, `Cycle median (${u})`, `Cycle SD (${u})`, 'Cycle CV', 'Runs (files)', `Run mean (${u})`, `Run SD (${u})`, 'Run CV', 'Warning'],
+      'Runs (n)', `Run mean (${u})`, `Run median (${u})`, `Run SD (${u})`, 'Run CV', 'Repeats (n)', `Repeat mean (${u})`, `Repeat SD (${u})`, 'Repeat CV', 'Warning'],
   ];
   const keys = project.groupBy.includes('concentrationM') ? project.groupBy : [...project.groupBy, 'concentrationM' as const];
   const selectedSet = new Set(opts.cycleIds);
@@ -145,7 +145,7 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     if (!g.cycleIds.some((id) => selectedSet.has(id))) continue;
     s6.push([
       ...keys.map((k) => g.label[k]), g.nCycles, num(g.mean * uf), num(g.median * uf), num(g.sd * uf), num(g.cv), g.nRuns,
-      num(g.runMean * uf), num(g.runSD * uf), num(g.runCV), g.nRuns < 2 ? 'Only one run: no between-run variation available' : '',
+      num(g.runMean * uf), num(g.runSD * uf), num(g.runCV), g.nRuns < 2 ? 'Only one repeat: no between-repeat variation available' : '',
     ]);
   }
 
@@ -224,10 +224,10 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     ['Smoothing / extra filtering', 'None', 'No additional low-pass filter is applied. The instrument filter settings are listed per file on Experiment Summary.'],
     ['Point screening method', 'Hampel-type rolling median / MAD', 'z = |F − rolling median| / max(1.4826·MAD, floor); score = z² / (z² + zHalf²). Severity index, not a probability.'],
     ['Rolling half-window (points)', p.halfWindow, ''],
-    ['Scale floor (gf)', p.scaleFloorGf === 0 ? 'auto (force resolution of each cycle)' : p.scaleFloorGf, ''],
+    ['Scale floor (gf)', p.scaleFloorGf === 0 ? 'auto (force resolution of each run)' : p.scaleFloorGf, ''],
     ['zHalf', p.zHalf, 'Robust z at which the score is 0.5.'],
     ['Yellow / orange / red score thresholds', `${p.yellow} / ${p.orange} / ${p.red}`, ''],
-    ['Cycle comparison grouping', cy.compareBy.map((k) => GROUP_LABEL[k]).join(', '), 'Cycles are compared only with cycles sharing these values.'],
+    ['Run comparison grouping', cy.compareBy.map((k) => GROUP_LABEL[k]).join(', '), 'Runs are compared only with runs sharing these values.'],
     ['Modified Z thresholds (yellow / orange / red)', `${cy.modZYellow} / ${cy.modZOrange} / ${cy.modZRed}`, 'Modified Z = 0.6745 (x − median) / MAD.'],
     ['Minimum group size for modified Z', cy.minGroupSize, ''],
     ['Weak-response fraction', cy.weakFraction, ''],
@@ -237,12 +237,12 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     ['Start-position difference (mm)', cy.startOffsetMm, 'Start of each movement compared with the previous movement in the same file (travel direction only).'],
     ['Point exclusion rule (processed data)', s.exclusionRule, 'keepAll = no automatic exclusion; excludeRed = red points; excludeYellowUp = yellow, orange and red points.'],
     [],
-    ['Manually excluded cycles'],
-    ['Cycle ID', 'Reason', 'Decided at'],
+    ['Manually excluded runs'],
+    ['Run ID', 'Reason', 'Decided at'],
     ...Object.entries(project.excludedCycles).map(([id, e]) => [id, e.reason, e.at]),
     [],
     ['Manually excluded points'],
-    ['Cycle ID', 'Point index', 'Reason', 'Decided at'],
+    ['Run ID', 'Point index', 'Reason', 'Decided at'],
     ...Object.entries(project.excludedPoints).flatMap(([id, pts]) => Object.entries(pts).map(([i, e]) => [id, Number(i), e.reason, e.at])),
     [],
     ['User corrections to metadata'],
@@ -255,8 +255,8 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
   ];
 
   const sheets: SheetSpec[] = [
-    { name: 'Experiment Summary', rows: s1, colWidths: [34, 14, 12, 12, 12, 14, 14, 12, 12, 12, 10, 10, 18, 14] },
-    { name: 'Cycle Summary', rows: s2, headerRows: 1, colWidths: [26, 10, 12, 10, 10, 10, 12, 28] },
+    { name: 'Experiment Summary', rows: s1, colWidths: [34, 14, 12, 12, 12, 14, 14, 12, 12, 10, 10, 18, 14] },
+    { name: 'Run Summary', rows: s2, headerRows: 1, colWidths: [26, 10, 12, 10, 10, 12, 28] },
     ...longSheets('Raw Data', rawHeader, rawRows, [26, 12, 8, 8, 10, 14, 14, 12, 12]),
     ...longSheets('Flagged Data', [...rawHeader.slice(0, 9), 'Rolling median (gf)', 'Robust z', 'Anomaly score', 'Classification', 'Why flagged', 'Excluded from processed'], flagRows, [26, 12, 8, 8, 10, 14, 14, 12, 12, 14, 10, 12, 14, 60, 24]),
     ...longSheets('Processed Data', [...rawHeader.slice(0, 9), `Baseline-corrected Fz (${u})`], procRows, [26, 12, 8, 8, 10, 14, 14, 12, 12, 16]),

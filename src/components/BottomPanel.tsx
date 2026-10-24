@@ -20,12 +20,12 @@ function ImportStatus() {
     <div className="import-status">
       <p className="summary-line">
         <span className="pill ok">{ok} imported</span> <span className="pill warning">{warn} with warnings</span>{' '}
-        <span className="pill error">{err} unreadable or empty</span> <span className="pill">{files.reduce((s, f) => s + f.cycles.length, 0)} cycles</span>
+        <span className="pill error">{err} unreadable or empty</span> <span className="pill">{files.reduce((s, f) => s + f.cycles.length, 0)} runs</span>
         {skipped.length > 0 && <span className="pill">{skipped.length} non-TXT files skipped</span>}
       </p>
       <table className="grid">
         <thead>
-          <tr><th>Status</th><th>File</th><th>Cycles</th><th>Blocks</th><th>Recorded</th><th>Messages</th></tr>
+          <tr><th>Status</th><th>File</th><th>Runs</th><th>Blocks</th><th>Recorded</th><th>Messages</th></tr>
         </thead>
         <tbody>
           {files.map((l) => (
@@ -58,7 +58,7 @@ function ImportStatus() {
   );
 }
 
-type SortKey = 'cond' | 'file' | 'cycle' | 'peak' | 'min' | 'max' | 'score' | 'qc' | 'date';
+type SortKey = 'cond' | 'file' | 'cycle' | 'peak' | 'min' | 'score' | 'qc' | 'date';
 
 function CycleTable() {
   const { visible, project, update, setUi, ui } = useApp();
@@ -75,7 +75,6 @@ function CycleTable() {
         case 'cycle': return r.cycle.cycleNumber;
         case 'peak': return r.peakProcessed;
         case 'min': return r.raw.min;
-        case 'max': return r.raw.max;
         case 'score': return r.cycleScore;
         case 'qc': return QC_ORDER.indexOf(r.qc);
         case 'date': return r.cycle.timestamp ?? '';
@@ -101,22 +100,22 @@ function CycleTable() {
   return (
     <div className="cycle-table">
       <div className="table-actions">
-        <span>{rows.length} cycle(s) shown; filters from the navigator apply.</span>
+        <span>{rows.length} run(s) shown; filters from the navigator apply.</span>
         <button className="small" disabled={!project.selection.length} onClick={() => addToActive(project.selection)}>Add selected to graph</button>
         <button
           className="small"
           disabled={!redIds.length}
-          title="Records a manual exclusion for every red cycle shown. Reversible."
+          title="Records a manual exclusion for every red run shown. Reversible."
           onClick={() =>
             update((p) => {
               const ec = { ...p.excludedCycles };
               const at = new Date().toISOString();
-              for (const id of redIds) ec[id] = { reason: 'Bulk exclusion of red (QC) cycles after review', at };
+              for (const id of redIds) ec[id] = { reason: 'Bulk exclusion of red (QC) runs after review', at };
               return { ...p, excludedCycles: ec };
             })
           }
         >
-          Exclude {redIds.length} red cycle(s)
+          Exclude {redIds.length} red run(s)
         </button>
       </div>
       <div className="table-scroll">
@@ -125,13 +124,12 @@ function CycleTable() {
             <tr>
               <th><span className="sr-only">Select</span></th>
               <H k="cond">Charge ratio</H>
-              <th>Conc. (M)</th><th>Gel</th><th>Substrate</th><th>Hold (s)</th>
+              <th>Conc. (M)</th><th>Substrate</th><th>Hold (s)</th>
               <H k="file">File</H>
               <th>Repeat</th>
-              <H k="cycle">Cycle</H>
+              <H k="cycle">Run</H>
               <H k="date">Test date/time</H>
               <H k="min">{`Min (${u})`}</H>
-              <H k="max">{`Max (${u})`}</H>
               <th>{`|Peak| (${u})`}</th><th>{`Mean (${u})`}</th><th>{`SD (${u})`}</th>
               <H k="peak">{`Selected peak (${u})`}</H>
               <H k="score">Anomaly score</H>
@@ -147,7 +145,6 @@ function CycleTable() {
                 </td>
                 <td className="num">{r.meta.chargeRatio.value ?? '—'}</td>
                 <td className={`num ${r.meta.concentrationM.source === 'default' ? 'default' : ''}`}>{r.meta.concentrationM.value}</td>
-                <td>{r.meta.gel.value ?? '—'}</td>
                 <td>{r.meta.substrate.value ?? '—'}</td>
                 <td className="num">{r.holdTimeS ?? '—'}</td>
                 <td>{r.file.name}</td>
@@ -155,7 +152,6 @@ function CycleTable() {
                 <td className="num">{r.cycle.cycleNumber}</td>
                 <td>{r.cycle.timestamp?.replace('T', ' ').slice(0, 19) ?? '—'}</td>
                 <td className="num">{fmt(r.raw.min * f, u === 'N' ? 4 : 2)}</td>
-                <td className="num">{fmt(r.raw.max * f, u === 'N' ? 4 : 2)}</td>
                 <td className="num">{fmt(r.raw.absPeak * f, u === 'N' ? 4 : 2)}</td>
                 <td className="num">{fmt(r.raw.mean * f, u === 'N' ? 4 : 2)}</td>
                 <td className="num">{fmt(r.raw.sd * f, u === 'N' ? 4 : 2)}</td>
@@ -172,7 +168,7 @@ function CycleTable() {
   );
 }
 
-const GROUP_KEYS: GroupKey[] = ['chargeRatio', 'concentrationM', 'gel', 'substrate', 'holdTimeS', 'amplitudeMm', 'velocityMmS'];
+const GROUP_KEYS: GroupKey[] = ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS', 'amplitudeMm', 'velocityMmS'];
 
 function StatsTab() {
   const { derived, project, update } = useApp();
@@ -230,8 +226,8 @@ function StatsTab() {
         </div>
       </div>
       <p className="note">
-        Cycle-level statistics treat each movement as one value. Cycles on the same specimen are not independent replicates. Run-level
-        statistics first average each file (repeat run), then summarise across runs. Excluded cycles are omitted.
+        Run-level statistics treat each movement as one value. Runs on the same specimen are not independent replicates. Repeat-level
+        statistics first average each file (repeat), then summarise across repeats. Excluded runs are omitted.
       </p>
       <div className="stats-split">
         <div className="table-scroll">
@@ -239,8 +235,8 @@ function StatsTab() {
             <thead>
               <tr>
                 {keys.map((k) => <th key={k}>{GROUP_LABEL[k]}</th>)}
-                <th>Cycles n</th><th>{`Cycle mean (${u})`}</th><th>{`Median (${u})`}</th><th>{`SD (${u})`}</th><th>CV</th>
-                <th>Runs n</th><th>{`Run mean (${u})`}</th><th>{`Run SD (${u})`}</th><th>Run CV</th>
+                <th>Runs n</th><th>{`Run mean (${u})`}</th><th>{`Run median (${u})`}</th><th>{`Run SD (${u})`}</th><th>Run CV</th>
+                <th>Repeats n</th><th>{`Repeat mean (${u})`}</th><th>{`Repeat SD (${u})`}</th><th>Repeat CV</th>
               </tr>
             </thead>
             <tbody>
@@ -254,7 +250,7 @@ function StatsTab() {
                   <td className="num">{fmt(g.cv * 100, 1)}%</td>
                   <td className="num">{g.nRuns}</td>
                   <td className="num">{fmt(g.runMean * f, 3)}</td>
-                  <td className="num" title={g.nRuns < 2 ? 'Only one run' : ''}>{fmt(g.runSD * f, 3)}</td>
+                  <td className="num" title={g.nRuns < 2 ? 'Only one repeat' : ''}>{fmt(g.runSD * f, 3)}</td>
                   <td className="num">{Number.isFinite(g.runCV) ? `${fmt(g.runCV * 100, 1)}%` : '—'}</td>
                 </tr>
               ))}
@@ -263,11 +259,11 @@ function StatsTab() {
         </div>
         <div className="stats-chart">
           <div className="segmented small">
-            <button className={level === 'run' ? 'on' : ''} onClick={() => setLevel('run')}>Between runs</button>
-            <button className={level === 'cycle' ? 'on' : ''} onClick={() => setLevel('cycle')}>Between cycles</button>
+            <button className={level === 'run' ? 'on' : ''} onClick={() => setLevel('run')}>Between repeats</button>
+            <button className={level === 'cycle' ? 'on' : ''} onClick={() => setLevel('cycle')}>Between runs</button>
           </div>
           {derived.groups.length > 0 && <PlotlyChart data={data} layout={layout} className="plot small" />}
-          <p className="note">Error bars: ±1 SD {level === 'run' ? 'of run means' : 'of individual cycles'}.</p>
+          <p className="note">Error bars: ±1 SD {level === 'run' ? 'of repeat means' : 'of individual runs'}.</p>
         </div>
       </div>
     </div>
@@ -277,7 +273,7 @@ function StatsTab() {
 function DataTab() {
   const { derived, ui, setUi, project } = useApp();
   const r = ui.focusId ? derived.results.get(ui.focusId) : null;
-  if (!r) return <p className="note">Select a cycle to see its recorded values point by point.</p>;
+  if (!r) return <p className="note">Select a run to see its recorded values point by point.</p>;
   const c = r.cycle;
   const n = c.force_gf.length;
   const LIMIT = 3000;
@@ -293,7 +289,7 @@ function DataTab() {
     <div className="data-tab">
       <div className="table-actions">
         <strong>
-          {r.file.path}, cycle {c.cycleNumber} ({groupValue(r, 'holdTimeS')} s hold)
+          {r.file.path}, Repeat {r.meta.repeat.value}, Run {c.cycleNumber} ({groupValue(r, 'holdTimeS')} s hold)
         </strong>
         <div className="segmented small">
           {(['raw', 'flagged', 'processed'] as const).map((v) => (
@@ -338,7 +334,7 @@ export function BottomPanel() {
   const { ui, setUi, files, derived } = useApp();
   const tabs = [
     { id: 'import', label: `Import status (${files.length})` },
-    { id: 'cycles', label: `Cycle summary (${derived.ordered.length})` },
+    { id: 'cycles', label: `Run summary (${derived.ordered.length})` },
     { id: 'stats', label: `Statistics (${derived.groups.length} groups)` },
     { id: 'data', label: 'Point data' },
   ] as const;

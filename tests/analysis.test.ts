@@ -33,7 +33,7 @@ describe('statistics helpers', () => {
     expect(resolutionStep([0, 0.5, 1.5, -0.5])).toBe(0.5);
   });
 
-  it('modified Z-scores flag the one weak cycle among nine', () => {
+  it('modified Z-scores flag the one weak run among nine', () => {
     const peaks = [-40, -41, -39, -40.5, -39.5, -40, -42, -38.5, -2];
     const { z } = modifiedZScores(peaks);
     expect(Math.abs(z[8])).toBeGreaterThan(10);
@@ -129,8 +129,8 @@ describe('Level A point screening', () => {
   });
 });
 
-describe('Level B cycle screening', () => {
-  it('flags one weak cycle among nine without invalidating the others', async () => {
+describe('Level B run screening', () => {
+  it('flags one weak run among nine without invalidating the others', async () => {
     const moves = [40, 41, 39, 40.5, 39.5, 40, 42, 38.5].map((p) => curve(p));
     moves.push(curve(3));
     const d = derive([await load(moves)]);
@@ -216,7 +216,7 @@ describe('processed data, exclusions and reproducibility', () => {
     expect(g.map((x) => x.label.concentrationM).sort()).toEqual(['2.1', '2.5']);
   });
 
-  it('separates cycle-level and run-level statistics', async () => {
+  it('separates run-level and repeat-level statistics', async () => {
     const a = await parseSource({ path: '0.5/Glass/30s.txt', bytes: enc(miniFile([curve(40), curve(42)])) });
     const b = await parseSource({ path: '0.5/Glass/30s-2.txt', bytes: enc(miniFile([curve(50), curve(52), curve(51)])) });
     const g = derive([a, b]).groups[0];
@@ -263,7 +263,7 @@ describe('starting position check', () => {
 });
 
 describe('repeat-file differences', () => {
-  it('reports a large difference between repeat files as a note without changing cycle QC colour', async () => {
+  it('reports a large difference between repeats as a note without changing run QC colour', async () => {
     const a = await parseSource({ path: '0.5/Glass/30s.txt', bytes: enc(miniFile([curve(40), curve(41), curve(40)])) });
     const b = await parseSource({ path: '0.5/Glass/30s-2.txt', bytes: enc(miniFile([curve(65), curve(66), curve(64)])) });
     const d = derive([a, b]);

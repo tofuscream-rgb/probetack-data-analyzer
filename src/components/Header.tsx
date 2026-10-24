@@ -1,6 +1,9 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../state/AppContext';
 import { APP_VERSION, ALGORITHM_VERSION } from '../types';
+import { useExperiment } from '../state/experiment';
+import { SHEETS, type SheetKey } from '../export/workbook';
+import { useCurrentGraph } from './GraphPanel';
 
 function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
@@ -48,42 +51,46 @@ function SaveDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+type Scope = 'experiment' | 'graph' | 'all';
+
 function ExportDialog({ onClose }: { onClose: () => void }) {
-  const { project, visible, derived, exportExcel } = useApp();
-  const [scope, setScope] = useState<'selected' | 'shown' | 'all'>(project.selection.length ? 'selected' : 'shown');
-  const [graphIds, setGraphIds] = useState(project.graphs.filter((g) => g.cycleIds.length).map((g) => g.id));
-  const [processed, setProcessed] = useState(project.settings.exclusionRule !== 'keepAll' || Object.keys(project.excludedPoints).length > 0);
+  const { derived, exportExcel } = useApp();
+  const ex = useExperiment();
+  const graph = useCurrentGraph();
+  const [scope, setScope] = useState<Scope>('experiment');
+  const [sheets, setSheets] = useState<SheetKey[]>(SHEETS.map((x) => x.key));
   const ids =
-    scope === 'selected' ? project.selection.filter((id) => derived.results.has(id)) : scope === 'shown' ? visible.map((r) => r.cycle.cycleId) : derived.ordered.map((r) => r.cycle.cycleId);
+    scope === 'experiment' ? ex.experimentRuns.map((r) => r.cycle.cycleId) : scope === 'graph' ? ex.graphRuns.map((r) => r.cycle.cycleId) : derived.ordered.map((r) => r.cycle.cycleId);
   const points = ids.reduce((s, id) => s + (derived.results.get(id)?.cycle.force_gf.length ?? 0), 0);
+  const pointSheets = sheets.filter((k) => k === 'raw' || k === 'flagged' || k === 'processed').length;
+  const toggle = (k: SheetKey, on: boolean) => setSheets((cur) => (on ? SHEETS.map((x) => x.key).filter((x) => x === k || cur.includes(x)) : cur.filter((x) => x !== k)));
   return (
     <Dialog title="Export to Excel" onClose={onClose}>
       <fieldset>
-        <legend>Runs for the data sheets</legend>
-        <label className="radio"><input type="radio" checked={scope === 'selected'} onChange={() => setScope('selected')} /> Selected runs ({project.selection.length})</label>
-        <label className="radio"><input type="radio" checked={scope === 'shown'} onChange={() => setScope('shown')} /> Runs matching the current filters ({visible.length})</label>
-        <label className="radio"><input type="radio" checked={scope === 'all'} onChange={() => setScope('all')} /> All imported runs ({derived.ordered.length})</label>
-        <p className="note">{points.toLocaleString()} measurement points will be written to each of the Raw, Flagged and Processed sheets.</p>
+        <legend>Which data</legend>
+        <label className="radio"><input type="radio" checked={scope === 'experiment'} onChange={() => setScope('experiment')} disabled={!ex.main} /> This experiment: {ex.title || '—'} ({ex.experimentRuns.length} runs in {ex.files.length} files)</label>
+        <label className="radio"><input type="radio" checked={scope === 'graph'} onChange={() => setScope('graph')} disabled={!ex.main} /> Only the TXT files on the graph ({ex.graphFiles.length} files, {ex.graphRuns.length} runs)</label>
+        <label className="radio"><input type="radio" checked={scope === 'all'} onChange={() => setScope('all')} /> Everything imported ({derived.ordered.length} runs, all charge ratios)</label>
       </fieldset>
       <fieldset>
-        <legend>Graphs to include as native, editable Excel charts</legend>
-        {project.graphs.map((g) => (
-          <label key={g.id} className="radio">
-            <input type="checkbox" checked={graphIds.includes(g.id)} disabled={!g.cycleIds.length} onChange={(e) => setGraphIds((x) => (e.target.checked ? [...x, g.id] : x.filter((y) => y !== g.id)))} />
-            {g.title} ({g.cycleIds.length} curves)
+        <legend>What to include</legend>
+        <div className="preset-row">
+          <button className="small" onClick={() => setSheets(SHEETS.map((x) => x.key))}>Everything</button>
+          <button className="small" onClick={() => setSheets(['charts', 'stats', 'runs'])}>Graph + summary tables</button>
+          <button className="small" onClick={() => setSheets(['stats', 'runs'])}>Summary tables only</button>
+        </div>
+        {SHEETS.map((x) => (
+          <label key={x.key} className="radio">
+            <input type="checkbox" checked={sheets.includes(x.key)} onChange={(e) => toggle(x.key, e.target.checked)} />
+            <span><strong>{x.name}</strong> <small>{x.description}{x.key === 'charts' ? ` (${graph.title || 'current graph'})` : ''}</small></span>
           </label>
         ))}
-        <label className="radio">
-          <input type="checkbox" checked={processed} onChange={(e) => setProcessed(e.target.checked)} /> Chart the processed curves (excluded points left as gaps)
-        </label>
+        {pointSheets > 0 && <p className="note">{points.toLocaleString()} measurement points will be written to each of the {pointSheets} point-data sheet(s).</p>}
       </fieldset>
-      <p className="note">
-        Sheets: Experiment Summary, Run Summary, Raw Data, Flagged Data, Processed Data, Statistical Summary, Charts, Analysis Settings. The file is
-        built in this browser and downloaded directly.
-      </p>
+      <p className="note">The file is built in this browser and downloaded directly.</p>
       <div className="dialog-actions">
         <button onClick={onClose}>Cancel</button>
-        <button className="primary" disabled={!ids.length} onClick={() => { exportExcel(ids, graphIds, processed); onClose(); }}>
+        <button className="primary" disabled={!ids.length || !sheets.length} onClick={() => { exportExcel(ids, sheets.includes('charts') ? [graph] : [], true, sheets); onClose(); }}>
           Download workbook
         </button>
       </div>
@@ -91,7 +98,7 @@ function ExportDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function PrivacyDialog({ onClose }: { onClose: () => void }) {
+function PrivacyDialog({ onClose }: { onClose: () => void }) {
   const { removeAllData } = useApp();
   return (
     <Dialog title="Where your data goes" onClose={onClose}>

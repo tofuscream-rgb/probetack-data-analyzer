@@ -1,4 +1,4 @@
-import type { AnalysisSettings, GraphConfig, ProjectState } from '../types';
+import type { AnalysisSettings, ExperimentSelection, GraphConfig, ProjectState } from '../types';
 import { PROJECT_SCHEMA_VERSION } from '../types';
 
 export function defaultSettings(): AnalysisSettings {
@@ -40,6 +40,10 @@ export function newGraph(n: number, cycleIds: string[] = []): GraphConfig {
   };
 }
 
+export function defaultExperiment(): ExperimentSelection {
+  return { chargeRatio: null, concentrationM: null, substrate: null, fileId: null, overlay: false, overlayFileIds: [] };
+}
+
 export function defaultProject(): ProjectState {
   const g = newGraph(1);
   return {
@@ -53,6 +57,7 @@ export function defaultProject(): ProjectState {
     activeGraphId: g.id,
     view: 'raw',
     mainTab: 'graph',
+    experiment: defaultExperiment(),
     selection: [],
     groupBy: ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'],
   };

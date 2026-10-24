@@ -1,17 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { ExperimentMeta, GroupKey, ProjectState, SourceFileRecord } from '../types';
+import type { ExperimentMeta, GraphConfig, ProjectState, SourceFileRecord } from '../types';
 import type { LoadedFile, SkippedEntry, SourceFile } from '../parser/loader';
 import { collectFromFileList } from '../parser/loader';
 import { parseInBackground } from '../parser/workerClient';
 import { applyOverride, inferMetadata } from '../parser/pathMetadata';
-import { computeDerived, groupValue, type CycleResult, type Derived } from '../analysis/engine';
+import { computeDerived, type Derived } from '../analysis/engine';
 import { defaultProject, newGraph } from './defaults';
 import { loadProjectZip, matchSources, migrateState, remapState, saveProjectZip } from '../storage/project';
 import { clearSession, isQuotaError, loadSession, saveSessionFiles, saveSessionState, type StoredSession } from '../storage/idb';
-import { buildWorkbook } from '../export/workbook';
+import { buildWorkbook, type SheetKey } from '../export/workbook';
 
-export type FilterKey = GroupKey | 'repeat' | 'date' | 'qc';
-export type Filters = Partial<Record<FilterKey, string[]>>;
 
 export interface Notice {
   id: number;
@@ -20,8 +18,6 @@ export interface Notice {
 }
 
 export interface UiState {
-  filters: Filters;
-  search: string;
   /** Run shown in the detail pane of the Data analysis tab. */
   focusId: string | null;
 }
@@ -33,7 +29,6 @@ interface Ctx {
   update: (fn: (p: ProjectState) => ProjectState) => void;
   meta: Map<string, ExperimentMeta>;
   derived: Derived;
-  visible: CycleResult[];
   ui: UiState;
   setUi: (patch: Partial<UiState> | ((u: UiState) => Partial<UiState>)) => void;
   busy: string | null;
@@ -51,7 +46,7 @@ interface Ctx {
   discardSession: () => Promise<void>;
   saveProject: (mode: 'settings' | 'complete') => void;
   loadProject: (file: File) => Promise<void>;
-  exportExcel: (cycleIds: string[], graphIds: string[], processed: boolean) => void;
+  exportExcel: (cycleIds: string[], graphs: GraphConfig[], processed: boolean, sheets: SheetKey[]) => void;
 }
 
 const AppContext = createContext<Ctx | null>(null);
@@ -74,13 +69,6 @@ export function download(bytes: Uint8Array | Blob, filename: string, type = 'app
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-export function filterValue(r: CycleResult, k: FilterKey): string {
-  if (k === 'repeat') return String(r.meta.repeat.value ?? '—');
-  if (k === 'date') return r.cycle.timestamp?.slice(0, 10) ?? '—';
-  if (k === 'qc') return r.qc;
-  return groupValue(r, k);
-}
-
 const toRecord = (l: LoadedFile): SourceFileRecord => ({
   fileId: l.parsed.fileId,
   path: l.parsed.path,
@@ -99,8 +87,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [restorable, setRestorable] = useState<StoredSession | null>(null);
   const [storageNote, setStorageNote] = useState<string | null>(null);
   const [ui, setUiState] = useState<UiState>({
-    filters: {},
-    search: '',
     focusId: null,
   });
   const noticeId = useRef(1);
@@ -137,17 +123,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [files, meta, project.settings, project.runOverrides, project.excludedPoints, project.groupBy],
   );
-
-  const visible = useMemo(() => {
-    const q = ui.search.trim().toLowerCase();
-    return derived.ordered.filter((r) => {
-      for (const [k, vals] of Object.entries(ui.filters) as [FilterKey, string[]][]) {
-        if (vals && vals.length && !vals.includes(filterValue(r, k))) return false;
-      }
-      if (q && !`${r.file.path} c${r.cycle.cycleNumber}`.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [derived, ui.filters, ui.search]);
 
   // ---- autosave -------------------------------------------------------------------
   useEffect(() => {
@@ -236,7 +211,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ' See the Files tab.',
       );
       if (bad || warn) setProject((p) => ({ ...p, mainTab: 'files' }));
-      setUi((u) => ({ focusId: u.focusId ?? out.find((l) => l.cycles.length)?.cycles[0]?.cycleId ?? null }));
       setBusy(null);
       setTimeout(() => persistFiles(merged), 0);
     },
@@ -276,7 +250,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSkipped([]);
     setPending([]);
     setProject(defaultProject());
-    setUi({ focusId: null, filters: {}, search: '' });
+    setUi({ focusId: null });
     await clearSession().catch(() => undefined);
     autosaveReady.current = true;
     notify('success', 'All data were removed from this page and from browser storage.');
@@ -357,15 +331,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const exportExcel = useCallback(
-    (cycleIds: string[], graphIds: string[], processed: boolean) => {
+    (cycleIds: string[], graphs: GraphConfig[], processed: boolean, sheets: SheetKey[]) => {
       setBusy('Building Excel workbook…');
       setTimeout(() => {
         try {
-          const graphs = project.graphs.filter((g) => graphIds.includes(g.id));
-          const bytes = buildWorkbook(derived, project, { cycleIds, graphs, useProcessedForCharts: processed });
+          const bytes = buildWorkbook(derived, project, { cycleIds, graphs, useProcessedForCharts: processed, sheets });
           const safe = project.name.replace(/[^\w.-]+/g, '_') || 'Mach1_Analysis';
           download(bytes, `${safe}_${new Date().toISOString().slice(0, 10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-          notify('success', `Excel workbook created with ${cycleIds.length} run(s) and ${graphs.length} chart(s).`);
+          notify('success', `Excel workbook created with ${sheets.length} part(s) and ${cycleIds.length} run(s).`);
         } catch (e) {
           notify('error', `Excel export failed: ${(e as Error).message}`);
         } finally {
@@ -377,7 +350,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const value: Ctx = {
-    files, skipped, project, update, meta, derived, visible, ui, setUi, busy, notices, notify, dismiss, pending,
+    files, skipped, project, update, meta, derived, ui, setUi, busy, notices, notify, dismiss, pending,
     restorable, storageNote, importFiles, importSources, loadExample, removeAllData, restoreSession, discardSession,
     saveProject, loadProject, exportExcel,
   };

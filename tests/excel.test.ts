@@ -63,6 +63,21 @@ describe('Excel export', () => {
     expect(raw.match(/<row /g)).toHaveLength(nPoints + 1);
   });
 
+  it('exports only the chosen parts of the workbook', async () => {
+    const loaded = await loadSynthetic();
+    const p = defaultProject();
+    const d = derive(loaded, p);
+    const ids = d.ordered.slice(0, 5).map((r) => r.cycle.cycleId);
+    const graph = { ...p.graphs[0], cycleIds: ids };
+    const names = (sheets: Parameters<typeof buildWorkbook>[2]['sheets']) => {
+      const z = unzipSync(buildWorkbook(d, p, { cycleIds: ids, graphs: [graph], useProcessedForCharts: true, sheets }));
+      return [...strFromU8(z['xl/workbook.xml']).matchAll(/<sheet name="([^"]+)"/g)].map((m) => m[1]);
+    };
+    expect(names(['stats', 'runs'])).toEqual(['Run Summary', 'Statistical Summary']);
+    expect(names(['charts', 'stats', 'runs'])).toEqual(['Run Summary', 'Statistical Summary', 'Charts']);
+    expect(names(undefined)).toHaveLength(8);
+  });
+
   it('builds valid column names and sheet names', () => {
     expect(colName(0)).toBe('A');
     expect(colName(25)).toBe('Z');

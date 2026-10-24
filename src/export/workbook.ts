@@ -10,10 +10,26 @@ import { buildXlsx, cellRef, type CellValue, type ChartSpec, type SheetSpec } fr
 
 const MAX_ROWS = 1_000_000;
 
+export type SheetKey = 'experiment' | 'runs' | 'raw' | 'flagged' | 'processed' | 'stats' | 'charts' | 'settings';
+
+/** The worksheets a user can choose to export, in workbook order. */
+export const SHEETS: { key: SheetKey; name: string; description: string }[] = [
+  { key: 'charts', name: 'Charts', description: 'Curves of the graph as an editable Excel chart, with their data' },
+  { key: 'stats', name: 'Statistical Summary', description: 'Mean, SD, median, CV and n per condition, all runs and without outliers' },
+  { key: 'runs', name: 'Run Summary', description: 'One row per run: peak force, Z-score, flag and why, status' },
+  { key: 'experiment', name: 'Experiment Summary', description: 'One row per TXT file: conditions, instrument settings, notes' },
+  { key: 'raw', name: 'Raw Data', description: 'Every recorded point (can be large)' },
+  { key: 'flagged', name: 'Flagged Data', description: 'Every point with its single-point screening score' },
+  { key: 'processed', name: 'Processed Data', description: 'Points of the runs used in the averages' },
+  { key: 'settings', name: 'Analysis Settings', description: 'All settings, manual decisions and file fingerprints (for reproducibility)' },
+];
+
 export interface ExportOptions {
   cycleIds: string[]; // runs to include in data sheets
   graphs: GraphConfig[]; // graphs to draw as native charts
   useProcessedForCharts: boolean;
+  /** Worksheets to include (default: all). */
+  sheets?: SheetKey[];
 }
 
 const num = (v: number | null | undefined): CellValue => (v === null || v === undefined || !Number.isFinite(v) ? null : v);
@@ -257,17 +273,18 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     ...files.map((r) => [r.file.fileId, r.file.path, r.file.sha256, r.file.sizeBytes]),
   ];
 
-  const sheets: SheetSpec[] = [
-    { name: 'Experiment Summary', rows: s1, colWidths: [34, 14, 12, 12, 12, 14, 14, 12, 12, 10, 10, 18, 14] },
-    { name: 'Run Summary', rows: s2, headerRows: 1, colWidths: [26, 10, 12, 10, 10, 12, 28] },
-    ...longSheets('Raw Data', rawHeader, rawRows, [26, 12, 8, 8, 10, 14, 14, 12, 12]),
-    ...longSheets('Flagged Data', [...rawHeader.slice(0, 9), 'Rolling median (gf)', 'Robust z', 'Anomaly score', 'Classification', 'Why flagged', 'Excluded from processed'], flagRows, [26, 12, 8, 8, 10, 14, 14, 12, 12, 14, 10, 12, 14, 60, 24]),
-    ...longSheets('Processed Data', [...rawHeader.slice(0, 9), `Baseline-corrected Fz (${u})`], procRows, [26, 12, 8, 8, 10, 14, 14, 12, 12, 16]),
-    { name: 'Statistical Summary', rows: s6, colWidths: [14, 14, 12, 12, 12, 10, 14, 14, 12, 10, 10, 14, 12, 10, 30] },
-    { name: 'Charts', rows: chartRows, charts },
-    { name: 'Analysis Settings', rows: s8, colWidths: [42, 40, 80] },
+  const sheets: [SheetKey, SheetSpec[]][] = [
+    ['experiment', [{ name: 'Experiment Summary', rows: s1, colWidths: [34, 14, 12, 12, 12, 14, 14, 12, 12, 10, 10, 18, 14] }]],
+    ['runs', [{ name: 'Run Summary', rows: s2, headerRows: 1, colWidths: [26, 10, 12, 10, 10, 12, 28] }]],
+    ['raw', longSheets('Raw Data', rawHeader, rawRows, [26, 12, 8, 8, 10, 14, 14, 12, 12])],
+    ['flagged', longSheets('Flagged Data', [...rawHeader.slice(0, 9), 'Rolling median (gf)', 'Robust z', 'Anomaly score', 'Classification', 'Why flagged', 'Excluded from processed'], flagRows, [26, 12, 8, 8, 10, 14, 14, 12, 12, 14, 10, 12, 14, 60, 24])],
+    ['processed', longSheets('Processed Data', [...rawHeader.slice(0, 9), `Baseline-corrected Fz (${u})`], procRows, [26, 12, 8, 8, 10, 14, 14, 12, 12, 16])],
+    ['stats', [{ name: 'Statistical Summary', rows: s6, colWidths: [14, 14, 12, 12, 12, 10, 14, 14, 12, 10, 10, 14, 12, 10, 30] }]],
+    ['charts', [{ name: 'Charts', rows: chartRows, charts }]],
+    ['settings', [{ name: 'Analysis Settings', rows: s8, colWidths: [42, 40, 80] }]],
   ];
-  return sheets;
+  const want = new Set(opts.sheets ?? SHEETS.map((x) => x.key));
+  return sheets.filter(([k]) => want.has(k)).flatMap(([, specs]) => specs);
 }
 
 /** Workbook with only one graph: its plotted data and an editable native chart. */

@@ -31,20 +31,20 @@ export function SettingsPanel() {
   return (
     <div className="settings-panel">
       <div className="settings-grid">
-        <Section title="Processed data">
+        <Section title="Outliers">
           {AUTO_CLASSES.map((c) => (
             <label key={c} className="check-row">
               <input type="checkbox" checked={s.runExclusion.excludeClasses.includes(c)} onChange={(e) => toggleClass(c, e.target.checked)} />
-              <span className={`qc-dot ${c}`} /> Automatically exclude {c} runs <small>({QC_LABEL[c]})</small>
+              <span className={`qc-dot ${c}`} /> Leave {c} runs out of the averages <small>({QC_LABEL[c]})</small>
             </label>
           ))}
           <p className="note">
-            Excluded runs are left out of the processed statistics; the raw statistics always use every run. A manual choice in the Data analysis tab
-            (Keep anyway / Exclude anyway) always wins over these rules. Flags themselves never depend on this setting.
+            These runs stay highlighted but are left out of the “without outliers” averages; the “all runs” averages always use every run. Your own
+            choice in the Data analysis tab (the In average tick box) always wins over these rules. Flags themselves never depend on this setting.
           </p>
         </Section>
 
-        <Section title="Run screening thresholds">
+        <Section title="How outliers are detected" open={false}>
           <p className="note">Runs are compared with other runs that share these conditions:</p>
           <div className="chips">
             {COMPARE_KEYS.map((k) => (
@@ -70,7 +70,7 @@ export function SettingsPanel() {
           <Num label="Incomplete if travel below (fraction)" value={s.cycle.completeFraction} step={0.01} min={0} max={1} onChange={(v) => setC({ completeFraction: v })} />
         </Section>
 
-        <Section title="Force and displacement">
+        <Section title="Force and displacement" open={false}>
           <label className="field">
             <span>Peak metric</span>
             <select value={s.peakMetric} onChange={(e) => set({ peakMetric: e.target.value as PeakMetric })}>

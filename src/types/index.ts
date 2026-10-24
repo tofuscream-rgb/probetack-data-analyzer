@@ -186,7 +186,20 @@ export interface GraphConfig {
 }
 
 export type ViewMode = 'raw' | 'flagged' | 'processed' | 'compare';
-export type MainTab = 'graph' | 'analysis' | 'summary' | 'settings' | 'files';
+export type MainTab = 'graph' | 'analysis' | 'compare' | 'settings' | 'files';
+
+/** Step 2 of the sidebar: which experiment (charge ratio + concentration + substrate) and which TXT files are viewed. */
+export interface ExperimentSelection {
+  /** Values as shown in the dropdowns (null = first available). */
+  chargeRatio: string | null;
+  concentrationM: string | null;
+  substrate: string | null;
+  /** The main TXT file to view. */
+  fileId: string | null;
+  /** Overlay additional TXT files of the same experiment. */
+  overlay: boolean;
+  overlayFileIds: string[];
+}
 
 export interface ProjectState {
   schemaVersion: number;
@@ -203,6 +216,7 @@ export interface ProjectState {
   /** Legacy: graph view of version 1.x; no longer shown. */
   view: ViewMode;
   mainTab: MainTab;
+  experiment: ExperimentSelection;
   selection: string[];
   groupBy: GroupKey[];
 }

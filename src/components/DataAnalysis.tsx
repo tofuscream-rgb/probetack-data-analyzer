@@ -8,6 +8,7 @@ import { axisLabel, axisValues } from '../plotting/axes';
 import { PlotlyChart } from '../plotting/PlotlyChart';
 import type { ForceUnit, GroupKey, MetaOverride } from '../types';
 import { QcLegend, compareConditionKeys, fmt, forceDigits, meanSd, useSetRunChoice, type RunChoice } from './common';
+import { useExperiment } from '../state/experiment';
 
 /** Runs are listed per experimental condition. Concentration is always part of the key. */
 export const CONDITION_KEYS: GroupKey[] = ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'];
@@ -55,54 +56,93 @@ function RunChoiceSelect({ r }: { r: CycleResult }) {
   );
 }
 
+/** "In average" checkbox: writes a manual override only when the choice differs from the automatic rule. */
+function InAverage({ r }: { r: CycleResult }) {
+  const { project, update } = useApp();
+  const autoIncluded = !project.settings.runExclusion.excludeClasses.includes(r.qc);
+  const toggle = (want: boolean) =>
+    update((p) => {
+      const ro = { ...p.runOverrides };
+      if (want === autoIncluded) delete ro[r.cycle.cycleId];
+      else ro[r.cycle.cycleId] = { action: want ? 'include' : 'exclude', reason: want ? 'Kept after review (Data analysis)' : 'Left out after review (Data analysis)', at: new Date().toISOString() };
+      return { ...p, runOverrides: ro };
+    });
+  return (
+    <input
+      type="checkbox"
+      checked={isIncluded(r)}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => toggle(e.target.checked)}
+      aria-label={`Use run ${r.cycle.cycleNumber} of ${r.file.name} in the average`}
+      title={r.override ? `Your choice: ${r.override.reason}. Untick/tick again to go back to automatic.` : autoIncluded ? 'Used in the average' : 'Outlier: left out of the average automatically. Tick to keep it anyway.'}
+    />
+  );
+}
+
 export function DataAnalysis() {
-  const { visible, derived, project, ui, setUi } = useApp();
+  const { derived, project, ui, setUi } = useApp();
+  const ex = useExperiment();
+  const [scope, setScope] = useState<'experiment' | 'graph'>('experiment');
   const u = project.settings.forceUnit;
   const f = unitFactor(u);
   const d = forceDigits(u);
-  const valueLabel = project.settings.peakMetric === 'min' ? 'Minimum force' : PEAK_LABEL[project.settings.peakMetric];
+  const valueLabel = project.settings.peakMetric === 'min' ? 'Peak (min) force' : PEAK_LABEL[project.settings.peakMetric];
+  const runs = scope === 'experiment' ? ex.experimentRuns : ex.graphRuns;
 
   const groups = useMemo(() => {
-    const stats = new Map(computeGroups(visible, CONDITION_KEYS).map((g) => [g.key, g]));
+    const stats = new Map(computeGroups(runs, CONDITION_KEYS).map((g) => [g.key, g]));
     const map = new Map<string, CycleResult[]>();
-    for (const r of visible) map.set(conditionKey(r), [...(map.get(conditionKey(r)) ?? []), r]);
+    for (const r of runs) map.set(conditionKey(r), [...(map.get(conditionKey(r)) ?? []), r]);
     return [...map]
       .sort(([a], [b]) => compareConditionKeys(a, b))
-      .map(([key, runs]) => ({ key, title: conditionTitle(runs[0]), runs: [...runs].sort(byRepeatAndRun), stats: stats.get(key) ?? null }));
-  }, [visible]);
+      .map(([key, list]) => ({ key, hold: list[0].holdTimeS, runs: [...list].sort(byRepeatAndRun), stats: stats.get(key) ?? null }));
+  }, [runs]);
 
   const focus = ui.focusId ? derived.results.get(ui.focusId) ?? null : null;
   const excl = project.settings.runExclusion.excludeClasses;
+  const nOutliers = runs.filter((r) => r.qc !== 'green').length;
 
-  if (!derived.ordered.length) return <p className="note pad">Import files with the navigator on the left to analyse their runs.</p>;
+  if (!ex.main) return <p className="note pad">Open your experiment folder in step 1 on the left, then choose an experiment in step 2.</p>;
 
   return (
     <div className={`analysis-layout ${focus ? 'with-detail' : ''}`}>
       <div className="analysis-main">
         <div className="analysis-intro">
-          <QcLegend />
+          <div className="table-actions">
+            <h3 className="exp-title">{ex.title}</h3>
+            <div className="segmented small" role="group" aria-label="Which files">
+              <button className={scope === 'experiment' ? 'on' : ''} onClick={() => setScope('experiment')}>All {ex.files.length} TXT files</button>
+              <button className={scope === 'graph' ? 'on' : ''} onClick={() => setScope('graph')}>Only files on the graph ({ex.graphFiles.length})</button>
+            </div>
+          </div>
           <p className="note">
-            How runs are compared: each run’s peak is compared with runs of the same condition (modified Z-score), plus checks for no negative force,
-            no peak, weak response, probe start position and incomplete movement.{' '}
-            {excl.length ? `${excl.join(' and ').replace(/^./, (c) => c.toUpperCase())} runs are excluded automatically` : 'No runs are excluded automatically'} (change in
-            Settings); Keep anyway / Exclude anyway always win.
+            Each run (one pull inside a TXT file) is one value. Its <strong>Z-score</strong> (modified, based on the median) shows how far it lies from the
+            other runs with the same charge ratio, concentration, substrate and holding time; |Z| ≥ {project.settings.cycle.modZOrange} is suspicious.
+            Runs are also checked for no negative force, no peak, weak response, probe start position and incomplete movement.{' '}
+            {nOutliers ? `${nOutliers} run(s) are highlighted. ` : 'No runs are highlighted. '}
+            {excl.length ? `${excl.join(' and ').replace(/^./, (c) => c.toUpperCase())} runs are left out of the average without outliers.` : 'No runs are left out automatically.'}{' '}
+            Untick or tick <em>In average</em> to decide yourself. Click a row for its curve and details.
           </p>
+          <QcLegend />
         </div>
-        {groups.length === 0 && <p className="note">No runs match the current filters.</p>}
         {groups.map((g) => {
-          const st = g.stats?.processed;
+          const raw = g.stats?.raw;
+          const pr = g.stats?.processed;
           return (
             <section key={g.key} className="run-group">
               <header className="run-group-head">
-                <h3>{g.title}</h3>
-                <span className="group-stat" title="Processed: included and manually kept runs only">
-                  Processed {meanSd((st?.mean ?? NaN) * f, (st?.sd ?? NaN) * f, st?.n ?? 0, d)} {u}
+                <h3>{g.hold !== null ? `${g.hold} s holding time` : 'Holding time unknown'}</h3>
+                <span className="group-stat">
+                  Average (all runs): <strong>{meanSd((raw?.mean ?? NaN) * f, (raw?.sd ?? NaN) * f, raw?.n ?? 0, d)}</strong> {u}
+                </span>
+                <span className="group-stat">
+                  Without outliers: <strong>{meanSd((pr?.mean ?? NaN) * f, (pr?.sd ?? NaN) * f, pr?.n ?? 0, d)}</strong> {u}
                 </span>
               </header>
               <table className="grid run-table">
                 <thead>
                   <tr>
-                    <th>Repeat</th><th>Run</th><th className="num">{`${valueLabel} (${u})`}</th><th>Flag</th><th>Reason</th><th>Status</th><th>Decision</th>
+                    <th>File</th><th>Run</th><th className="num">{`${valueLabel} (${u})`}</th><th className="num" title="Modified Z-score within the same condition; needs at least 4 runs">Z-score</th><th>Flag</th><th>Why</th><th title="Used in the average without outliers">In average</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -111,16 +151,18 @@ export function DataAnalysis() {
                     return (
                       <tr
                         key={r.cycle.cycleId}
-                        className={`${isIncluded(r) ? '' : 'excluded'} ${ui.focusId === r.cycle.cycleId ? 'focus' : ''}`}
+                        className={`hl-${r.qc} ${isIncluded(r) ? '' : 'excluded'} ${ui.focusId === r.cycle.cycleId ? 'focus' : ''}`}
                         onClick={() => setUi({ focusId: r.cycle.cycleId })}
                       >
-                        <td className="num" title={r.file.path}>{r.meta.repeat.value ?? '—'}</td>
+                        <td title={r.file.path}>{r.file.name}</td>
                         <td className="num">{r.cycle.cycleNumber}</td>
                         <td className="num value">{fmt(r.peakRaw * f, d)}</td>
-                        <td><span className={`qc-pill ${r.qc}`} title={QC_LABEL[r.qc]}>{r.qc}</span></td>
+                        <td className={`num z ${r.modZ !== null && Math.abs(r.modZ) >= project.settings.cycle.modZOrange ? 'big' : ''}`} title={r.modZ === null ? 'Fewer than the minimum number of runs in this condition' : ''}>
+                          {r.modZ === null ? '—' : Math.abs(r.modZ) >= 99 ? (r.modZ > 0 ? '≫' : '≪') : r.modZ.toFixed(2)}
+                        </td>
+                        <td><span className={`qc-pill ${r.qc}`} title={QC_LABEL[r.qc]}>{r.qc === 'green' ? 'ok' : QC_LABEL[r.qc].split(' —')[0].toLowerCase()}</span></td>
                         <td className="reason" title={msgs.join('\n')}><div className="clamp">{shorten(msgs, 90) || <span className="muted">—</span>}</div></td>
-                        <td title={r.statusReason}>{STATUS_LABEL[r.status]}</td>
-                        <td><RunChoiceSelect r={r} /></td>
+                        <td className="center"><InAverage r={r} /></td>
                       </tr>
                     );
                   })}

@@ -12,16 +12,25 @@ No installation, account, Python or server is needed. Collaborators only need th
 
 ## Using the website
 
-1. Open the website and click **Open folder** (or drag the folder onto the page). You can also pick individual **TXT files** or a **ZIP archive**. Use **Try it with synthetic example data** to explore without your own files.
-2. Check the small **Files** tab (top right). Every file is listed as OK, with warnings, or without usable data (for example a file that contains only the `<Mach-1 File>` header). Nothing is skipped silently; the tab opens by itself when an import has problems.
-3. Use the **navigator** on the left: search, **filters** (charge ratio, concentration, substrate, holding time, repeat, flag) and the tree of conditions → files → runs. The filters decide which runs the Data analysis and Data summary tabs show. Each file has a ribbon with one tick per run, coloured by flag: filled = included in the processed statistics, hollow = excluded (automatically or by hand). Click a run to open its details.
-4. Work through the four main tabs. The page remembers the selected tab in the project.
+**1. Open your experiments** (left side). Choose how to import, **folder** (recommended), **TXT file(s)** or a **ZIP file**, and click **Browse**. You can also drag a folder onto the page. Every TXT file found is listed, with its sub-folders kept. **Try it with example data** loads invented example files.
 
-   - **Graph**: tick runs, whole files or whole groups in the navigator and click **Add to graph** (or **New graph** for another comparison). Choose the axes (force vs displacement by default) or **Swap axes**, show or hide single curves, and drag to zoom (**Reset zoom** or a double-click resets). **Min marker** marks each run’s minimum force (▼). With **Show excluded runs** (on by default), excluded runs are drawn as thin grey dashed lines; otherwise they are hidden. Export the graph as **PNG**, **SVG** or **XLSX** (its data with an editable chart).
-   - **Data analysis**: the filtered runs as a table grouped by condition (charge ratio, concentration, substrate, holding time). Each group shows its processed mean ± SD (n). Each row shows the repeat, run, minimum force, flag colour, the reason for the flag (hover for the full text) and the status. Under **Decision**, choose **Automatic** (follow the rule in Settings), **Keep anyway** or **Exclude anyway**. Keep and Exclude ask for an optional reason, which is saved and exported. Excluded rows are greyed and their value struck through. Click a row to open its details beside the table: the force-vs-displacement curve, metadata (with **Correct metadata** for one file or a whole folder, e.g. when the concentration is only the 2.1 M default), all flag messages and notes, measured values and the point data.
-   - **Data summary**: one block per charge ratio + concentration + substrate, one row per holding time. **Raw** lists every run’s value with mean ± SD and n; **Flagged** shows the same values coloured by flag (struck through when excluded); **Processed** gives mean ± SD and n after exclusions and how many runs were excluded. The chart below plots mean ± SD against holding time, one line per block, as **Raw**, **Processed** or **Both** (processed solid, raw dashed). Tick **Also show repeat-level statistics** to average each repeat first.
-   - **Settings**: **Processed data** chooses which flag colours are excluded automatically (red and orange by default; manual Keep/Exclude always wins). **Run screening thresholds** holds the Level B settings, and **Force and displacement** the peak metric, unit, displacement definition and baseline. **Advanced** (collapsed) holds single-point screening, which finds one-point recording glitches inside a curve, and the point exclusion rule.
-5. **Restore original data** (header) clears every manual run decision and point exclusion. **Export Excel** writes the eight-sheet workbook. **Save project** downloads a project file to continue later. The page also autosaves in your browser.
+**2. Choose your experiment.** The dropdowns are built from your folder names:
+
+- **Charge ratio**, then **Total monomer concentration** (only the concentrations measured at that charge ratio), then **Substrate**.
+- **TXT file to view**: the files of that experiment, sorted by holding time (e.g. `1s.txt`, `1s-2.txt`, `30s.txt`, `60s.txt`).
+- Tick **Overlay additional TXT files** to put more files of the same experiment on the graph. Use it to check that repeats agree (`1s.txt` and `1s-3.txt`) or to compare holding times (`1s`, `30s`, `60s`).
+
+The small ticks next to each file show its runs, coloured by flag. A hollow tick is an outlier that is left out of the averages.
+
+**3. Look at the results** in the tabs:
+
+- **Graph**: force vs displacement for every run of the chosen file(s). Change the axes, show or hide single runs or whole files, and drag to zoom. ▼ marks each run's minimum force. Outlier runs are drawn grey and dashed; untick **Show outlier runs** to hide them. **Save graph** as PNG, SVG or an Excel file with an editable chart.
+- **Data analysis**: the peak summary of the chosen experiment, one block per holding time. Each block gives the **average ± SD (n)** of all runs and **without outliers**. Each run is listed with its peak force, **Z-score** and flag, and outliers are highlighted with the reason. Untick or tick **In average** to decide yourself whether a run counts. Click a run to see its curve, all notes, metadata (and correct it, e.g. a missing concentration) and the point data.
+- **Compare charge ratios**: pick a concentration and substrate to get a table of average ± SD per charge ratio and holding time, a chart of **peak force vs charge ratio** (one line per holding time) and a chart of **peak force vs holding time** (one line per charge ratio), with all runs or without outliers.
+- **Settings**: which flag colours count as outliers that are left out of the averages (red and orange by default), how outliers are detected, force unit, peak metric, displacement and baseline. **Advanced** holds single-point glitch screening.
+- **Files** (small tab, top right): the import status of every file. Nothing is skipped silently.
+
+**4. Export Excel** (top right). Choose which data (this experiment, only the files on the graph, or everything) and what to include: the graph as an editable chart, the statistical summary, the run summary, point data and settings. You can also use the shortcuts **Everything**, **Graph + summary tables** or **Summary tables only**. **Save project** downloads a project file to continue later, and the page also autosaves in your browser. **Restore original data** clears all your manual In average choices and point exclusions.
 
 ### How folder and file names are read
 
@@ -79,7 +88,7 @@ Each run is compared only with runs under the same conditions (selectable; defau
   - a repeat differing from the other repeats by more than 30%;
   - force not back at the reference level when the movement ended (specimen possibly still attached).
 
-A single inconsistent run never invalidates its file. By default, red and orange runs are left out of the processed statistics. You can change which colours are excluded under Settings and override any single run with Keep anyway / Exclude anyway. Flags are always computed the same way, whatever is excluded.
+A single inconsistent run never invalidates its file. By default, red and orange runs are left out of the processed statistics. You can change which colours are excluded under Settings and override any single run with the In average tick box in Data analysis. Flags are always computed the same way, whatever is excluded.
 
 ### Statistics
 
@@ -127,7 +136,7 @@ Project files carry a schema version, the app and algorithm versions, and are va
 | Peak extraction, units, displacement, baseline | Implemented and tested |
 | Level A and Level B screening | Implemented and tested; thresholds are starting points to tune on your data |
 | Automatic run exclusion, Keep/Exclude overrides, raw vs processed statistics | Implemented, tested (logic) and exercised in the browser |
-| Tabbed interface (Graph, Data analysis, Data summary, Settings, Files) | Implemented; exercised in Chromium at 1280 px width |
+| Two-step sidebar (open, choose experiment) and tabs (Graph, Data analysis, Compare charge ratios, Settings, Files) | Implemented; exercised in Chromium at 1280 px width |
 | Grouped statistics with run- and repeat-level variation | Implemented and tested |
 | Excel export with native charts | Implemented and tested; **verify in Microsoft Excel** |
 | PNG / SVG / graph-data export | Implemented; exercised in the browser |

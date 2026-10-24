@@ -3,10 +3,10 @@ import { loadPlotly } from './plotting/PlotlyChart';
 import { warmUpWorker } from './parser/workerClient';
 import { AppProvider, useApp } from './state/AppContext';
 import { Header } from './components/Header';
-import { Navigator } from './components/Navigator';
+import { Sidebar } from './components/Sidebar';
 import { GraphPanel } from './components/GraphPanel';
 import { DataAnalysis } from './components/DataAnalysis';
-import { DataSummary } from './components/DataSummary';
+import { CompareChargeRatios } from './components/CompareChargeRatios';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ImportStatus } from './components/FilesTab';
 import type { MainTab } from './types';
@@ -14,7 +14,7 @@ import type { MainTab } from './types';
 const TABS: { id: MainTab; label: string; minor?: boolean }[] = [
   { id: 'graph', label: 'Graph' },
   { id: 'analysis', label: 'Data analysis' },
-  { id: 'summary', label: 'Data summary' },
+  { id: 'compare', label: 'Compare charge ratios' },
   { id: 'settings', label: 'Settings' },
   { id: 'files', label: 'Files', minor: true },
 ];
@@ -42,7 +42,7 @@ function MainArea() {
       <div className={`main-body tab-${tab}`} role="tabpanel">
         {tab === 'graph' && <GraphPanel />}
         {tab === 'analysis' && <DataAnalysis />}
-        {tab === 'summary' && <DataSummary />}
+        {tab === 'compare' && <CompareChargeRatios />}
         {tab === 'settings' && <SettingsPanel />}
         {tab === 'files' && <ImportStatus />}
       </div>
@@ -106,7 +106,7 @@ function Shell() {
         </div>
       )}
       <main className="workspace">
-        <Navigator />
+        <Sidebar />
         <MainArea />
       </main>
       <div className="notices" aria-live="polite">

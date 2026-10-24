@@ -81,8 +81,18 @@ describe('project save and load', () => {
     expect(old.mainTab).toBe('graph');
     expect(old.graphs[0].showExcluded).toBe(true);
     expect(old.graphs[0].showMarkers).toBe(false);
-    expect(migrateState({ mainTab: 'summary' }).mainTab).toBe('summary');
+    expect(migrateState({ mainTab: 'compare' }).mainTab).toBe('compare');
+    expect(migrateState({ mainTab: 'summary' as never }).mainTab).toBe('analysis'); // 1.3 summary tab became part of Data analysis
     expect(migrateState({ mainTab: 'bogus' as never }).mainTab).toBe('graph');
+  });
+
+  it('keeps the chosen experiment and remaps its file ids when files are reconnected', () => {
+    expect(migrateState({}).experiment).toEqual({ chargeRatio: null, concentrationM: null, substrate: null, fileId: null, overlay: false, overlayFileIds: [] });
+    const s = migrateState({ experiment: { chargeRatio: '0.25', concentrationM: '2.5', substrate: 'Glass', fileId: 'old1', overlay: true, overlayFileIds: ['old2', 'x'] } });
+    expect(s.experiment.substrate).toBe('Glass');
+    const r = remapState(s, new Map([['old1', 'new1'], ['old2', 'new2']]));
+    expect(r.experiment.fileId).toBe('new1');
+    expect(r.experiment.overlayFileIds).toEqual(['new2', 'x']);
   });
 
   it('removes the retired gel option from grouping and comparison keys of older projects', () => {

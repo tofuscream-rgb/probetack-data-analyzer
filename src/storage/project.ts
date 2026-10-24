@@ -9,7 +9,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import type { GroupKey, MainTab, ProjectState, RunOverride, SourceFileRecord } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
-import { defaultProject, defaultSettings } from '../state/defaults';
+import { defaultExperiment, defaultProject, defaultSettings } from '../state/defaults';
 
 export interface ProjectFileJson {
   format: 'mach1-analyzer-project';
@@ -63,7 +63,7 @@ export function saveProjectZip(
 
 // The gel option was removed from the interface; older projects may still group or compare by it.
 const withoutGel = (keys: GroupKey[]) => keys.filter((k) => k !== 'gel');
-const MAIN_TABS: MainTab[] = ['graph', 'analysis', 'summary', 'settings', 'files'];
+const MAIN_TABS: MainTab[] = ['graph', 'analysis', 'compare', 'settings', 'files'];
 
 /** Merge a possibly older/partial state with current defaults so new fields always exist. */
 export function migrateState(raw: Partial<ProjectState>): ProjectState {
@@ -92,7 +92,9 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
     runOverrides,
     excludedPoints: raw.excludedPoints ?? {},
     graphs: Array.isArray(raw.graphs) && raw.graphs.length ? raw.graphs.map((g) => ({ ...g, showExcluded: g.showExcluded ?? true })) : d.graphs,
-    mainTab: raw.mainTab && MAIN_TABS.includes(raw.mainTab) ? raw.mainTab : 'graph',
+    // 'summary' was the per-condition summary tab of 1.3; it became part of Data analysis.
+    mainTab: (raw.mainTab as string) === 'summary' ? 'analysis' : raw.mainTab && MAIN_TABS.includes(raw.mainTab) ? raw.mainTab : 'graph',
+    experiment: { ...defaultExperiment(), ...(raw.experiment ?? {}) },
     selection: Array.isArray(raw.selection) ? raw.selection : [],
     groupBy: groupBy.length ? groupBy : d.groupBy,
   };
@@ -178,6 +180,11 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
     runOverrides: remapKeys(state.runOverrides, mapCycle),
     excludedPoints: remapKeys(state.excludedPoints, mapCycle),
     selection: state.selection.map(mapCycle),
+    experiment: {
+      ...state.experiment,
+      fileId: state.experiment.fileId ? idMap.get(state.experiment.fileId) ?? state.experiment.fileId : null,
+      overlayFileIds: state.experiment.overlayFileIds.map((id) => idMap.get(id) ?? id),
+    },
     graphs: state.graphs.map((g) => ({ ...g, cycleIds: g.cycleIds.map(mapCycle), hidden: g.hidden.map(mapCycle) })),
   };
 }

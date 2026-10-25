@@ -3,7 +3,7 @@ import type { GraphConfig, ProjectState } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, GF_TO_N } from '../types';
 import type { CycleResult, Derived } from '../analysis/engine';
 import { GROUP_LABEL, STATUS_LABEL, isIncluded, type SummaryStats } from '../analysis/engine';
-import { PEAK_LABEL, DISPLACEMENT_LABEL, displacement } from '../analysis/cycleMetrics';
+import { DISPLACEMENT_LABEL, FORCE_SIGN_LABEL, displacement, displayFactor, peakLabel } from '../analysis/cycleMetrics';
 import { QC_ORDER, explainPoint } from '../analysis/pointOutliers';
 import { axisLabel, axisValues, curveLabel } from '../plotting/axes';
 import { buildXlsx, cellRef, type CellValue, type ChartSpec, type SheetSpec } from './xlsxWriter';
@@ -50,8 +50,12 @@ export function buildWorkbook(derived: Derived, project: ProjectState, opts: Exp
 
 export function buildWorkbookSheets(derived: Derived, project: ProjectState, opts: ExportOptions): SheetSpec[] {
   const s = project.settings;
-  const uf = s.forceUnit === 'N' ? GF_TO_N : 1;
-  const u = s.forceUnit;
+  // Forces follow the unit and sign settings; SDs use the magnitude only. Point-data sheets keep the recorded Fz.
+  const uf = displayFactor(s);
+  const ufa = Math.abs(uf);
+  const pos = s.forceSign === 'positive';
+  const zSign = pos ? -1 : 1;
+  const u = pos ? `${s.forceUnit}, sign inverted` : s.forceUnit;
   const selected = opts.cycleIds.map((id) => derived.results.get(id)).filter((r): r is CycleResult => !!r);
   const exportedAt = new Date().toISOString();
 
@@ -62,8 +66,9 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     ['Exported at', exportedAt],
     ['Application version', APP_VERSION],
     ['Algorithm version', ALGORITHM_VERSION],
-    ['Peak metric', PEAK_LABEL[s.peakMetric]],
-    ['Force unit', u],
+    ['Peak metric', peakLabel(s)],
+    ['Force unit', s.forceUnit],
+    ['Force sign', FORCE_SIGN_LABEL[s.forceSign]],
     ['Runs exported', selected.length],
     ['Files exported', files.length],
     [],
@@ -98,11 +103,11 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
   // ---- Sheet 2: Run Summary --------------------------------------------------------
   const s2: CellValue[][] = [[
     'Run ID', 'Charge ratio', 'Concentration (M)', 'Substrate', 'Holding time (s)', 'File name', 'File path', 'Repeat number',
-    'Run number', 'Operation', 'Amplitude (mm)', 'Velocity (mm/s)', 'Test date', 'Test time', `Peak (${PEAK_LABEL[s.peakMetric]}) (${u})`,
+    'Run number', 'Operation', 'Amplitude (mm)', 'Velocity (mm/s)', 'Test date', 'Test time', `Peak (${peakLabel(s)}) (${u})`,
     `Minimum force (${u})`, `Maximum force (${u})`, `Peak force magnitude (${u})`, `Mean force (${u})`, `SD (${u})`, 'Points',
     'Time at min (s)', 'Time at max (s)', 'Z at min (mm)', 'Z at max (mm)', 'Displacement at min (mm)', 'Displacement at max (mm)',
     `Baseline (${u})`, `Baseline-corrected min (${u})`, `Processed peak (${u})`, 'Processed points', 'Points excluded by rule',
-    'Points excluded manually', 'Run anomaly score', 'Max point score', 'Modified Z', 'QC classification', 'QC reasons',
+    'Points excluded manually', 'Run anomaly score', 'Max point score', pos ? 'Modified Z (sign inverted)' : 'Modified Z', 'QC classification', 'QC reasons',
     'Status', 'Status reason',
   ]];
   for (const r of selected) {
@@ -111,10 +116,10 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
       r.cycle.cycleId, num(m.chargeRatio.value), num(m.concentrationM.value), m.substrate.value, num(r.holdTimeS), r.file.name,
       r.file.path, num(m.repeat.value), r.cycle.cycleNumber, r.cycle.operation, num(r.cycle.amplitudeMm), num(r.cycle.velocityMmS),
       r.cycle.date, r.cycle.time, num(r.peakRaw * uf), num(r.raw.min * uf), num(r.raw.max * uf),
-      num(r.raw.absPeak * uf), num(r.raw.mean * uf), num(r.raw.sd * uf), r.raw.n, num(r.raw.tAtMin), num(r.raw.tAtMax), num(r.raw.zAtMin),
+      num(r.raw.absPeak * ufa), num(r.raw.mean * uf), num(r.raw.sd * ufa), r.raw.n, num(r.raw.tAtMin), num(r.raw.tAtMax), num(r.raw.zAtMin),
       num(r.raw.zAtMax), num(r.raw.dispAtMin), num(r.raw.dispAtMax), num(r.baseline === null ? null : r.baseline * uf),
       num(r.raw.baselineMin === null ? null : r.raw.baselineMin * uf), num(r.peakProcessed * uf), r.processed.n, r.excludedByRule,
-      r.excludedManual, num(r.cycleScore), num(r.points.maxScore), num(r.modZ), r.qc,
+      r.excludedManual, num(r.cycleScore), num(r.points.maxScore), num(r.modZ === null ? null : r.modZ * zSign), r.qc,
       r.flags.filter((f) => f.cls !== 'green').map((f) => f.message).join(' | '),
       STATUS_LABEL[r.status], r.statusReason,
     ]);
@@ -122,7 +127,7 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
 
   // ---- Sheets 3–5: point-level data --------------------------------------------------
   const extraCols = [...new Set(selected.flatMap((r) => Object.keys(r.cycle.extra)))];
-  const rawHeader = ['Run ID', 'File name', 'Run number', 'Point index', 'Time (s)', 'Position z (mm)', 'Displacement (mm)', 'Fz (gf)', 'Fz (N)', ...extraCols];
+  const rawHeader = ['Run ID', 'File name', 'Run number', 'Point index', 'Time (s)', 'Position z (mm)', 'Displacement (mm)', 'Fz as recorded (gf)', 'Fz as recorded (N)', ...extraCols];
   const rawRows: CellValue[][] = [];
   const flagRows: CellValue[][] = [];
   const procRows: CellValue[][] = [];
@@ -157,8 +162,8 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
   const keys = project.groupBy.includes('concentrationM') ? project.groupBy : [...project.groupBy, 'concentrationM' as const];
   const runCols = (t: string) => [`${t} runs (n)`, `${t} run mean (${u})`, `${t} run SD (${u})`, `${t} run median (${u})`, `${t} run CV`];
   const repeatCols = (t: string) => [`${t} repeats (n)`, `${t} repeat mean (${u})`, `${t} repeat SD (${u})`, `${t} repeat CV`];
-  const runVals = (st: SummaryStats) => [st.n, num(st.mean * uf), num(st.sd * uf), num(st.median * uf), num(st.cv)];
-  const repeatVals = (st: SummaryStats) => [st.nRepeats, num(st.repeatMean * uf), num(st.repeatSD * uf), num(st.repeatCV)];
+  const runVals = (st: SummaryStats) => [st.n, num(st.mean * uf), num(st.sd * ufa), num(st.median * uf), num(st.cv)];
+  const repeatVals = (st: SummaryStats) => [st.nRepeats, num(st.repeatMean * uf), num(st.repeatSD * ufa), num(st.repeatCV)];
   s6.push([...keys.map((k) => GROUP_LABEL[k]), ...runCols('Raw'), ...runCols('Processed'), ...repeatCols('Raw'), ...repeatCols('Processed'), 'Warning']);
   const selectedSet = new Set(opts.cycleIds);
   for (const g of derived.groups) {
@@ -235,8 +240,9 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     ['Application version', APP_VERSION, ''],
     ['Algorithm version', ALGORITHM_VERSION, 'Recorded so results can be reproduced.'],
     ['Exported at', exportedAt, ''],
-    ['Peak metric', PEAK_LABEL[s.peakMetric], ''],
-    ['Force unit', u, `1 gf = ${GF_TO_N} N (unit conversion only; unrelated to the load-cell calibration factor).`],
+    ['Peak metric', peakLabel(s), ''],
+    ['Force unit', s.forceUnit, `1 gf = ${GF_TO_N} N (unit conversion only; unrelated to the load-cell calibration factor).`],
+    ['Force sign', FORCE_SIGN_LABEL[s.forceSign], 'Display and export only: summary forces are multiplied by −1 so adhesion is positive. Calculations, flags and the point-data sheets use the recorded values.'],
     ['Displacement definition', DISPLACEMENT_LABEL[s.displacementMode], 'z₀ = first recorded z of each movement.'],
     ['Baseline mode', s.baselineMode, s.baselineMode === 'holdMean' ? `Mean of the last ${s.baselineHoldLastS} s of the preceding hold.` : s.baselineMode === 'moveInterval' ? `Mean of movement interval ${s.baselineInterval[0]}–${s.baselineInterval[1]} s.` : 'No baseline correction.'],
     ['Smoothing / extra filtering', 'None', 'No additional low-pass filter is applied. The instrument filter settings are listed per file on Experiment Summary.'],

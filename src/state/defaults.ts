@@ -5,7 +5,8 @@ export function defaultSettings(): AnalysisSettings {
   return {
     peakMetric: 'min', // current glass datasets: adhesion appears as a negative peak
     forceUnit: 'gf',
-    displacementMode: 'signed',
+    forceSign: 'positive', // display only: adhesion (recorded negative) is shown as a positive force
+    displacementMode: 'distance', // |z − z₀|: every run starts at 0 and increases
     baselineMode: 'none', // never assumed automatically
     baselineHoldLastS: 0.5,
     baselineInterval: [0, 0.1],

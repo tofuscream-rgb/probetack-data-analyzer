@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react';
 import type { Data, Layout } from 'plotly.js';
 import { useApp } from '../state/AppContext';
 import { STATUS_LABEL, computeGroups, groupValue, isIncluded, type CycleResult } from '../analysis/engine';
-import { PEAK_LABEL, unitFactor, type Metrics } from '../analysis/cycleMetrics';
+import { displayFactor, peakLabel, type Metrics } from '../analysis/cycleMetrics';
 import { QC_LABEL, QC_ORDER } from '../analysis/pointOutliers';
 import { axisLabel, axisValues } from '../plotting/axes';
 import { PlotlyChart } from '../plotting/PlotlyChart';
-import type { ForceUnit, GroupKey, MetaOverride } from '../types';
+import type { AnalysisSettings, GroupKey, MetaOverride } from '../types';
 import { QcLegend, compareConditionKeys, fmt, forceDigits, meanSd, useSetRunChoice, type RunChoice } from './common';
 import { useExperiment } from '../state/experiment';
 
@@ -84,9 +84,12 @@ export function DataAnalysis() {
   const ex = useExperiment();
   const [scope, setScope] = useState<'experiment' | 'graph'>('experiment');
   const u = project.settings.forceUnit;
-  const f = unitFactor(u);
+  const f = displayFactor(project.settings);
+  const fa = Math.abs(f); // spreads (SD) are never negative
   const d = forceDigits(u);
-  const valueLabel = project.settings.peakMetric === 'min' ? 'Peak (min) force' : PEAK_LABEL[project.settings.peakMetric];
+  const valueLabel = project.settings.peakMetric === 'min' && project.settings.forceSign !== 'positive' ? 'Peak (min) force' : peakLabel(project.settings);
+  // The Z-score is computed on recorded forces; with inverted sign it is shown inverted too, so high = stronger adhesion.
+  const zSign = project.settings.forceSign === 'positive' ? -1 : 1;
   const runs = scope === 'experiment' ? ex.experimentRuns : ex.graphRuns;
 
   const groups = useMemo(() => {
@@ -133,10 +136,10 @@ export function DataAnalysis() {
               <header className="run-group-head">
                 <h3>{g.hold !== null ? `${g.hold} s holding time` : 'Holding time unknown'}</h3>
                 <span className="group-stat">
-                  Average (all runs): <strong>{meanSd((raw?.mean ?? NaN) * f, (raw?.sd ?? NaN) * f, raw?.n ?? 0, d)}</strong> {u}
+                  Average (all runs): <strong>{meanSd((raw?.mean ?? NaN) * f, (raw?.sd ?? NaN) * fa, raw?.n ?? 0, d)}</strong> {u}
                 </span>
                 <span className="group-stat">
-                  Without outliers: <strong>{meanSd((pr?.mean ?? NaN) * f, (pr?.sd ?? NaN) * f, pr?.n ?? 0, d)}</strong> {u}
+                  Without outliers: <strong>{meanSd((pr?.mean ?? NaN) * f, (pr?.sd ?? NaN) * fa, pr?.n ?? 0, d)}</strong> {u}
                 </span>
               </header>
               <table className="grid run-table">
@@ -158,7 +161,7 @@ export function DataAnalysis() {
                         <td className="num">{r.cycle.cycleNumber}</td>
                         <td className="num value">{fmt(r.peakRaw * f, d)}</td>
                         <td className={`num z ${r.modZ !== null && Math.abs(r.modZ) >= project.settings.cycle.modZOrange ? 'big' : ''}`} title={r.modZ === null ? 'Fewer than the minimum number of runs in this condition' : ''}>
-                          {r.modZ === null ? '—' : Math.abs(r.modZ) >= 99 ? (r.modZ > 0 ? '≫' : '≪') : r.modZ.toFixed(2)}
+                          {r.modZ === null ? '—' : Math.abs(r.modZ) >= 99 ? (r.modZ * zSign > 0 ? '≫' : '≪') : (r.modZ * zSign).toFixed(2)}
                         </td>
                         <td><span className={`qc-pill ${r.qc}`} title={QC_LABEL[r.qc]}>{r.qc === 'green' ? 'ok' : QC_LABEL[r.qc].split(' —')[0].toLowerCase()}</span></td>
                         <td className="reason" title={msgs.join('\n')}><div className="clamp">{shorten(msgs, 90) || <span className="muted">—</span>}</div></td>
@@ -177,19 +180,22 @@ export function DataAnalysis() {
   );
 }
 
-function MetricsTable({ raw, proc, u }: { raw: Metrics; proc: Metrics; u: ForceUnit }) {
-  const f = unitFactor(u);
+function MetricsTable({ raw, proc, s }: { raw: Metrics; proc: Metrics; s: AnalysisSettings }) {
+  const u = s.forceUnit;
+  const f = displayFactor(s);
+  const fa = Math.abs(f);
+  const pos = s.forceSign === 'positive';
   const rows: [string, number | null, number | null, number?][] = [
-    [`Minimum (${u})`, raw.min * f, proc.min * f],
-    [`Peak magnitude (${u})`, raw.absPeak * f, proc.absPeak * f],
+    [pos ? `Peak adhesion force (${u})` : `Minimum (${u})`, raw.min * f, proc.min * f],
+    [`Peak magnitude (${u})`, raw.absPeak * fa, proc.absPeak * fa],
     [`Mean (${u})`, raw.mean * f, proc.mean * f],
-    [`SD (${u})`, raw.sd * f, proc.sd * f],
+    [`SD (${u})`, raw.sd * fa, proc.sd * fa],
     ['Points', raw.n, proc.n, 0],
-    ['Time at min (s)', raw.tAtMin, proc.tAtMin],
-    ['Z at min (mm)', raw.zAtMin, proc.zAtMin, 4],
-    ['Displacement at min (mm)', raw.dispAtMin, proc.dispAtMin, 4],
+    [pos ? 'Time at peak (s)' : 'Time at min (s)', raw.tAtMin, proc.tAtMin],
+    [pos ? 'Z at peak (mm)' : 'Z at min (mm)', raw.zAtMin, proc.zAtMin, 4],
+    [pos ? 'Displacement at peak (mm)' : 'Displacement at min (mm)', raw.dispAtMin, proc.dispAtMin, 4],
     [`Baseline (${u})`, raw.baseline === null ? null : raw.baseline * f, proc.baseline === null ? null : proc.baseline * f],
-    [`Baseline-corrected min (${u})`, raw.baselineMin === null ? null : raw.baselineMin * f, proc.baselineMin === null ? null : proc.baselineMin * f],
+    [pos ? `Baseline-corrected peak (${u})` : `Baseline-corrected min (${u})`, raw.baselineMin === null ? null : raw.baselineMin * f, proc.baselineMin === null ? null : proc.baselineMin * f],
   ];
   return (
     <table className="metrics">
@@ -217,13 +223,15 @@ function RunCurve({ r }: { r: CycleResult }) {
     const xId = axisValues(r, 'disp_mm', s) ? 'disp_mm' : 'time_s';
     const ys = axisValues(r, 'force', s)!;
     const color = isIncluded(r) ? '#1F4E9C' : '#9AA6B5';
+    // The adhesion peak is the minimum of the recorded force, whatever sign is displayed.
+    const fz = r.cycle.force_gf;
     let iMin = -1;
-    for (let i = 0; i < ys.length; i++) if (r.include[i] && (iMin < 0 || ys[i] < ys[iMin])) iMin = i;
+    for (let i = 0; i < fz.length; i++) if (r.include[i] && (iMin < 0 || fz[i] < fz[iMin])) iMin = i;
     const traces: Data[] = [
       { type: 'scatter', mode: 'lines', x: Array.from(xs), y: Array.from(ys, (v, i) => (r.include[i] ? v : null)), connectgaps: false, line: { color, width: 1.6, dash: isIncluded(r) ? 'solid' : 'dash' }, hovertemplate: 'x = %{x:.4f}<br>y = %{y:.4f}<extra></extra>' } as unknown as Data,
     ];
     if (iMin >= 0) {
-      traces.push({ type: 'scatter', mode: 'markers', x: [xs[iMin]], y: [ys[iMin]], marker: { symbol: 'triangle-down', size: 11, color, line: { color: '#18263A', width: 1 } }, hovertemplate: 'Minimum force %{y:.4f}<extra></extra>' } as unknown as Data);
+      traces.push({ type: 'scatter', mode: 'markers', x: [xs[iMin]], y: [ys[iMin]], marker: { symbol: s.forceSign === 'positive' ? 'triangle-up' : 'triangle-down', size: 11, color, line: { color: '#18263A', width: 1 } }, hovertemplate: `${peakLabel(s)} %{y:.4f}<extra></extra>` } as unknown as Data);
     }
     const lay: Partial<Layout> = {
       margin: { l: 56, r: 8, t: 8, b: 40 },
@@ -331,7 +339,7 @@ function PointTable({ r }: { r: CycleResult }) {
         <table className="grid dense">
           <thead>
             <tr>
-              <th>#</th><th>Time (s)</th><th>z (mm)</th><th>Fz (gf)</th><th>Rolling median</th><th>Score</th><th>Point flag</th><th>Exclude</th>
+              <th>#</th><th>Time (s)</th><th>z (mm)</th><th title="Exactly as in the TXT file (adhesion negative)">Fz as recorded (gf)</th><th>Rolling median</th><th>Score</th><th>Point flag</th><th>Exclude</th>
             </tr>
           </thead>
           <tbody>
@@ -379,8 +387,8 @@ function RunDetail({ r, onClose }: { r: CycleResult; onClose: () => void }) {
         <p className="note">{r.statusReason}</p>
       </div>
       <p className="big-number">
-        {fmt(r.peakProcessed * unitFactor(u), u === 'N' ? 5 : 2)} <span>{u}</span> <small>{PEAK_LABEL[s.peakMetric]}</small>
-        {r.peakProcessed !== r.peakRaw && Number.isFinite(r.peakRaw) && <small> all points {fmt(r.peakRaw * unitFactor(u), 2)}</small>}
+        {fmt(r.peakProcessed * displayFactor(s), u === 'N' ? 5 : 2)} <span>{u}</span> <small>{peakLabel(s)}</small>
+        {r.peakProcessed !== r.peakRaw && Number.isFinite(r.peakRaw) && <small> all points {fmt(r.peakRaw * displayFactor(s), 2)}</small>}
       </p>
       <RunCurve r={r} />
 
@@ -413,7 +421,7 @@ function RunDetail({ r, onClose }: { r: CycleResult; onClose: () => void }) {
       </details>
       <details className="section">
         <summary>Measured values</summary>
-        <MetricsTable raw={r.raw} proc={r.processed} u={u} />
+        <MetricsTable raw={r.raw} proc={r.processed} s={s} />
         <p className="note">{r.baselineNote}</p>
       </details>
       <details className="section">

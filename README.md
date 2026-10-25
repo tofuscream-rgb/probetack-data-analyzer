@@ -24,7 +24,7 @@ The small ticks next to each file show its runs, coloured by flag. A hollow tick
 
 **3. Look at the results** in the tabs:
 
-- **Graph**: force vs displacement for every run of the chosen file(s). Change the axes, show or hide single runs or whole files, and drag to zoom. ▼ marks each run's minimum force. Outlier runs are drawn grey and dashed; untick **Show outlier runs** to hide them. **Save graph** as PNG, SVG or an Excel file with an editable chart.
+- **Graph**: adhesion force vs displacement for every run of the chosen file(s). Every run starts at displacement 0, and adhesion is shown as a positive force (both can be changed under Settings → Force and displacement). Change the axes, show or hide single runs or whole files, and drag to zoom. ▲ marks each run's peak adhesion force. Outlier runs are drawn grey and dashed; untick **Show outlier runs** to hide them. **Save graph** as PNG, SVG or an Excel file with an editable chart.
 - **Data analysis**: the peak summary of the chosen experiment, one block per holding time. Each block gives the **average ± SD (n)** of all runs and **without outliers**. Each run is listed with its peak force, **Z-score** and flag, and outliers are highlighted with the reason. Untick or tick **In average** to decide yourself whether a run counts. Click a run to see its curve, all notes, metadata (and correct it, e.g. a missing concentration) and the point data.
 - **Compare charge ratios**: pick a concentration and substrate to get a table of average ± SD per charge ratio and holding time, a chart of **peak force vs charge ratio** (one line per holding time) and a chart of **peak force vs holding time** (one line per charge ratio), with all runs or without outliers.
 - **Settings**: which flag colours count as outliers that are left out of the averages (red and orange by default), how outliers are detected, force unit, peak metric, displacement and baseline. **Advanced** holds single-point glitch screening.
@@ -59,7 +59,8 @@ Minimum, maximum and absolute peak force; mean; SD (n − 1); number of points; 
 
 - **Peak metric** (Settings): minimum (default; adhesion appears as negative force), maximum, maximum absolute, or baseline-corrected minimum.
 - **Units:** gf or N, with 1 gf = 0.00980665 N. Calculations are always done in gf and converted for display. The load-cell calibration factor is applied by the instrument and is unrelated.
-- **Relative displacement:** z − z₀, |z − z₀| or z₀ − z, where z₀ is the first z of the movement. This definition has **not** yet been checked against Mach-1 Analysis.
+- **Force sign:** the instrument records pulling (adhesion) as negative force. By default the site multiplies displayed and exported forces by −1, so adhesion and the peak are positive (SDs stay positive). Calculations and flags use the recorded values, and the point-data sheets in Excel keep the recorded Fz. Choose *As recorded* under Settings to turn this off.
+- **Relative displacement:** each run is zeroed at its own start (z₀ = first recorded z of that run), so runs that start at different stage heights all begin at 0. The default is the distance travelled, |z − z₀|, which counts up from 0; z − z₀ and z₀ − z are also available. This definition has **not** yet been checked against Mach-1 Analysis.
 - **Baseline correction** is off by default and never chosen automatically. You can use the mean of the last N s of the preceding hold, or the mean of a time interval you type in under **Settings → Force and displacement**.
 - **No smoothing or extra low-pass filtering is applied.** The files report the instrument’s 3 Hz low-pass filter; whether exported values already include it has not been independently confirmed.
 

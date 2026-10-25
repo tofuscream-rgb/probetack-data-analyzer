@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
-import { buildWorkbook } from '../src/export/workbook';
+import { buildWorkbook, buildWorkbookSheets } from '../src/export/workbook';
 import { isIncluded } from '../src/analysis/engine';
 import { colName, safeSheetName } from '../src/export/xlsxWriter';
 import { defaultProject } from '../src/state/defaults';
@@ -27,8 +27,8 @@ describe('Excel export', () => {
     expect(chart).toContain('<c:scatterChart>');
     expect(chart.match(/<c:ser>/g)).toHaveLength(3);
     expect(chart).toMatch(/<c:xVal><c:numRef><c:f>'Charts'!\$M\$5:\$M\$\d+<\/c:f>/);
-    expect(chart).toContain('Relative Z displacement (mm)');
-    expect(chart).toContain('Force Fz (gf)');
+    expect(chart).toContain('Displacement from start (mm)');
+    expect(chart).toContain('Adhesion force (gf)');
     expect(strFromU8(z['[Content_Types].xml'])).toContain('drawingml.chart+xml');
     const summary = strFromU8(z['xl/worksheets/sheet1.xml']);
     expect(summary).toContain('only the Mach-1 header');
@@ -46,7 +46,7 @@ describe('Excel export', () => {
     expect(runSheet).toContain('Status reason');
     expect(runSheet).toContain('Excluded manually: test exclusion');
     const stats = strFromU8(z['xl/worksheets/sheet6.xml']);
-    for (const h of ['Raw runs (n)', 'Raw run mean (gf)', 'Raw run SD (gf)', 'Raw run median (gf)', 'Raw run CV', 'Processed runs (n)', 'Processed run mean (gf)', 'Processed run SD (gf)', 'Processed run median (gf)', 'Processed run CV', 'Raw repeats (n)', 'Processed repeat mean (gf)']) {
+    for (const h of ['Raw runs (n)', 'Raw run mean (gf, sign inverted)', 'Raw run SD (gf, sign inverted)', 'Raw run median (gf, sign inverted)', 'Raw run CV', 'Processed runs (n)', 'Processed run mean (gf, sign inverted)', 'Processed run SD (gf, sign inverted)', 'Processed run median (gf, sign inverted)', 'Processed run CV', 'Raw repeats (n)', 'Processed repeat mean (gf, sign inverted)']) {
       expect(stats).toContain(h);
     }
     expect(settings).toContain('Automatic run exclusion (QC classes)');
@@ -76,6 +76,29 @@ describe('Excel export', () => {
     expect(names(['stats', 'runs'])).toEqual(['Run Summary', 'Statistical Summary']);
     expect(names(['charts', 'stats', 'runs'])).toEqual(['Run Summary', 'Statistical Summary', 'Charts']);
     expect(names(undefined)).toHaveLength(8);
+  });
+
+  it('exports adhesion as positive means with positive SDs, and keeps the recorded Fz in point data', async () => {
+    const loaded = await loadSynthetic();
+    const p = defaultProject();
+    const d = derive(loaded, p);
+    const ids = d.ordered.map((r) => r.cycle.cycleId);
+    const sheets = buildWorkbookSheets(d, p, { cycleIds: ids, graphs: [], useProcessedForCharts: true });
+    const stats = sheets.find((x) => x.name === 'Statistical Summary')!.rows;
+    const hi = stats.findIndex((row) => row.includes('Raw runs (n)'));
+    const head = stats[hi] as string[];
+    const meanCol = head.findIndex((h) => typeof h === 'string' && h.startsWith('Raw run mean'));
+    const sdCol = head.findIndex((h) => typeof h === 'string' && h.startsWith('Raw run SD'));
+    expect(head[meanCol]).toContain('sign inverted');
+    const body = stats.slice(hi + 1).filter((row) => typeof row[meanCol] === 'number');
+    expect(body.length).toBeGreaterThan(5);
+    for (const row of body) {
+      expect(row[meanCol] as number).toBeGreaterThan(0);
+      expect(row[sdCol] as number).toBeGreaterThanOrEqual(0);
+    }
+    const raw = sheets.find((x) => x.name === 'Raw Data')!.rows;
+    expect(raw[0]).toContain('Fz as recorded (gf)');
+    expect(raw[1][7]).toBe(d.results.get(ids[0])!.cycle.force_gf[0]);
   });
 
   it('builds valid column names and sheet names', () => {

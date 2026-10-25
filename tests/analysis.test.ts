@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseSource } from '../src/parser/loader';
 import { scorePoints } from '../src/analysis/pointOutliers';
 import { modifiedZScores, median, mad, resolutionStep, sampleSD } from '../src/analysis/stats';
-import { displacement } from '../src/analysis/cycleMetrics';
+import { displacement, displayFactor, peakLabel } from '../src/analysis/cycleMetrics';
 import { defaultProject, defaultSettings } from '../src/state/defaults';
 import { GF_TO_N, type QCClass, type RunStatus } from '../src/types';
 import { computeGroups, type CycleResult } from '../src/analysis/engine';
@@ -84,7 +84,9 @@ describe('peak extraction and units', () => {
     p.settings.forceUnit = 'N';
     const r = derive([l], p).ordered[0];
     const yN = axisValues(r, 'force', p.settings)!;
-    expect(yN[50]).toBeCloseTo(r.cycle.force_gf[50] * GF_TO_N, 12);
+    expect(yN[50]).toBeCloseTo(-r.cycle.force_gf[50] * GF_TO_N, 12); // default sign: adhesion shown positive
+    p.settings.forceSign = 'recorded';
+    expect(axisValues(r, 'force', p.settings)![50]).toBeCloseTo(r.cycle.force_gf[50] * GF_TO_N, 12);
     expect(r.raw.min).toBe(derive([l]).ordered[0].raw.min); // results stay in gf internally
     expect(GF_TO_N).toBe(0.00980665);
   });
@@ -377,5 +379,40 @@ describe('run-level exclusion', () => {
     expect(strict.flags).toEqual(none.flags);
     expect(none.statuses.every((s) => s === 'included')).toBe(true);
     expect(dflt.statuses).toContain('excludedAuto');
+  });
+});
+
+describe('displacement zeroing and force sign', () => {
+  it('starts every run at displacement 0 and counts up, whatever stage height it started at', async () => {
+    const loaded = await loadSynthetic();
+    const d = derive(loaded);
+    const s = defaultSettings();
+    expect(s.displacementMode).toBe('distance');
+    const starts = new Set(d.ordered.map((r) => r.cycle.z_mm[0]));
+    expect(starts.size).toBeGreaterThan(1); // runs really start at different absolute z
+    for (const r of d.ordered.filter((x) => x.cycle.z_mm.length)) {
+      const disp = axisValues(r, 'disp_mm', s)!;
+      expect(disp[0]).toBe(0);
+      expect(Math.min(...disp)).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('shows adhesion as positive force by default without changing recorded values or flags', async () => {
+    const loaded = await loadSynthetic();
+    const p = defaultProject();
+    expect(p.settings.forceSign).toBe('positive');
+    const pos = derive(loaded, p);
+    const r = pos.ordered.find((x) => x.raw.min < -10)!;
+    const shown = axisValues(r, 'force', p.settings)!;
+    expect(shown[5]).toBeCloseTo(-r.cycle.force_gf[5], 12);
+    expect(Math.max(...shown)).toBeCloseTo(-r.raw.min, 12);
+    expect(displayFactor(p.settings) * r.peakRaw).toBeGreaterThan(0);
+    expect(displayFactor({ forceUnit: 'N', forceSign: 'positive' })).toBeCloseTo(-GF_TO_N, 15);
+    expect(peakLabel(p.settings)).toBe('Peak adhesion force');
+    const rec = defaultProject();
+    rec.settings.forceSign = 'recorded';
+    const asRecorded = derive(loaded, rec);
+    const snap = (d: typeof pos) => d.ordered.map((x) => [x.peakRaw, x.qc, x.modZ, x.flags.map((f) => f.message)]);
+    expect(snap(pos)).toEqual(snap(asRecorded));
   });
 });

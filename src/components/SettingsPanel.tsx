@@ -1,8 +1,8 @@
 import { useApp } from '../state/AppContext';
 import { GROUP_LABEL } from '../analysis/engine';
-import { DISPLACEMENT_LABEL, PEAK_LABEL } from '../analysis/cycleMetrics';
+import { DISPLACEMENT_LABEL, FORCE_SIGN_LABEL, PEAK_LABEL } from '../analysis/cycleMetrics';
 import { QC_LABEL } from '../analysis/pointOutliers';
-import type { AnalysisSettings, GroupKey, PeakMetric, QCClass } from '../types';
+import type { AnalysisSettings, ForceSign, GroupKey, PeakMetric, QCClass } from '../types';
 import { defaultSettings } from '../state/defaults';
 import { Section } from './common';
 
@@ -70,7 +70,17 @@ export function SettingsPanel() {
           <Num label="Incomplete if travel below (fraction)" value={s.cycle.completeFraction} step={0.01} min={0} max={1} onChange={(v) => setC({ completeFraction: v })} />
         </Section>
 
-        <Section title="Force and displacement" open={false}>
+        <Section title="Force and displacement">
+          <label className="field">
+            <span>Force sign</span>
+            <select value={s.forceSign} onChange={(e) => set({ forceSign: e.target.value as ForceSign })}>
+              {(Object.keys(FORCE_SIGN_LABEL) as ForceSign[]).map((k) => <option key={k} value={k}>{FORCE_SIGN_LABEL[k]}</option>)}
+            </select>
+          </label>
+          <p className="note">
+            The instrument records pulling (adhesion) as negative force. With the sign inverted, graphs, tables and Excel show adhesion as positive, and
+            the peak is the highest point (▲). Only the display changes; outlier detection uses the recorded values.
+          </p>
           <label className="field">
             <span>Peak metric</span>
             <select value={s.peakMetric} onChange={(e) => set({ peakMetric: e.target.value as PeakMetric })}>
@@ -91,7 +101,10 @@ export function SettingsPanel() {
               {Object.entries(DISPLACEMENT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </label>
-          <p className="note">z₀ is the first recorded z of each movement. Check against Mach-1 Analysis before relying on equivalence.</p>
+          <p className="note">
+            Every run is zeroed at its own start: z₀ is the first recorded z of that run, so curves that start at different stage heights all begin at
+            0. “Distance travelled” makes it count up from 0 in positive millimetres. Check against Mach-1 Analysis before relying on equivalence.
+          </p>
           <label className="field">
             <span>Baseline</span>
             <select value={s.baselineMode} onChange={(e) => set({ baselineMode: e.target.value as AnalysisSettings['baselineMode'] })}>

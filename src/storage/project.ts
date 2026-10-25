@@ -87,6 +87,8 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
       point: { ...ds.point, ...(s.point ?? {}) },
       cycle: { ...ds.cycle, ...(s.cycle ?? {}), compareBy },
       runExclusion: { excludeClasses: Array.isArray(excludeClasses) ? excludeClasses : ds.runExclusion.excludeClasses },
+      // Before schema 3 the signed z − z₀ was the default; it is replaced by the new default (distance from each run's start).
+      displacementMode: (raw.schemaVersion ?? 0) < 3 && (s.displacementMode ?? 'signed') === 'signed' ? ds.displacementMode : s.displacementMode ?? ds.displacementMode,
     },
     overrides: raw.overrides ?? {},
     runOverrides,

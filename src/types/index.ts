@@ -1,10 +1,10 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.3.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.1.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
-export const PROJECT_SCHEMA_VERSION = 2;
+export const PROJECT_SCHEMA_VERSION = 3; // 3: forceSign; displacement shown as distance from each run's start
 export const GF_TO_N = 0.00980665;
 export const DEFAULT_CONCENTRATION_M = 2.1;
 
@@ -92,6 +92,8 @@ export interface Cycle {
 
 export type PeakMetric = 'min' | 'max' | 'absmax' | 'baselineMin';
 export type ForceUnit = 'gf' | 'N';
+/** 'positive': forces are displayed and exported with inverted sign, so adhesion is positive. */
+export type ForceSign = 'positive' | 'recorded';
 export type DisplacementMode = 'signed' | 'distance' | 'inverted';
 export type BaselineMode = 'none' | 'holdMean' | 'moveInterval';
 export type QCClass = 'green' | 'yellow' | 'orange' | 'red';
@@ -136,6 +138,7 @@ export interface RunExclusionSettings {
 export interface AnalysisSettings {
   peakMetric: PeakMetric;
   forceUnit: ForceUnit;
+  forceSign: ForceSign;
   displacementMode: DisplacementMode;
   baselineMode: BaselineMode;
   baselineHoldLastS: number;

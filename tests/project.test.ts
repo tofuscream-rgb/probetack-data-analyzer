@@ -95,6 +95,13 @@ describe('project save and load', () => {
     expect(r.experiment.overlayFileIds).toEqual(['new2', 'x']);
   });
 
+  it('switches projects saved with the old signed displacement default to distance from each run start', () => {
+    expect(migrateState({ schemaVersion: 2, settings: { displacementMode: 'signed' } as never }).settings.displacementMode).toBe('distance');
+    expect(migrateState({ schemaVersion: 2, settings: { displacementMode: 'inverted' } as never }).settings.displacementMode).toBe('inverted');
+    expect(migrateState({ schemaVersion: 3, settings: { displacementMode: 'signed' } as never }).settings.displacementMode).toBe('signed');
+    expect(migrateState({ schemaVersion: 2, settings: {} as never }).settings.forceSign).toBe('positive');
+  });
+
   it('removes the retired gel option from grouping and comparison keys of older projects', () => {
     const ds = defaultSettings();
     const s = migrateState({

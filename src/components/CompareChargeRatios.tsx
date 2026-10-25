@@ -3,7 +3,7 @@ import type { Data, Layout } from 'plotly.js';
 import { useApp } from '../state/AppContext';
 import { useExperiment } from '../state/experiment';
 import { computeGroups, groupValue, type GroupStats, type SummaryStats } from '../analysis/engine';
-import { PEAK_LABEL, unitFactor } from '../analysis/cycleMetrics';
+import { displayFactor, peakLabel } from '../analysis/cycleMetrics';
 import { PlotlyChart } from '../plotting/PlotlyChart';
 import { CURVE_COLORS } from '../plotting/colors';
 import { CONDITION_KEYS } from './DataAnalysis';
@@ -18,7 +18,8 @@ export function CompareChargeRatios() {
   const { derived, project } = useApp();
   const ex = useExperiment();
   const u = project.settings.forceUnit;
-  const f = unitFactor(u);
+  const f = displayFactor(project.settings);
+  const fa = Math.abs(f); // SD is never negative
   const d = forceDigits(u);
   const [which, setWhich] = useState<Which>('processed');
   const [concPick, setConc] = useState<string | null>(null);
@@ -41,7 +42,7 @@ export function CompareChargeRatios() {
   const holds = [...new Set(groups.map((g) => g.label.holdTimeS))].sort(byNum);
   const cell = (cr: string, h: string): GroupStats | undefined => groups.find((g) => g.label.chargeRatio === cr && g.label.holdTimeS === h);
   const st = (g: GroupStats | undefined): SummaryStats | null => (g ? g[which] : null);
-  const peakName = PEAK_LABEL[project.settings.peakMetric].toLowerCase();
+  const peakName = peakLabel(project.settings).toLowerCase();
 
   const chart = (xs: string[], series: string[], get: (x: string, s: string) => GroupStats | undefined, xTitle: string, seriesName: (s: string) => string) => {
     const data: Data[] = series.map((s, k) => {
@@ -53,7 +54,7 @@ export function CompareChargeRatios() {
         name: seriesName(s),
         x: pts.map((p) => num(p.x)),
         y: pts.map((p) => p.v!.mean * f),
-        error_y: { type: 'data', array: pts.map((p) => (p.v!.sd || 0) * f), visible: true, color, thickness: 1 },
+        error_y: { type: 'data', array: pts.map((p) => (p.v!.sd || 0) * fa), visible: true, color, thickness: 1 },
         text: pts.map((p) => `n = ${p.v!.n}`),
         line: { color, width: 2 },
         marker: { color, size: 8 },
@@ -117,7 +118,7 @@ export function CompareChargeRatios() {
                     <td className="strong">{cr}</td>
                     {holds.map((h) => {
                       const v = st(cell(cr, h));
-                      return <td key={h} className="num">{v ? meanSd(v.mean * f, v.sd * f, v.n, d) : '—'}</td>;
+                      return <td key={h} className="num">{v ? meanSd(v.mean * f, v.sd * fa, v.n, d) : '—'}</td>;
                     })}
                   </tr>
                 ))}

@@ -40,6 +40,29 @@ export function unitFactor(unit: 'gf' | 'N'): number {
   return unit === 'N' ? GF_TO_N : 1;
 }
 
+/**
+ * Factor for every force that is displayed or exported: unit conversion × sign.
+ * With 'positive', adhesion (recorded as negative force) is shown as a positive
+ * number. Calculations and flags always use the recorded values in gf. Spreads,
+ * such as SD, use Math.abs of this factor.
+ */
+export function displayFactor(s: Pick<AnalysisSettings, 'forceUnit' | 'forceSign'>): number {
+  return unitFactor(s.forceUnit) * (s.forceSign === 'positive' ? -1 : 1);
+}
+
+/** Name of the selected peak metric as displayed, taking the sign setting into account. */
+export function peakLabel(s: Pick<AnalysisSettings, 'peakMetric' | 'forceSign'>): string {
+  if (s.forceSign !== 'positive') return PEAK_LABEL[s.peakMetric];
+  if (s.peakMetric === 'min') return 'Peak adhesion force';
+  if (s.peakMetric === 'baselineMin') return 'Baseline-corrected pull-off force';
+  return `${PEAK_LABEL[s.peakMetric]} (sign inverted)`;
+}
+
+export const FORCE_SIGN_LABEL = {
+  positive: 'Adhesion as positive force (sign inverted)',
+  recorded: 'As recorded (adhesion is negative)',
+} as const;
+
 export function displacement(z: ArrayLike<number>, mode: DisplacementMode): Float64Array {
   const out = new Float64Array(z.length);
   if (z.length === 0) return out;

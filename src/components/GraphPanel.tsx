@@ -33,6 +33,7 @@ export function GraphPanel() {
   const graph = useCurrentGraph();
   const openRun = useOpenRun();
   const s = project.settings;
+  const pos = s.forceSign === 'positive';
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
   const multi = ex.graphFiles.length > 1;
 
@@ -90,8 +91,8 @@ export function GraphPanel() {
             meta,
             legendgroup: multi ? r.file.fileId : meta,
             showlegend: false,
-            marker: { symbol: 'triangle-down', size: excluded ? 8 : 11, color, line: { color: '#18263A', width: 1 } },
-            hovertemplate: `${name}<br>Minimum force: y = %{y:.4f}, x = %{x:.4f}<br>point %{customdata}<extra></extra>`,
+            marker: { symbol: pos ? 'triangle-up' : 'triangle-down', size: excluded ? 8 : 11, color, line: { color: '#18263A', width: 1 } },
+            hovertemplate: `${name}<br>${pos ? 'Peak adhesion force' : 'Minimum force'}: y = %{y:.4f}, x = %{x:.4f}<br>point %{customdata}<extra></extra>`,
           } as unknown as Data);
         }
       }
@@ -161,8 +162,8 @@ export function GraphPanel() {
           </select>
         </label>
         <button className="link" onClick={() => setGraph({ x: graph.y, y: graph.x })} title="Swap X and Y">Swap axes</button>
-        <label className="check" title="Mark each run's minimum force (▼)">
-          <input type="checkbox" checked={graph.showMarkers} onChange={(e) => setGraph({ showMarkers: e.target.checked })} /> Min marker
+        <label className="check" title={pos ? "Mark each run's peak adhesion force (▲)" : "Mark each run's minimum force (▼)"}>
+          <input type="checkbox" checked={graph.showMarkers} onChange={(e) => setGraph({ showMarkers: e.target.checked })} /> {pos ? 'Peak marker' : 'Min marker'}
         </label>
         <label className="check" title="Draw runs that are left out of the averages as thin grey dashed lines">
           <input type="checkbox" checked={graph.showExcluded} onChange={(e) => setGraph({ showExcluded: e.target.checked })} /> Show outlier runs

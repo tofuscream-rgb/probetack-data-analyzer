@@ -192,6 +192,23 @@ export type ViewMode = 'raw' | 'flagged' | 'processed' | 'compare';
 export type MainTab = 'graph' | 'analysis' | 'compare' | 'settings' | 'files';
 
 /** Step 2 of the sidebar: which experiment (charge ratio + concentration + substrate) and which TXT files are viewed. */
+/**
+ * Compare charge ratios tab: which data sets are compared. A data set is one
+ * substrate × charge ratio × concentration. null = default (see the tab).
+ */
+export interface CompareSelection {
+  /** Substrate names in lower case ("ss" and "SS" are the same). */
+  substrates: string[] | null;
+  chargeRatios: string[] | null;
+  concentrations: string[] | null;
+  holdTimes: string[] | null;
+  /** Data set keys unticked in the list of matched sets. */
+  hiddenSets: string[];
+  /** Order of charge ratios inside each substrate panel. */
+  order: 'desc' | 'asc';
+  which: 'processed' | 'raw';
+}
+
 export interface ExperimentSelection {
   /** Values as shown in the dropdowns (null = first available). */
   chargeRatio: string | null;
@@ -220,6 +237,7 @@ export interface ProjectState {
   view: ViewMode;
   mainTab: MainTab;
   experiment: ExperimentSelection;
+  compare: CompareSelection;
   selection: string[];
   groupBy: GroupKey[];
 }

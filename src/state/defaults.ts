@@ -1,4 +1,4 @@
-import type { AnalysisSettings, ExperimentSelection, GraphConfig, ProjectState } from '../types';
+import type { AnalysisSettings, CompareSelection, ExperimentSelection, GraphConfig, ProjectState } from '../types';
 import { PROJECT_SCHEMA_VERSION } from '../types';
 
 export function defaultSettings(): AnalysisSettings {
@@ -45,6 +45,10 @@ export function defaultExperiment(): ExperimentSelection {
   return { chargeRatio: null, concentrationM: null, substrate: null, fileId: null, overlay: false, overlayFileIds: [] };
 }
 
+export function defaultCompare(): CompareSelection {
+  return { substrates: null, chargeRatios: null, concentrations: null, holdTimes: null, hiddenSets: [], order: 'desc', which: 'processed' };
+}
+
 export function defaultProject(): ProjectState {
   const g = newGraph(1);
   return {
@@ -59,6 +63,7 @@ export function defaultProject(): ProjectState {
     view: 'raw',
     mainTab: 'graph',
     experiment: defaultExperiment(),
+    compare: defaultCompare(),
     selection: [],
     groupBy: ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'],
   };

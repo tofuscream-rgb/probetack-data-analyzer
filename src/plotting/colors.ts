@@ -9,3 +9,9 @@ export const QC_COLORS: Record<QCClass, string> = {
   orange: '#E07000',
   red: '#C62828',
 };
+
+/**
+ * Pastel bar colours for comparison charts (periwinkle, coral, sand, then mint,
+ * apricot, lavender, aqua, pink), drawn with a dark outline as in published tack plots.
+ */
+export const PASTEL_COLORS = ['#8E9AF3', '#EE7A74', '#E9C779', '#8ED1A2', '#F4AE72', '#B8A2E8', '#7DC8CC', '#F2A8C4'];

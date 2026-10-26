@@ -9,7 +9,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import type { GroupKey, MainTab, ProjectState, RunOverride, SourceFileRecord } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
-import { defaultExperiment, defaultProject, defaultSettings } from '../state/defaults';
+import { defaultCompare, defaultExperiment, defaultProject, defaultSettings } from '../state/defaults';
 
 export interface ProjectFileJson {
   format: 'mach1-analyzer-project';
@@ -97,6 +97,7 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
     // 'summary' was the per-condition summary tab of 1.3; it became part of Data analysis.
     mainTab: (raw.mainTab as string) === 'summary' ? 'analysis' : raw.mainTab && MAIN_TABS.includes(raw.mainTab) ? raw.mainTab : 'graph',
     experiment: { ...defaultExperiment(), ...(raw.experiment ?? {}) },
+    compare: { ...defaultCompare(), ...(raw.compare ?? {}) },
     selection: Array.isArray(raw.selection) ? raw.selection : [],
     groupBy: groupBy.length ? groupBy : d.groupBy,
   };

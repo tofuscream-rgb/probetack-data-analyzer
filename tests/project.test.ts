@@ -102,6 +102,11 @@ describe('project save and load', () => {
     expect(migrateState({ schemaVersion: 2, settings: {} as never }).settings.forceSign).toBe('positive');
   });
 
+  it('fills in the compare selection for older projects and keeps a saved one', () => {
+    expect(migrateState({}).compare).toEqual({ substrates: null, chargeRatios: null, concentrations: null, holdTimes: null, hiddenSets: [], order: 'desc', which: 'processed' });
+    expect(migrateState({ compare: { substrates: ['glass', 'pet'], order: 'asc' } as never }).compare).toMatchObject({ substrates: ['glass', 'pet'], order: 'asc', hiddenSets: [] });
+  });
+
   it('removes the retired gel option from grouping and comparison keys of older projects', () => {
     const ds = defaultSettings();
     const s = migrateState({

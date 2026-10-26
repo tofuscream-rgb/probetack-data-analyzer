@@ -396,3 +396,14 @@ table.grid td.center { text-align: center; }
 .preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 8px; }
 label.radio small { display: block; }
 table.grid th.num { text-align: right; }
+
+/* compare: pick data sets */
+.compare-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px 18px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--rule-2); border-radius: 8px; }
+.pick-head { display: flex; align-items: baseline; gap: 6px; margin-bottom: 5px; }
+.pick-head strong { margin-right: auto; }
+.check-chip { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; border: 1px solid var(--rule); }
+.check-chip input { margin: 0; }
+.check-chip.on { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
+.sets-list { border: none; padding: 0; }
+.sets-list .chips { margin-top: 6px; }
+.plot.compare-bars { flex: none; height: 480px; }

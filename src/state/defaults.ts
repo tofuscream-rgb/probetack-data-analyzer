@@ -57,6 +57,7 @@ export function defaultProject(): ProjectState {
     settings: defaultSettings(),
     overrides: {},
     runOverrides: {},
+    disabledFiles: [],
     excludedPoints: {},
     graphs: [g],
     activeGraphId: g.id,

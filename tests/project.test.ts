@@ -107,6 +107,13 @@ describe('project save and load', () => {
     expect(migrateState({ compare: { substrates: ['glass', 'pet'], order: 'asc' } as never }).compare).toMatchObject({ substrates: ['glass', 'pet'], order: 'asc', hiddenSets: [] });
   });
 
+  it('keeps deselected files across save, load and reconnection', () => {
+    expect(migrateState({}).disabledFiles).toEqual([]);
+    const s = migrateState({ disabledFiles: ['old1', 'old2'] });
+    expect(s.disabledFiles).toEqual(['old1', 'old2']);
+    expect(remapState(s, new Map([['old1', 'new1']])).disabledFiles).toEqual(['new1', 'old2']);
+  });
+
   it('removes the retired gel option from grouping and comparison keys of older projects', () => {
     const ds = defaultSettings();
     const s = migrateState({

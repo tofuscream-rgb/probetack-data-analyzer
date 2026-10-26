@@ -12,7 +12,7 @@ No installation, account, Python or server is needed. Collaborators only need th
 
 ## Using the website
 
-**1. Open your experiments** (left side). Choose how to import, **folder** (recommended), **TXT file(s)** or a **ZIP file**, and click **Browse**. You can also drag a folder onto the page. Every TXT file found is listed, with its sub-folders kept. **Try it with example data** loads invented example files.
+**1. Open your experiments** (left side). Choose how to import, **folder** (recommended), **TXT file(s)** or a **ZIP file**, and click **Browse**. You can also drag a folder onto the page. Every TXT file found is listed, with its sub-folders kept. **Try it with example data** loads invented example files. Every imported file has a tick box, grouped by folder. Untick a file (or a whole folder) to leave it out of the graphs, averages, outlier checks, comparisons and Excel export, and tick it again to bring it back. Unticked files stay in the list, are marked in the Files tab, are listed in the Excel *Analysis Settings* sheet, and are remembered in saved projects.
 
 **2. Choose your experiment.** The dropdowns are built from your folder names:
 

@@ -112,16 +112,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [files, project.overrides],
   );
 
+  // Deselected files stay imported and listed, but take no part in any calculation.
+  const used = useMemo(() => {
+    const off = new Set(project.disabledFiles);
+    return files.filter((l) => !off.has(l.parsed.fileId));
+  }, [files, project.disabledFiles]);
   const derived = useMemo(
     () =>
       computeDerived(
-        files.map((l) => l.parsed),
-        new Map(files.map((l) => [l.parsed.fileId, l.cycles])),
+        used.map((l) => l.parsed),
+        new Map(used.map((l) => [l.parsed.fileId, l.cycles])),
         meta,
         project,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [files, meta, project.settings, project.runOverrides, project.excludedPoints, project.groupBy],
+    [used, meta, project.settings, project.runOverrides, project.excludedPoints, project.groupBy],
   );
 
   // ---- autosave -------------------------------------------------------------------
@@ -335,7 +340,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setBusy('Building Excel workbook…');
       setTimeout(() => {
         try {
-          const bytes = buildWorkbook(derived, project, { cycleIds, graphs, useProcessedForCharts: processed, sheets });
+          const off = new Set(project.disabledFiles);
+          const deselectedFiles = files.filter((l) => off.has(l.parsed.fileId)).map((l) => ({ path: l.parsed.path, sha256: l.parsed.sha256 }));
+          const bytes = buildWorkbook(derived, project, { cycleIds, graphs, useProcessedForCharts: processed, sheets, deselectedFiles });
           const safe = project.name.replace(/[^\w.-]+/g, '_') || 'Mach1_Analysis';
           download(bytes, `${safe}_${new Date().toISOString().slice(0, 10)}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
           notify('success', `Excel workbook created with ${sheets.length} part(s) and ${cycleIds.length} run(s).`);
@@ -346,7 +353,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }, 30);
     },
-    [derived, project, notify],
+    [derived, project, notify, files],
   );
 
   const value: Ctx = {

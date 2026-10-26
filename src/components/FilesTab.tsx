@@ -2,7 +2,8 @@ import { useApp } from '../state/AppContext';
 
 /** Import status of every file: OK, with warnings, or without usable data. Nothing is skipped silently. */
 export function ImportStatus() {
-  const { files, skipped, pending } = useApp();
+  const { files, skipped, pending, project } = useApp();
+  const off = new Set(project.disabledFiles);
   const ok = files.filter((f) => f.parsed.status === 'ok').length;
   const warn = files.filter((f) => f.parsed.status === 'warning').length;
   const err = files.filter((f) => f.parsed.status === 'error').length;
@@ -22,7 +23,7 @@ export function ImportStatus() {
           {files.map((l) => (
             <tr key={l.parsed.fileId} className={l.parsed.status}>
               <td><span className={`status ${l.parsed.status}`}>{l.parsed.status === 'ok' ? 'OK' : l.parsed.status === 'warning' ? 'Warning' : 'No data'}</span></td>
-              <td title={l.parsed.sha256}>{l.parsed.path}</td>
+              <td title={l.parsed.sha256}>{l.parsed.path}{off.has(l.parsed.fileId) && <span className="tag"> not used (unticked)</span>}</td>
               <td className="num">{l.cycles.length}</td>
               <td className="num">{l.parsed.blocks.length}</td>
               <td>{l.parsed.header['Date'] ?? '—'}</td>

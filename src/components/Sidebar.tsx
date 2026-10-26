@@ -22,6 +22,64 @@ export function QcRibbon({ cycles }: { cycles: CycleResult[] }) {
   );
 }
 
+/** Tri-state checkbox (some files of a folder selected). */
+function TriCheck({ on, some, onChange, label }: { on: boolean; some: boolean; onChange: () => void; label: string }) {
+  return <input type="checkbox" checked={on} ref={(el) => { if (el) el.indeterminate = some && !on; }} onChange={onChange} aria-label={label} />;
+}
+
+/** The imported files, grouped by folder. Unticked files stay listed but are left out of every calculation. */
+function FileSelector() {
+  const { files, project, update } = useApp();
+  const off = new Set(project.disabledFiles);
+  const setOff = (ids: string[], disable: boolean) =>
+    update((p) => {
+      const cur = new Set(p.disabledFiles);
+      ids.forEach((id) => (disable ? cur.add(id) : cur.delete(id)));
+      return { ...p, disabledFiles: [...cur] };
+    });
+  const folders = new Map<string, typeof files>();
+  for (const l of files) {
+    const dir = l.parsed.path.split('/').slice(0, -1).join('/') || '(top level)';
+    folders.set(dir, [...(folders.get(dir) ?? []), l]);
+  }
+  const used = files.filter((l) => !off.has(l.parsed.fileId)).length;
+  return (
+    <>
+      <div className="file-select-bar">
+        <span>{used} of {files.length} TXT file(s) used</span>
+        <button className="link small" onClick={() => setOff(files.map((l) => l.parsed.fileId), false)}>Select all</button>
+        <button className="link small" onClick={() => setOff(files.map((l) => l.parsed.fileId), true)}>None</button>
+      </div>
+      <div className="file-list" aria-label="Imported files: untick a file to leave it out">
+        {[...folders].sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true })).map(([dir, list]) => {
+          const ids = list.map((l) => l.parsed.fileId);
+          const n = ids.filter((id) => !off.has(id)).length;
+          return (
+            <div key={dir} className="fl-folder">
+              <label className="fl-folder-head" title={dir}>
+                <TriCheck on={n === ids.length} some={n > 0} onChange={() => setOff(ids, n === ids.length)} label={`Use all files in ${dir}`} />
+                <span className="fl-name">{dir}</span>
+                <small>{n}/{ids.length}</small>
+              </label>
+              {list
+                .slice()
+                .sort((a, b) => a.parsed.name.localeCompare(b.parsed.name, undefined, { numeric: true }))
+                .map((l) => (
+                  <label key={l.parsed.fileId} className={`fl-file ${off.has(l.parsed.fileId) ? 'off' : ''}`} title={l.parsed.path}>
+                    <input type="checkbox" checked={!off.has(l.parsed.fileId)} onChange={(e) => setOff([l.parsed.fileId], !e.target.checked)} />
+                    <span className="fl-name">{l.parsed.name}</span>
+                    <small>{sizeLabel(l.parsed.sizeBytes)}{l.parsed.status !== 'ok' ? ' · see Files tab' : ''}</small>
+                  </label>
+                ))}
+            </div>
+          );
+        })}
+      </div>
+      <p className="hint">Untick a file to leave it out of the graphs, averages, comparisons and Excel export. Subfolders are preserved; files are read on this computer only.</p>
+    </>
+  );
+}
+
 const sizeLabel = (bytes: number) => (bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} kB`);
 const holdLabel = (e: ExperimentFile) => (e.holdTimeS !== null ? `${e.holdTimeS} s` : '');
 
@@ -63,21 +121,11 @@ export function Sidebar() {
         <input ref={folderInput} type="file" hidden multiple {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} onChange={onPick} />
         <input ref={fileInput} type="file" hidden multiple accept=".txt,text/plain" onChange={onPick} />
         <input ref={zipInput} type="file" hidden accept=".zip,application/zip" onChange={onPick} />
-        {files.length > 0 && (
-          <ul className="file-list" aria-label="Imported files">
-            {files.map((l) => (
-              <li key={l.parsed.fileId} title={l.parsed.path}>
-                <span className="file-icon" aria-hidden="true" />
-                <span className="fl-name">{l.parsed.path}</span>
-                <small>{sizeLabel(l.parsed.sizeBytes)}{l.parsed.status !== 'ok' ? ' · see Files tab' : ''}</small>
-              </li>
-            ))}
-          </ul>
+        {files.length > 0 ? (
+          <FileSelector />
+        ) : (
+          <p className="hint">You can also drag a folder onto the page. Files are read on this computer only.</p>
         )}
-        <p className="hint">
-          {files.length > 0 ? `${files.length} TXT file(s) loaded; subfolders are preserved. ` : 'You can also drag a folder onto the page. '}
-          Files are read on this computer only.
-        </p>
         {pending.length > 0 && (
           <div className="banner warn">
             <strong>{pending.length} project file(s) not connected.</strong> Select the original folder or files; they are matched by content, so moved files are found too.

@@ -30,6 +30,8 @@ export interface ExportOptions {
   useProcessedForCharts: boolean;
   /** Worksheets to include (default: all). */
   sheets?: SheetKey[];
+  /** Imported files the user deselected (listed in Analysis Settings; not used anywhere else). */
+  deselectedFiles?: { path: string; sha256: string }[];
 }
 
 const num = (v: number | null | undefined): CellValue => (v === null || v === undefined || !Number.isFinite(v) ? null : v);
@@ -273,6 +275,10 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     ['User corrections to metadata'],
     ['File ID', 'Field', 'Value'],
     ...Object.entries(project.overrides).flatMap(([id, ov]) => Object.entries(ov).map(([k, v]) => [id, k, v as CellValue])),
+    [],
+    ['Files deselected by the user (imported but not used in any calculation)'],
+    ['Path', 'SHA-256'],
+    ...(opts.deselectedFiles?.length ? opts.deselectedFiles.map((f) => [f.path, f.sha256]) : [['none']]),
     [],
     ['Source files'],
     ['File ID', 'Path', 'SHA-256', 'Size (bytes)'],

@@ -228,6 +228,8 @@ export interface ProjectState {
   overrides: Record<string, MetaOverride>;
   /** Keyed by cycleId. */
   runOverrides: Record<string, RunOverride>;
+  /** Imported files the user deselected: kept in the file list but left out of every calculation. */
+  disabledFiles: string[];
   /** Legacy (schema 1): manual run exclusions. Converted to runOverrides by migrateState. */
   excludedCycles?: Record<string, ManualExclusion>;
   excludedPoints: Record<string, Record<string, ManualExclusion>>;

@@ -63,6 +63,16 @@ describe('Excel export', () => {
     expect(raw.match(/<row /g)).toHaveLength(nPoints + 1);
   });
 
+  it('lists deselected files in Analysis Settings', async () => {
+    const loaded = await loadSynthetic();
+    const p = defaultProject();
+    const d = derive(loaded, p);
+    const ids = d.ordered.slice(0, 3).map((r) => r.cycle.cycleId);
+    const rows = buildWorkbookSheets(d, p, { cycleIds: ids, graphs: [], useProcessedForCharts: true, sheets: ['settings'], deselectedFiles: [{ path: 'A/60s-2.txt', sha256: 'abc' }] })[0].rows;
+    const i = rows.findIndex((r) => String(r[0]).startsWith('Files deselected'));
+    expect(rows[i + 2]).toEqual(['A/60s-2.txt', 'abc']);
+  });
+
   it('exports only the chosen parts of the workbook', async () => {
     const loaded = await loadSynthetic();
     const p = defaultProject();

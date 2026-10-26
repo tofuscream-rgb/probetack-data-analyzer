@@ -134,11 +134,18 @@ small { color: var(--ink-3); font-size: 11px; }
 .radio-group legend { font-weight: 500; padding: 0; margin-bottom: 2px; color: var(--ink-2); }
 .radio-group label.radio { margin: 3px 0; }
 button.browse { align-self: stretch; padding: 7px 11px; }
-.file-list { list-style: none; margin: 0; padding: 4px; max-height: 210px; overflow: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; display: flex; flex-direction: column; gap: 3px; }
-.file-list li { display: grid; grid-template-columns: 18px minmax(0, 1fr); column-gap: 7px; padding: 4px 6px; background: var(--surface-2); border-radius: 5px; font-size: 12px; }
-.file-list .file-icon { grid-row: span 2; width: 14px; height: 17px; margin-top: 2px; border: 1.5px solid var(--ink-2); border-radius: 2px; position: relative; }
-.file-list .file-icon::after { content: ''; position: absolute; left: 2px; right: 2px; top: 4px; height: 6px; border-top: 1.5px solid var(--ink-3); border-bottom: 1.5px solid var(--ink-3); }
-.fl-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.file-list { margin: 0; padding: 4px; max-height: 280px; overflow: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; display: flex; flex-direction: column; gap: 2px; }
+.fl-folder { display: flex; flex-direction: column; }
+.fl-folder + .fl-folder { border-top: 1px solid var(--rule-2); margin-top: 2px; padding-top: 2px; }
+.fl-folder-head, .fl-file { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; column-gap: 7px; padding: 3px 6px; border-radius: 5px; font-size: 12px; cursor: pointer; }
+.fl-folder-head { font-weight: 600; background: var(--surface-2); }
+.fl-file { padding-left: 22px; }
+.fl-file:hover, .fl-folder-head:hover { background: var(--accent-weak); }
+.fl-file.off .fl-name { color: var(--ink-3); text-decoration: line-through; }
+.fl-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-folder-head .fl-name { direction: rtl; text-align: left; }
+.file-select-bar { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.file-select-bar span { margin-right: auto; }
 .sidebar .hint { margin: 2px 0; }
 .hint.warn { color: #9a5400; }
 .sidebar .field select { width: 100%; padding: 6px 8px; }

@@ -92,6 +92,7 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
     },
     overrides: raw.overrides ?? {},
     runOverrides,
+    disabledFiles: Array.isArray(raw.disabledFiles) ? raw.disabledFiles : [],
     excludedPoints: raw.excludedPoints ?? {},
     graphs: Array.isArray(raw.graphs) && raw.graphs.length ? raw.graphs.map((g) => ({ ...g, showExcluded: g.showExcluded ?? true })) : d.graphs,
     // 'summary' was the per-condition summary tab of 1.3; it became part of Data analysis.
@@ -181,6 +182,7 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
     ...state,
     overrides: remapKeys(state.overrides, (k) => idMap.get(k) ?? k),
     runOverrides: remapKeys(state.runOverrides, mapCycle),
+    disabledFiles: state.disabledFiles.map((id) => idMap.get(id) ?? id),
     excludedPoints: remapKeys(state.excludedPoints, mapCycle),
     selection: state.selection.map(mapCycle),
     experiment: {

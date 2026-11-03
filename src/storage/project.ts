@@ -7,9 +7,9 @@
  *   README.txt        what the file contains
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { GroupKey, MainTab, ProjectState, RunOverride, SourceFileRecord } from '../types';
+import type { GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, ProjectState, RunOverride, SourceFileRecord } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
-import { defaultCompare, defaultExperiment, defaultProject, defaultSettings } from '../state/defaults';
+import { defaultCompare, defaultExperiment, defaultLapShear, defaultProject, defaultSettings } from '../state/defaults';
 
 export interface ProjectFileJson {
   format: 'mach1-analyzer-project';
@@ -65,6 +65,40 @@ export function saveProjectZip(
 const withoutGel = (keys: GroupKey[]) => keys.filter((k) => k !== 'gel');
 const MAIN_TABS: MainTab[] = ['graph', 'analysis', 'compare', 'settings', 'files'];
 
+/** Lap-shear state with every field present; unknown or damaged values fall back to defaults. */
+export function migrateLapShear(raw: Partial<LapShearState> | undefined): LapShearState {
+  const d = defaultLapShear();
+  const r = raw ?? {};
+  const s: Partial<LapShearSettings> = r.settings ?? {};
+  const pos = (v: unknown, fb: number) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fb);
+  const runs: Record<string, LapShearRunMeta> = {};
+  for (const [id, m] of Object.entries(r.runs ?? {})) {
+    if (!m || typeof m !== 'object') continue;
+    runs[id] = {
+      lengthMm: pos(m.lengthMm, d.settings.defaults.lengthMm),
+      widthMm: pos(m.widthMm, d.settings.defaults.widthMm),
+      thicknessMm: pos(m.thicknessMm, d.settings.defaults.thicknessMm),
+      failureMode: ['adhesive', 'cohesive', 'mixed'].includes(m.failureMode) ? m.failureMode : 'unspecified',
+      manualFailureMm: typeof m.manualFailureMm === 'number' && Number.isFinite(m.manualFailureMm) ? m.manualFailureMm : null,
+    };
+  }
+  return {
+    settings: {
+      integration: { ...d.settings.integration, ...(s.integration ?? {}) },
+      baseline: { ...d.settings.baseline, ...(s.baseline ?? {}) },
+      failure: { ...d.settings.failure, ...(s.failure ?? {}) },
+      direction: s.direction === 'negative' || s.direction === 'positive' ? s.direction : 'auto',
+      gapFactor: pos(s.gapFactor, d.settings.gapFactor),
+      defaults: { ...d.settings.defaults, ...(s.defaults ?? {}) },
+    },
+    runs,
+    selected: Array.isArray(r.selected) ? r.selected : null,
+    fileId: typeof r.fileId === 'string' ? r.fileId : null,
+    view: { ...d.view, ...(r.view ?? {}) },
+    tab: r.tab && ['graph', 'results', 'settings', 'files'].includes(r.tab) ? r.tab : 'graph',
+  };
+}
+
 /** Merge a possibly older/partial state with current defaults so new fields always exist. */
 export function migrateState(raw: Partial<ProjectState>): ProjectState {
   const d = defaultProject();
@@ -96,6 +130,8 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
     excludedPoints: raw.excludedPoints ?? {},
     graphs: Array.isArray(raw.graphs) && raw.graphs.length ? raw.graphs.map((g) => ({ ...g, showExcluded: g.showExcluded ?? true })) : d.graphs,
     // 'summary' was the per-condition summary tab of 1.3; it became part of Data analysis.
+    mode: raw.mode === 'lapShear' ? 'lapShear' : 'tack',
+    lapShear: migrateLapShear(raw.lapShear),
     mainTab: (raw.mainTab as string) === 'summary' ? 'analysis' : raw.mainTab && MAIN_TABS.includes(raw.mainTab) ? raw.mainTab : 'graph',
     experiment: { ...defaultExperiment(), ...(raw.experiment ?? {}) },
     compare: { ...defaultCompare(), ...(raw.compare ?? {}) },
@@ -183,6 +219,12 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
     overrides: remapKeys(state.overrides, (k) => idMap.get(k) ?? k),
     runOverrides: remapKeys(state.runOverrides, mapCycle),
     disabledFiles: state.disabledFiles.map((id) => idMap.get(id) ?? id),
+    lapShear: {
+      ...state.lapShear,
+      runs: remapKeys(state.lapShear.runs, mapCycle),
+      selected: state.lapShear.selected ? state.lapShear.selected.map(mapCycle) : null,
+      fileId: state.lapShear.fileId ? idMap.get(state.lapShear.fileId) ?? state.lapShear.fileId : null,
+    },
     excludedPoints: remapKeys(state.excludedPoints, mapCycle),
     selection: state.selection.map(mapCycle),
     experiment: {

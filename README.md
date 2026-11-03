@@ -1,6 +1,11 @@
 # Mach-1 Analyzer
 
-A browser-based tool for analysing Biomomentum Mach-1 mechanical test files (TXT exports from Mach-1 Motion). It imports whole experiment folders, separates every movement (run), extracts peak forces, screens for outliers, compares conditions, exports Excel workbooks with editable charts, and saves projects.
+A browser-based tool for analysing Biomomentum Mach-1 mechanical test files (TXT exports from Mach-1 Motion). It supports two experimental methods, chosen with **Experiment type** at the top of the page:
+
+- **Probe Tack**: imports whole experiment folders, separates every movement (run), extracts peak forces, screens for outliers and compares conditions.
+- **Lap Shear**: peak load, apparent nominal lap-shear strength, mechanical work and work per bonded area for every run, with editable specimen dimensions and failure modes (see [Lap Shear analysis](#lap-shear-analysis)).
+
+Both export Excel workbooks with editable charts and save projects.
 
 **Website:** https://tofuscream-rgb.github.io/mach1-analyzer/
 
@@ -100,6 +105,42 @@ Statistics are grouped by the variables you choose; concentration is always incl
 
 ---
 
+## Lap Shear analysis
+
+Choose **Experiment type → Lap Shear** at the top. Imported files are shared with Probe Tack mode, and Probe Tack's settings and results are not changed.
+
+### Using it
+
+1. **Open your experiments** exactly as in Probe Tack mode: a folder, one or more TXT files, or a ZIP. Untick files you do not want to use.
+2. **Choose runs.** Every `<Move Relative>` section of a TXT file is one run (a file with three pulls gives Run 1, Run 2 and Run 3); runs are never merged. Use the **TXT file** box to move between files and tick the runs to compare. Runs from different files can be shown together. A run that cannot be analysed shows which measurements are missing (*Time, s*, *Position (z), mm*, *Fz, gf*). Files are not rejected just because they do not say they are lap-shear files.
+3. **Graph**: loading force vs displacement (or vs time) for the ticked runs, in gf or N. ▲ marks each peak (with optional labels), × marks complete failure, and the shaded area is exactly the interval used for the *selected integration work*. Choose the integration (full curve, start to peak, or a custom displacement range) above the graph. Zoom by dragging; save as PNG or SVG.
+4. **Results**: one row per run with editable **overlap length, overlap width and gel thickness** (defaults 25 × 10 × 1 mm, bonded area 250 mm²), a **failure mode** (Not specified, Adhesive, Cohesive, Mixed) and an optional **failure displacement**. All results update immediately, and the curve itself never changes. Use *Set dimensions for all selected runs* for a whole batch. Below the table: mean ± sample SD (n) of every property, also per condition when the runs come from different folders.
+5. **Settings**: integration interval, gap handling, complete-failure criterion, baseline correction, loading direction and the default dimensions.
+6. **Export Excel**: a summary sheet (every run, dimensions, bonded area, failure mode, mean ± SD), an editable Excel chart, one sheet per run (time, original position, relative displacement, original signed force, corrected force, peak, integration interval, cumulative work) and the analysis settings.
+
+Dimensions, failure modes, manual failure points and settings are saved with the project and in the browser's autosave.
+
+### How the values are calculated
+
+| Quantity | Definition |
+|---|---|
+| Displacement | δ = \|z − z₀\| along the pull direction, z₀ = first valid position of the run |
+| Loading force | The force sign with the larger magnitude is the loading direction (or set it in Settings). It is shown as a positive magnitude; the original signed values are kept and exported. |
+| Peak force | Largest loading force, in gf and N (1 gf = 0.00980665 N), with its displacement and time |
+| Bonded overlap area | A = overlap length × overlap width (mm²). Gel thickness is recorded but does not enter the strength. |
+| Apparent nominal lap-shear strength | τ = F<sub>max</sub> / A: kPa = N/mm² × 1000, MPa = N/mm². Average stress over the original bonded area at peak load, not the maximum local stress in the joint. |
+| Mechanical work | W = ∫ F dδ by the trapezoidal rule, in N·mm = mJ. Full-curve work = work to peak + post-peak work. |
+| Selected integration work | Full curve, start to peak, or a custom δ range; the force is interpolated at the exact custom limits. |
+| Work per bonded area | W<sub>A</sub> = W (mJ) × 1000 / A (mm²), in J/m², for the selected and the full-curve work |
+| Complete failure | First point after the peak where the loading force stays below 5% of the peak for 20 consecutive valid points (both adjustable). Left blank if this never happens; a typed value overrides it. The end of machine travel is never taken as separation. Work to failure is reported separately from full recorded work. |
+| Statistics | Mean and sample SD (n − 1). Strength and work per area are computed per run with that run's own area before averaging. |
+
+Work per bonded area is **apparent mechanical work per bonded area**. It can include elastic deformation, viscoelastic dissipation, cohesive damage, interfacial separation, frictional sliding after failure and fixture compliance, so it is not labelled adhesion energy or fracture toughness. Failure mode is entered from your observation of the specimen and is never inferred from the curve. No stiffness fitting is done.
+
+**Data quality.** Points with missing or non-finite time, position or force are skipped. Work is never integrated across skipped points or time steps longer than 5 × the median step. Only displacement beyond everything reached before is integrated, so small backward steps of the stage (common in real files) neither cancel nor double-count work; the signed work including reversals is also exported. Steps with no displacement change add nothing. The raw data are never sorted or modified, and each run lists these events (hover ⚠ in the Results table).
+
+**Zero-force baseline correction** (off by default): the median force of the first 30 valid points is subtracted, but only if they look unloaded (spread ≤ 2 gf and small compared with the largest force); otherwise the run says why no correction was applied. Raw values are kept; when correction is on, the raw curve can be shown dashed on the graph.
+
 ## Excel export
 
 The workbook is generated in the browser and contains eight sheets:
@@ -138,6 +179,7 @@ Project files carry a schema version, the app and algorithm versions, and are va
 | Level A and Level B screening | Implemented and tested; thresholds are starting points to tune on your data |
 | Automatic run exclusion, Keep/Exclude overrides, raw vs processed statistics | Implemented, tested (logic) and exercised in the browser |
 | Two-step sidebar (open, choose experiment) and tabs (Graph, Data analysis, Compare charge ratios, Settings, Files) | Implemented; exercised in Chromium at 1280 px width |
+| Lap Shear mode: runs, dimensions, strength, work, failure endpoint, baseline, statistics, Excel | Implemented and tested (synthetic cases with known answers); exercised in the browser with a real two-run lap-shear file |
 | Grouped statistics with run- and repeat-level variation | Implemented and tested |
 | Excel export with native charts | Implemented and tested; **verify in Microsoft Excel** |
 | PNG / SVG / graph-data export | Implemented; exercised in the browser |
@@ -155,11 +197,11 @@ The code is TypeScript + React, built with Vite. Main parts:
 
 ```
 src/parser/      Mach-1 parser, folder-name metadata, ZIP import, hashing, Web Worker
-src/analysis/    statistics, per-run metrics, point and run screening, grouping
+src/analysis/    statistics, per-run metrics, point and run screening, grouping; lapShear.ts = lap-shear calculations
 src/plotting/    Plotly wrapper, axis definitions, colours, display-only downsampling
 src/export/      XLSX writer with native charts, workbook builder
 src/storage/     IndexedDB autosave, project files
-src/components/  interface panels
+src/components/  interface panels (lapShear/ = Lap Shear mode)
 tests/           automated tests (Vitest)
 examples/        synthetic, non-confidential example data (and its generator in scripts/)
 ```
@@ -173,7 +215,9 @@ npm test           # run tests
 npm run build      # production build into dist/
 ```
 
-To test with real files locally, put them in a folder named `private-data/` in the project. It is git-ignored, and `tests/real-data.test.ts` uses it when present.
+To test with real files locally, put them in a folder named `private-data/` in the project. It is listed in `.gitignore` (so it is never committed), and `tests/real-data.test.ts` uses it when present.
+
+Deployment is unchanged: every push to `main` runs the tests, builds the site and publishes it to GitHub Pages through `.github/workflows/deploy.yml` (see below). No new dependencies are needed for Lap Shear mode.
 
 Algorithm changes that alter numerical results should increase `ALGORITHM_VERSION` in `src/types/index.ts`. It is recorded in every export and project.
 

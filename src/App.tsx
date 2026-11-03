@@ -10,6 +10,8 @@ import { CompareChargeRatios } from './components/CompareChargeRatios';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ImportStatus } from './components/FilesTab';
 import type { MainTab } from './types';
+import { LapShearSidebar } from './components/lapShear/LapShearSidebar';
+import { LapShearWorkspace } from './components/lapShear/LapShearWorkspace';
 
 const TABS: { id: MainTab; label: string; minor?: boolean }[] = [
   { id: 'graph', label: 'Graph' },
@@ -76,7 +78,7 @@ async function filesFromDrop(e: DragEvent): Promise<File[]> {
 }
 
 function Shell() {
-  const { busy, notices, dismiss, restorable, restoreSession, discardSession, importFiles } = useApp();
+  const { busy, notices, dismiss, restorable, restoreSession, discardSession, importFiles, project } = useApp();
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
     // Load all code up front: afterwards the page needs no network at all.
@@ -106,8 +108,17 @@ function Shell() {
         </div>
       )}
       <main className="workspace">
-        <Sidebar />
-        <MainArea />
+        {project.mode === 'lapShear' ? (
+          <>
+            <LapShearSidebar />
+            <LapShearWorkspace />
+          </>
+        ) : (
+          <>
+            <Sidebar />
+            <MainArea />
+          </>
+        )}
       </main>
       <div className="notices" aria-live="polite">
         {notices.map((n) => (

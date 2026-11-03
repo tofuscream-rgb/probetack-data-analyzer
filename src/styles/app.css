@@ -414,3 +414,40 @@ table.grid th.num { text-align: right; }
 .sets-list { border: none; padding: 0; }
 .sets-list .chips { margin-top: 6px; }
 .plot.compare-bars { flex: none; height: 480px; }
+
+/* experiment type switch (header) */
+.mode-switch { display: inline-flex; align-items: center; gap: 8px; margin-left: 6px; padding-left: 12px; border-left: 1px solid var(--rule); }
+.mode-switch > span { font-size: 12px; color: var(--ink-2); font-weight: 500; }
+.mode-switch .segmented button { padding: 5px 14px; font-weight: 500; }
+
+/* lap shear */
+.run-error { margin: 2px 6px 4px 28px; font-size: 11.5px; color: var(--red); }
+.run-picker .fl-file { padding-left: 22px; }
+.num-field { display: inline-flex; flex-direction: column; gap: 2px; }
+.num-field.labeled { display: flex; margin: 6px 0; }
+.num-field.labeled > span { font-size: 12px; color: var(--ink-2); }
+.num-input { border: 1px solid var(--rule); border-radius: var(--radius); padding: 4px 7px; background: var(--surface); width: 100%; min-width: 0; }
+.num-input.compact { width: 76px; padding: 2px 5px; text-align: right; }
+.num-input.invalid { border-color: var(--red); background: #fff5f5; }
+.num-error { color: var(--red); font-size: 11px; }
+.integration-bar { padding-top: 0; }
+.integration-bar .num-field.labeled { flex-direction: row; align-items: center; gap: 4px; margin: 0; }
+.integration-bar .num-input { width: 70px; }
+.integration-bar .view-help { padding: 0; }
+.ls-results { display: flex; flex-direction: column; gap: 8px; }
+.apply-all { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 12px; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--rule-2); border-radius: 8px; }
+.apply-all > strong { flex: 1 1 100%; font-size: 12.5px; }
+.apply-all .num-field.labeled { margin: 0; width: 130px; }
+.ls-table-wrap { max-height: 58vh; }
+table.ls-table th { white-space: normal; vertical-align: bottom; min-width: 64px; }
+table.ls-table td { vertical-align: middle; white-space: nowrap; }
+table.ls-table .sticky-col { position: sticky; left: 0; background: var(--surface); z-index: 2; min-width: 170px; }
+table.ls-table th.sticky-col { z-index: 3; background: var(--surface-2); }
+table.ls-table select { font-size: 12px; padding: 2px 4px; }
+.run-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.cond { font-size: 11px; color: var(--ink-3); }
+.warn-mark { color: #9a5400; cursor: help; }
+.ls-h { font-size: 14px; margin-top: 8px; }
+table.ls-summary td:first-child { white-space: nowrap; }
+.ls-definitions p { margin: 4px 0; max-width: 120ch; }
+.main-body.tab-summary { padding: 10px 12px; }

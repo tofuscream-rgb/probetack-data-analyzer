@@ -1,23 +1,11 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState } from 'react';
+import { Dialog } from './Dialog';
 import { useApp } from '../state/AppContext';
 import { APP_VERSION, ALGORITHM_VERSION } from '../types';
 import { useExperiment } from '../state/experiment';
 import { SHEETS, type SheetKey } from '../export/workbook';
 import { useCurrentGraph } from './GraphPanel';
-
-function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return (
-    <div className="dialog-backdrop" onClick={onClose}>
-      <div className="dialog" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
-        <div className="dialog-head">
-          <h2>{title}</h2>
-          <button className="icon" onClick={onClose} aria-label="Close">×</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
+import { LapShearExportDialog } from './lapShear/LapShearExport';
 
 function SaveDialog({ onClose }: { onClose: () => void }) {
   const { saveProject, files, pending } = useApp();
@@ -152,6 +140,13 @@ export function Header() {
         <span className="brand-name">Mach-1 Analyzer</span>
       </div>
       <input className="project-name" value={project.name} onChange={(e) => update((p) => ({ ...p, name: e.target.value }))} aria-label="Project name" />
+      <div className="mode-switch" role="group" aria-label="Experiment type">
+        <span>Experiment type</span>
+        <div className="segmented">
+          <button className={project.mode === 'tack' ? 'on' : ''} aria-pressed={project.mode === 'tack'} onClick={() => update((p) => ({ ...p, mode: 'tack' }))}>Probe Tack</button>
+          <button className={project.mode === 'lapShear' ? 'on' : ''} aria-pressed={project.mode === 'lapShear'} onClick={() => update((p) => ({ ...p, mode: 'lapShear' }))}>Lap Shear</button>
+        </div>
+      </div>
       {storageNote && <span className="storage-note" title={storageNote}>Autosave limited</span>}
       <div className="spacer" />
       <button onClick={() => projectInput.current?.click()}>Load project</button>
@@ -159,6 +154,7 @@ export function Header() {
       <button onClick={() => setDialog('save')} disabled={!files.length && !Object.keys(project.overrides).length}>Save project</button>
       <button className="primary" onClick={() => setDialog('export')} disabled={!files.length}>Export Excel</button>
       <button
+        hidden={project.mode !== 'tack'}
         disabled={!hasExclusions}
         title="Clear every manual exclusion and set the automatic rule to Keep all points"
         onClick={() => {
@@ -171,7 +167,7 @@ export function Header() {
       </button>
       <button className="link privacy" onClick={() => setDialog('privacy')}>Privacy</button>
       {dialog === 'save' && <SaveDialog onClose={() => setDialog(null)} />}
-      {dialog === 'export' && <ExportDialog onClose={() => setDialog(null)} />}
+      {dialog === 'export' && (project.mode === 'lapShear' ? <LapShearExportDialog onClose={() => setDialog(null)} /> : <ExportDialog onClose={() => setDialog(null)} />)}
       {dialog === 'privacy' && <PrivacyDialog onClose={() => setDialog(null)} />}
     </header>
   );

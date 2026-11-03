@@ -1,4 +1,4 @@
-import type { AnalysisSettings, CompareSelection, ExperimentSelection, GraphConfig, ProjectState } from '../types';
+import type { AnalysisSettings, CompareSelection, ExperimentSelection, GraphConfig, LapShearState, ProjectState } from '../types';
 import { PROJECT_SCHEMA_VERSION } from '../types';
 
 export function defaultSettings(): AnalysisSettings {
@@ -49,6 +49,24 @@ export function defaultCompare(): CompareSelection {
   return { substrates: null, chargeRatios: null, concentrations: null, holdTimes: null, hiddenSets: [], order: 'desc', which: 'processed' };
 }
 
+export function defaultLapShear(): LapShearState {
+  return {
+    settings: {
+      integration: { mode: 'full', fromMm: 0, toMm: 5 },
+      baseline: { enabled: false, points: 30, maxSpreadGf: 2 },
+      failure: { auto: true, fraction: 0.05, consecutive: 20 },
+      direction: 'auto',
+      gapFactor: 5,
+      defaults: { lengthMm: 25, widthMm: 10, thicknessMm: 1 },
+    },
+    runs: {},
+    selected: null,
+    fileId: null,
+    view: { x: 'disp', unit: 'gf', peakLabels: true, shade: true, showRaw: false },
+    tab: 'graph',
+  };
+}
+
 export function defaultProject(): ProjectState {
   const g = newGraph(1);
   return {
@@ -63,6 +81,8 @@ export function defaultProject(): ProjectState {
     activeGraphId: g.id,
     view: 'raw',
     mainTab: 'graph',
+    mode: 'tack',
+    lapShear: defaultLapShear(),
     experiment: defaultExperiment(),
     compare: defaultCompare(),
     selection: [],

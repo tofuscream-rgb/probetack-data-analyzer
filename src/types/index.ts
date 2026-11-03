@@ -1,6 +1,6 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.4.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.1.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
@@ -221,6 +221,55 @@ export interface ExperimentSelection {
   overlayFileIds: string[];
 }
 
+/** Which experimental method the interface shows. Imported files are shared by both. */
+export type ExperimentMode = 'tack' | 'lapShear';
+
+/* ---------------------------------------------------------------- Lap shear */
+
+/** Bonded-joint geometry of one lap-shear run. Thickness is recorded but does not enter τ = F / (L × W). */
+export interface LapShearDims {
+  lengthMm: number;
+  widthMm: number;
+  thicknessMm: number;
+}
+
+/** Observed by the user on the specimen; never inferred from the curve. */
+export type FailureMode = 'unspecified' | 'adhesive' | 'cohesive' | 'mixed';
+
+export interface LapShearRunMeta extends LapShearDims {
+  failureMode: FailureMode;
+  /** Failure displacement picked by the user (mm); overrides the automatic criterion. */
+  manualFailureMm: number | null;
+}
+
+export type IntegrationMode = 'full' | 'toPeak' | 'custom';
+
+export interface LapShearSettings {
+  integration: { mode: IntegrationMode; fromMm: number; toMm: number };
+  /** Zero-force baseline from the first valid points, only when they pass the unloaded-region checks. */
+  baseline: { enabled: boolean; points: number; maxSpreadGf: number };
+  /** Complete failure: loading force below `fraction` × peak for `consecutive` valid points after the peak. */
+  failure: { auto: boolean; fraction: number; consecutive: number };
+  /** Sign of the loading force: detected from the data, or set by the user. */
+  direction: 'auto' | 'negative' | 'positive';
+  /** A time step longer than this multiple of the median step is a measurement gap and is not integrated across. */
+  gapFactor: number;
+  /** Dimensions given to runs that were never edited. */
+  defaults: LapShearDims;
+}
+
+export interface LapShearState {
+  settings: LapShearSettings;
+  /** Per-run dimensions, failure mode and manual failure point, keyed by cycleId. */
+  runs: Record<string, LapShearRunMeta>;
+  /** Runs shown on the graph and in the results (cycleIds). null = all valid runs. */
+  selected: string[] | null;
+  /** File whose runs are listed first in the sidebar. */
+  fileId: string | null;
+  view: { x: 'disp' | 'time'; unit: 'gf' | 'N'; peakLabels: boolean; shade: boolean; showRaw: boolean };
+  tab: 'graph' | 'results' | 'settings' | 'files';
+}
+
 export interface ProjectState {
   schemaVersion: number;
   name: string;
@@ -238,6 +287,8 @@ export interface ProjectState {
   /** Legacy: graph view of version 1.x; no longer shown. */
   view: ViewMode;
   mainTab: MainTab;
+  mode: ExperimentMode;
+  lapShear: LapShearState;
   experiment: ExperimentSelection;
   compare: CompareSelection;
   selection: string[];

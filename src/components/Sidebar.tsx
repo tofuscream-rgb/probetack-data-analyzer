@@ -83,9 +83,9 @@ function FileSelector() {
 const sizeLabel = (bytes: number) => (bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} kB`);
 const holdLabel = (e: ExperimentFile) => (e.holdTimeS !== null ? `${e.holdTimeS} s` : '');
 
-export function Sidebar() {
-  const { files, pending, importFiles, loadExample, update } = useApp();
-  const ex = useExperiment();
+/** Step 1, shared by both experiment modes: import a folder, TXT files or a ZIP, and tick the files to use. */
+export function ImportStep() {
+  const { files, pending, importFiles, loadExample, project } = useApp();
   const [mode, setMode] = useState<ImportMode>('folder');
   const folderInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -95,12 +95,7 @@ export function Sidebar() {
     if (e.target.files) importFiles(e.target.files);
     e.target.value = '';
   };
-  const others = ex.files.filter((e) => e !== ex.main);
-  const overlayIds = ex.overlayFiles.map((e) => e.file.fileId);
-  const setOverlay = (ids: string[]) => ex.set({ overlayFileIds: ids });
-
   return (
-    <nav className="sidebar" aria-label="Open and choose experiments">
       <section className="step">
         <h2>1. Open your experiments</h2>
         <fieldset className="radio-group">
@@ -131,12 +126,25 @@ export function Sidebar() {
             <strong>{pending.length} project file(s) not connected.</strong> Select the original folder or files; they are matched by content, so moved files are found too.
           </div>
         )}
-        {!files.length && (
+        {!files.length && project.mode === 'tack' && (
           <button className="link" onClick={loadExample}>
             Try it with example data
           </button>
         )}
       </section>
+  );
+}
+
+export function Sidebar() {
+  const { update } = useApp();
+  const ex = useExperiment();
+  const others = ex.files.filter((e) => e !== ex.main);
+  const overlayIds = ex.overlayFiles.map((e) => e.file.fileId);
+  const setOverlay = (ids: string[]) => ex.set({ overlayFileIds: ids });
+
+  return (
+    <nav className="sidebar" aria-label="Open and choose experiments">
+      <ImportStep />
 
       <section className="step">
         <h2>2. Choose your experiment</h2>

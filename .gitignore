@@ -1,0 +1,4 @@
+node_modules/
+dist/
+# Real experimental data used for local testing: never commit it.
+private-data/

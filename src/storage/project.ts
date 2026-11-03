@@ -78,6 +78,9 @@ function migrateView(d: RunGraphView, v: Partial<RunGraphView> | undefined): Run
   if (out.shade !== 'none' && out.shade !== 'highlight' && out.shade !== 'all') out.shade = d.shade;
   if (!['gf', 'N', 'kPa', 'MPa', 'N/m'].includes(out.unit)) out.unit = d.unit;
   out.x = 'disp';
+  if (out.labels !== 'legend' && out.labels !== 'curve' && out.labels !== 'none') out.labels = d.labels;
+  if (typeof out.title !== 'string') out.title = '';
+  if (!out.names || typeof out.names !== 'object') out.names = {};
   return out;
 }
 
@@ -282,6 +285,7 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
     lapShear: {
       ...state.lapShear,
       runs: remapKeys(state.lapShear.runs, mapCycle),
+      view: { ...state.lapShear.view, names: remapKeys(state.lapShear.view.names, mapCycle) },
       selected: state.lapShear.selected ? state.lapShear.selected.map(mapCycle) : null,
       fileId: state.lapShear.fileId ? idMap.get(state.lapShear.fileId) ?? state.lapShear.fileId : null,
       disabledFiles: state.lapShear.disabledFiles.map((id) => idMap.get(id) ?? id),
@@ -289,6 +293,7 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
     peel: {
       ...state.peel,
       runs: remapKeys(state.peel.runs, mapCycle),
+      view: { ...state.peel.view, names: remapKeys(state.peel.view.names, mapCycle) },
       selected: state.peel.selected ? state.peel.selected.map(mapCycle) : null,
       fileId: state.peel.fileId ? idMap.get(state.peel.fileId) ?? state.peel.fileId : null,
       disabledFiles: state.peel.disabledFiles.map((id) => idMap.get(id) ?? id),

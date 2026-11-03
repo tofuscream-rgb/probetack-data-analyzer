@@ -483,3 +483,14 @@ table.ls-summary td:first-child { white-space: nowrap; }
   .mode-switch > span { display: none; }
   .project-name { width: 130px; }
 }
+
+/* curve labels, title, rename */
+.label-bar { padding-top: 0; position: relative; }
+.title-field input { width: 220px; }
+.rename-curves { position: relative; }
+.rename-curves > summary { cursor: pointer; color: var(--accent); font-size: 12.5px; list-style: none; }
+.rename-curves > summary::-webkit-details-marker { display: none; }
+.rename-curves[open] > summary { font-weight: 600; }
+.rename-list { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: 420px; max-height: 340px; overflow: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(24, 38, 58, 0.14); padding: 8px 10px; }
+.rename-list label { display: grid; grid-template-columns: minmax(0, 1fr) 160px; align-items: center; gap: 8px; margin: 3px 0; font-size: 12px; }
+.rename-list label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }

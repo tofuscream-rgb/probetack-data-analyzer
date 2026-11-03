@@ -6,7 +6,7 @@ import { lttbIndices } from '../../plotting/downsample';
 import { EXPORT_SIZE, figAxis, figLayout, peakLabelFont } from '../../plotting/figureStyle';
 import { CURVE_COLORS } from '../../plotting/colors';
 import { NumberField } from '../lapShear/NumberField';
-import { RunGraphControls, Y_OPTIONS, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
+import { GraphLabelControls, RunGraphControls, Y_OPTIONS, commonTitle, curveLabelAnnotations, shortLabels, type LabelSeries, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
 
 const DISPLAY_LIMIT = 4000;
 const rgba = (hex: string, a: number) => {
@@ -37,7 +37,10 @@ export function PeelGraph() {
   const { data, layout } = useMemo(() => {
     const traces: Data[] = [];
     const annotations: Partial<Layout>['annotations'] = [];
+    const labelSeries: LabelSeries[] = [];
     const ids = runs.map((r) => r.id);
+    const short = v.labels === 'curve' ? shortLabels(runs.map((r) => ({ label: r.label, cycleNumber: r.cycle.cycleNumber, cond: r.cond }))) : runs.map((r) => r.label);
+    const avoid: number[] = [];
     runs.forEach((r, k) => {
       const color = CURVE_COLORS[k % CURVE_COLORS.length];
       const st = runStyle(v, r.id, ids);
@@ -48,6 +51,8 @@ export function PeelGraph() {
       const xs = series.dispMm;
       const idx = displayIndices(r, xs);
       const y = (i: number) => series.loadGf[i] * f;
+      const name = v.names[r.id]?.trim() || short[k];
+      labelSeries.push({ id: r.id, name, color, x: idx.map((i) => xs[i]), y: idx.map(y) });
       if (st.shade && res.window.n > 1) {
         const inside = idx.filter((i) => series.dispMm[i] >= res.window.fromMm && series.dispMm[i] <= res.window.toMm);
         traces.push({ type: 'scatter', mode: 'lines', x: inside.map((i) => xs[i]), y: inside.map(y), fill: 'tozeroy', fillcolor: rgba(color, 0.18), line: { width: 0 }, hoverinfo: 'skip', showlegend: false, legendgroup: r.id } as unknown as Data);
@@ -56,28 +61,29 @@ export function PeelGraph() {
         const mean = res.plateau.meanGf * f;
         traces.push({
           type: 'scatter', mode: 'lines', x: [x0, x1], y: [mean, mean], line: { color, width: 2, dash: 'dash' }, showlegend: false, legendgroup: r.id,
-          hovertemplate: `${r.label}<br>Steady-state average ${mean.toFixed(dg)} ${unit} (window ${res.window.fromMm.toFixed(1)}–${res.window.toMm.toFixed(1)} mm)<extra></extra>`,
+          hovertemplate: `${name}<br>Steady-state average ${mean.toFixed(dg)} ${unit} (window ${res.window.fromMm.toFixed(1)}–${res.window.toMm.toFixed(1)} mm)<extra></extra>`,
         } as unknown as Data);
       }
       if (v.showRaw && res.curve.baseline.applied) {
-        traces.push({ type: 'scatter', mode: 'lines', name: `${r.label} (raw)`, x: idx.map((i) => xs[i]), y: idx.map((i) => res.curve.loadingSign * r.cycle.force_gf[i] * f), line: { color, width: 1, dash: 'dot' }, legendgroup: r.id } as unknown as Data);
+        traces.push({ type: 'scatter', mode: 'lines', name: `${name} (raw)`, x: idx.map((i) => xs[i]), y: idx.map((i) => res.curve.loadingSign * r.cycle.force_gf[i] * f), line: { color, width: 1, dash: 'dot' }, legendgroup: r.id } as unknown as Data);
       }
       traces.push({
-        type: 'scatter', mode: 'lines', name: r.label, meta: r.id, x: idx.map((i) => xs[i]), y: idx.map(y), line: { color, width: st.width }, opacity: st.opacity, legendgroup: r.id,
-        hovertemplate: `${r.label}<br>δ = %{x:.3f} mm<br>%{y:.${dg}f} ${unit}<extra></extra>`,
+        type: 'scatter', mode: 'lines', name, meta: r.id, x: idx.map((i) => xs[i]), y: idx.map(y), line: { color, width: st.width }, opacity: st.opacity, legendgroup: r.id,
+        hovertemplate: `${name}<br>δ = %{x:.3f} mm<br>%{y:.${dg}f} ${unit}<extra></extra>`,
       } as unknown as Data);
       const pk = res.curve.peak;
       if (pk) {
+        avoid.push(xs[pk.index]);
         traces.push({
           type: 'scatter', mode: 'markers', x: [xs[pk.index]], y: [pk.forceGf * f], marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, opacity: st.opacity, meta: r.id, showlegend: false, legendgroup: r.id,
-          hovertemplate: `${r.label}<br>Peak ${(pk.forceGf * f).toFixed(dg)} ${unit} at δ = ${pk.dispMm.toFixed(2)} mm<extra></extra>`,
+          hovertemplate: `${name}<br>Peak ${(pk.forceGf * f).toFixed(dg)} ${unit} at δ = ${pk.dispMm.toFixed(2)} mm<extra></extra>`,
         } as unknown as Data);
         if (v.peakLabels && st.labels) annotations.push({ x: xs[pk.index], y: pk.forceGf * f, text: `${(pk.forceGf * f).toFixed(Math.max(1, dg - 1))} ${unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: peakLabelFont(color), bgcolor: 'rgba(255,255,255,0.8)' });
       }
       if (res.detach.dispMm !== null) {
         let di = -1;
         for (let i = 0; i < series.dispMm.length; i++) if (series.dispMm[i] >= res.detach.dispMm) { di = i; break; }
-        if (di >= 0) traces.push({ type: 'scatter', mode: 'markers', x: [xs[di]], y: [y(di)], marker: { symbol: 'x-thin', size: 12, line: { color, width: 2.5 } }, opacity: st.opacity, showlegend: false, legendgroup: r.id, hovertemplate: `${r.label}<br>Detachment (${res.detach.source}) at δ = ${res.detach.dispMm.toFixed(2)} mm<extra></extra>` } as unknown as Data);
+        if (di >= 0) traces.push({ type: 'scatter', mode: 'markers', x: [xs[di]], y: [y(di)], marker: { symbol: 'x-thin', size: 12, line: { color, width: 2.5 } }, opacity: st.opacity, showlegend: false, legendgroup: r.id, hovertemplate: `${name}<br>Detachment (${res.detach.source}) at δ = ${res.detach.dispMm.toFixed(2)} mm<extra></extra>` } as unknown as Data);
       }
     });
     const lay: Partial<Layout> = {
@@ -87,7 +93,11 @@ export function PeelGraph() {
       xaxis: figAxis('Peel displacement δ = |z − z₀| (mm)'),
       yaxis: figAxis(yTitle),
       legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 15, color: '#000' } },
-      annotations,
+      showlegend: v.labels === 'legend',
+      annotations: v.labels === 'curve' ? [...annotations, ...curveLabelAnnotations(labelSeries, v.peakLabels ? avoid : [])] : annotations,
+      ...(v.title.trim() ? { title: { text: `<b>${v.title.trim()}</b>`, font: { size: 22, color: '#000' }, x: 0.5, xanchor: 'center' }, margin: { l: 90, r: 16, t: 64, b: 78 } } : {}),
+      // Keep labels the user dragged while the graph updates.
+      editrevision: 'labels',
       dragmode: 'zoom',
       hovermode: 'closest',
       uirevision: unit,
@@ -127,6 +137,7 @@ export function PeelGraph() {
           <button className="small" onClick={() => save('svg')}>SVG</button>
         </div>
       </div>
+      <GraphLabelControls view={v} set={(view) => set({ view })} runs={runs} suggestion={commonTitle(runs.map((r) => r.cond))} />
       <div className="graph-toolbar integration-bar">
         <label>
           Steady-state window
@@ -154,7 +165,7 @@ export function PeelGraph() {
           <p>Open your 90° peel TXT files on the left and tick the runs to compare.</p>
         </div>
       ) : (
-        <PlotlyChart data={data} layout={layout} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={{ toImageButtonOptions: { format: 'png', filename: 'peel_90', scale: 3 } }} />
+        <PlotlyChart data={data} layout={layout} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={{ editable: true, edits: { annotationPosition: true, annotationTail: true, annotationText: false, axisTitleText: false, titleText: false, legendText: false, legendPosition: true, colorbarTitleText: false, colorbarPosition: false, shapePosition: false }, toImageButtonOptions: { format: 'png', filename: 'peel_90', scale: 3 } }} />
       )}
     </section>
   );

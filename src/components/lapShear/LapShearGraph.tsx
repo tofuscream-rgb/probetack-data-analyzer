@@ -8,7 +8,7 @@ import { EXPORT_SIZE, figAxis, figLayout, peakLabelFont } from '../../plotting/f
 import { CURVE_COLORS } from '../../plotting/colors';
 import type { IntegrationMode } from '../../types';
 import { NumberField } from './NumberField';
-import { RunGraphControls, Y_OPTIONS, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
+import { GraphLabelControls, RunGraphControls, Y_OPTIONS, commonTitle, curveLabelAnnotations, shortLabels, type LabelSeries, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
 
 const DISPLAY_LIMIT = 4000;
 
@@ -47,7 +47,10 @@ export function LapShearGraph() {
   const { data, layout } = useMemo(() => {
     const traces: Data[] = [];
     const annotations: Partial<Layout>['annotations'] = [];
+    const labelSeries: LabelSeries[] = [];
     const ids = runs.map((r) => r.id);
+    const short = v.labels === 'curve' ? shortLabels(runs.map((r) => ({ label: r.label, cycleNumber: r.cycle.cycleNumber, cond: r.cond }))) : runs.map((r) => r.label);
+    const avoid: number[] = [];
     runs.forEach((r, k) => {
       const color = CURVE_COLORS[k % CURVE_COLORS.length];
       const st = runStyle(v, r.id, ids);
@@ -57,7 +60,8 @@ export function LapShearGraph() {
       const xs = res.series.dispMm;
       const idx = displayIndices(r, xs);
       const y = (i: number) => res.series.loadGf[i] * f;
-      const name = r.label;
+      const name = v.names[r.id]?.trim() || short[k];
+      labelSeries.push({ id: r.id, name, color, x: idx.map((i) => xs[i]), y: idx.map(y) });
 
       // Shaded integration interval (the one used for "Selected integration work").
       if (st.shade && Number.isFinite(res.work.selectedMJ)) {
@@ -105,6 +109,7 @@ export function LapShearGraph() {
       } as unknown as Data);
       if (res.peak) {
         const px = xs[res.peak.index];
+        avoid.push(px);
         const py = res.peak.forceGf * f;
         traces.push({
           type: 'scatter',
@@ -148,7 +153,11 @@ export function LapShearGraph() {
       xaxis: figAxis(xTitle),
       yaxis: figAxis(yTitle),
       legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 15, color: '#000' } },
-      annotations,
+      showlegend: v.labels === 'legend',
+      annotations: v.labels === 'curve' ? [...annotations, ...curveLabelAnnotations(labelSeries, v.peakLabels ? avoid : [])] : annotations,
+      ...(v.title.trim() ? { title: { text: `<b>${v.title.trim()}</b>`, font: { size: 22, color: '#000' }, x: 0.5, xanchor: 'center' }, margin: { l: 90, r: 16, t: 64, b: 78 } } : {}),
+      // Keep labels the user dragged while the graph updates.
+      editrevision: 'labels',
       dragmode: 'zoom',
       hovermode: 'closest',
       uirevision: unit,
@@ -189,6 +198,7 @@ export function LapShearGraph() {
           <button className="small" onClick={() => save('svg')}>SVG</button>
         </div>
       </div>
+      <GraphLabelControls view={v} set={(view) => set({ view })} runs={runs} suggestion={commonTitle(runs.map((r) => r.cond))} />
       <div className="graph-toolbar integration-bar">
         <label>
           Integration
@@ -212,7 +222,7 @@ export function LapShearGraph() {
           <p>Open your lap-shear TXT files on the left and tick the runs to compare.</p>
         </div>
       ) : (
-        <PlotlyChart data={data} layout={layout} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={{ toImageButtonOptions: { format: 'png', filename: 'lap_shear', scale: 3 } }} />
+        <PlotlyChart data={data} layout={layout} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={{ editable: true, edits: { annotationPosition: true, annotationTail: true, annotationText: false, axisTitleText: false, titleText: false, legendText: false, legendPosition: true, colorbarTitleText: false, colorbarPosition: false, shapePosition: false }, toImageButtonOptions: { format: 'png', filename: 'lap_shear', scale: 3 } }} />
       )}
     </section>
   );

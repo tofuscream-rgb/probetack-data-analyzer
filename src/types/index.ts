@@ -1,6 +1,6 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.8.0';
+export const APP_VERSION = '1.9.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.1.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
@@ -280,6 +280,9 @@ export interface RunGraphView {
   title: string;
   /** Names the user gave to curves (by run id); empty = automatic label. */
   names: Record<string, string>;
+  /** Axis titles typed by the user ('' = automatic). The y title is cleared when the y quantity changes. */
+  xTitle: string;
+  yTitle: string;
 }
 
 /** Compare charge ratios tab of Lap Shear and 90° Peel: which data sets and which property. */

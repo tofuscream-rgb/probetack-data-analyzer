@@ -81,6 +81,8 @@ function migrateView(d: RunGraphView, v: Partial<RunGraphView> | undefined): Run
   if (out.labels !== 'legend' && out.labels !== 'curve' && out.labels !== 'none') out.labels = d.labels;
   if (typeof out.title !== 'string') out.title = '';
   if (!out.names || typeof out.names !== 'object') out.names = {};
+  if (typeof out.xTitle !== 'string') out.xTitle = '';
+  if (typeof out.yTitle !== 'string') out.yTitle = '';
   return out;
 }
 

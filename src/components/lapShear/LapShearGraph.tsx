@@ -40,8 +40,10 @@ export function LapShearGraph() {
   const unit = v.unit === 'N/m' ? 'gf' : v.unit; // N/m is a peel-only choice
   const stress = unit === 'kPa' || unit === 'MPa';
   const dg = yDigits(unit);
-  const xTitle = 'Displacement δ = |z − z₀| (mm)';
-  const yTitle = stress ? `Apparent shear stress τ = F/A (${unit})` : `Loading force (${unit})`;
+  const autoX = 'Displacement δ = |z − z₀| (mm)';
+  const xTitle = v.xTitle.trim() || autoX;
+  const autoY = stress ? `Shear strength (${unit})` : `Loading force (${unit})`;
+  const yTitle = v.yTitle.trim() || autoY;
   const runs = selected.filter((r) => r.result.ok);
 
   const { data, layout } = useMemo(() => {
@@ -164,7 +166,7 @@ export function LapShearGraph() {
     };
     return { data: traces, layout: lay };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs, v, unit]);
+  }, [runs, v, unit, xTitle, yTitle]);
 
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
@@ -183,7 +185,7 @@ export function LapShearGraph() {
       <div className="graph-toolbar">
         <label title="Stress uses each run's own bonded area A = overlap length × width">
           Y axis
-          <select className="y-select" value={unit} onChange={(e) => set({ view: { ...v, unit: e.target.value as YUnit } })}>
+          <select className="y-select" value={unit} onChange={(e) => set({ view: { ...v, unit: e.target.value as YUnit, yTitle: '' } })}>
             {Y_OPTIONS.lapShear.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <span className="vs">vs displacement</span>
@@ -198,7 +200,7 @@ export function LapShearGraph() {
           <button className="small" onClick={() => save('svg')}>SVG</button>
         </div>
       </div>
-      <GraphLabelControls view={v} set={(view) => set({ view })} runs={runs} suggestion={commonTitle(runs.map((r) => r.cond))} />
+      <GraphLabelControls view={v} set={(view) => set({ view })} runs={runs} suggestion={commonTitle(runs.map((r) => r.cond))} autoX={autoX} autoY={autoY} />
       <div className="graph-toolbar integration-bar">
         <label>
           Integration

@@ -40,20 +40,20 @@ export function runStyle(view: RunGraphView, id: string, runIds: string[]) {
 
 export type YUnit = RunGraphView['unit'];
 
-/** y-axis choices: force, stress = force / area (kPa, MPa), and (peel) force per width. */
+/** y-axis choices: force, shear strength / stress = force / area (kPa, MPa), and (peel) peel energy G = F/w·(1 − cos θ). */
 export const Y_OPTIONS: Record<'lapShear' | 'peel', { value: YUnit; label: string }[]> = {
   lapShear: [
     { value: 'gf', label: 'Force (gf)' },
     { value: 'N', label: 'Force (N)' },
-    { value: 'kPa', label: 'Apparent shear stress τ = F/A (kPa)' },
-    { value: 'MPa', label: 'Apparent shear stress τ = F/A (MPa)' },
+    { value: 'kPa', label: 'Shear strength τ = F/A (kPa)' },
+    { value: 'MPa', label: 'Shear strength τ = F/A (MPa)' },
   ],
   peel: [
     { value: 'gf', label: 'Force (gf)' },
     { value: 'N', label: 'Force (N)' },
     { value: 'kPa', label: 'Nominal stress F/A (kPa)' },
     { value: 'MPa', label: 'Nominal stress F/A (MPa)' },
-    { value: 'N/m', label: 'Force per width F/w (N/m)' },
+    { value: 'N/m', label: 'Peel energy G = F/w·(1 − cos θ) (J/m²)' },
   ],
 };
 
@@ -153,11 +153,14 @@ export function commonTitle(conds: { chargeRatio: string; concentration: string;
 }
 
 /** Curve labels (legend / on curves / none), graph title and curve names. */
-export function GraphLabelControls({ view, set, runs, suggestion }: {
+export function GraphLabelControls({ view, set, runs, suggestion, autoX, autoY }: {
   view: RunGraphView;
   set: (v: RunGraphView) => void;
   runs: { id: string; label: string }[];
   suggestion: string;
+  /** Automatic axis titles, shown as placeholders. */
+  autoX: string;
+  autoY: string;
 }) {
   return (
     <div className="graph-toolbar label-bar">
@@ -174,6 +177,21 @@ export function GraphLabelControls({ view, set, runs, suggestion }: {
         <input value={view.title} placeholder={suggestion ? `e.g. ${suggestion}` : 'none'} onChange={(e) => set({ ...view, title: e.target.value })} aria-label="Graph title" />
       </label>
       {suggestion && !view.title && <button className="link small" onClick={() => set({ ...view, title: suggestion })}>Use “{suggestion}”</button>}
+      <details className="rename-curves axis-titles">
+        <summary>Axis titles{view.xTitle || view.yTitle ? ' (edited)' : ''}</summary>
+        <div className="rename-list">
+          <label>
+            <span>Y axis</span>
+            <input value={view.yTitle} placeholder={autoY} onChange={(e) => set({ ...view, yTitle: e.target.value })} aria-label="Y axis title" />
+          </label>
+          <label>
+            <span>X axis</span>
+            <input value={view.xTitle} placeholder={autoX} onChange={(e) => set({ ...view, xTitle: e.target.value })} aria-label="X axis title" />
+          </label>
+          {(view.xTitle || view.yTitle) && <button className="link small" onClick={() => set({ ...view, xTitle: '', yTitle: '' })}>Back to automatic titles</button>}
+          <p className="hint">Leave empty for the automatic title. Write m&lt;sup&gt;2&lt;/sup&gt; for a superscript. The Y title goes back to automatic when you change the Y quantity.</p>
+        </div>
+      </details>
       <details className="rename-curves">
         <summary>Rename curves</summary>
         <div className="rename-list">
@@ -217,3 +235,6 @@ export function shortLabels(runs: { label: string; cycleNumber: number; cond: { 
   const out = parts.map((p, i) => keep.map((k) => p[k]).filter(Boolean).join(' · ') || runs[i].label);
   return new Set(out).size === out.length ? out : runs.map((r) => r.label);
 }
+
+/** Unit as written on the graph: peel energy is stored as 'N/m' (1 N/m = 1 J/m²). */
+export const unitText = (unit: YUnit) => (unit === 'N/m' ? 'J/m²' : unit);

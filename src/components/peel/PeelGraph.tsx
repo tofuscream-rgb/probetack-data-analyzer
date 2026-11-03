@@ -6,7 +6,7 @@ import { lttbIndices } from '../../plotting/downsample';
 import { EXPORT_SIZE, figAxis, figLayout, peakLabelFont } from '../../plotting/figureStyle';
 import { CURVE_COLORS } from '../../plotting/colors';
 import { NumberField } from '../lapShear/NumberField';
-import { GraphLabelControls, RunGraphControls, Y_OPTIONS, commonTitle, curveLabelAnnotations, shortLabels, type LabelSeries, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
+import { GraphLabelControls, RunGraphControls, Y_OPTIONS, commonTitle, curveLabelAnnotations, shortLabels, type LabelSeries, runStyle, unitText, yDigits, yFactor, type YUnit } from '../RunGraphControls';
 
 const DISPLAY_LIMIT = 4000;
 const rgba = (hex: string, a: number) => {
@@ -31,7 +31,11 @@ export function PeelGraph() {
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
   const unit = v.unit;
   const dg = yDigits(unit);
-  const yTitle = unit === 'kPa' || unit === 'MPa' ? `Nominal stress F/A (${unit})` : unit === 'N/m' ? 'Force per width F/w (N/m)' : `Peel force (${unit})`;
+  const autoY = unit === 'kPa' || unit === 'MPa' ? `Nominal stress F/A (${unit})` : unit === 'N/m' ? 'Peel energy (J/m²)' : `Peel force (${unit})`;
+  const yTitle = v.yTitle.trim() || autoY;
+  const autoX = 'Peel displacement δ = |z − z₀| (mm)';
+  const xTitle = v.xTitle.trim() || autoX;
+  const ut = unitText(unit);
   const runs = selected.filter((r) => r.result.ok);
 
   const { data, layout } = useMemo(() => {
@@ -46,7 +50,8 @@ export function PeelGraph() {
       const st = runStyle(v, r.id, ids);
       const res = r.result;
       const series = res.curve.series;
-      const f = yFactor(unit, r.meta.lengthMm * r.meta.widthMm, r.meta.widthMm); // each run with its own gel area / width
+      // Each run with its own gel area / width; peel energy G = F/w · (1 − cos θ) with its own peel angle (= F/w at 90°).
+      const f = yFactor(unit, r.meta.lengthMm * r.meta.widthMm, r.meta.widthMm) * (unit === 'N/m' ? 1 - Math.cos((r.meta.angleDeg * Math.PI) / 180) : 1);
       if (!Number.isFinite(f)) return;
       const xs = series.dispMm;
       const idx = displayIndices(r, xs);
@@ -61,7 +66,7 @@ export function PeelGraph() {
         const mean = res.plateau.meanGf * f;
         traces.push({
           type: 'scatter', mode: 'lines', x: [x0, x1], y: [mean, mean], line: { color, width: 2, dash: 'dash' }, showlegend: false, legendgroup: r.id,
-          hovertemplate: `${name}<br>Steady-state average ${mean.toFixed(dg)} ${unit} (window ${res.window.fromMm.toFixed(1)}–${res.window.toMm.toFixed(1)} mm)<extra></extra>`,
+          hovertemplate: `${name}<br>Steady-state average ${mean.toFixed(dg)} ${ut} (window ${res.window.fromMm.toFixed(1)}–${res.window.toMm.toFixed(1)} mm)<extra></extra>`,
         } as unknown as Data);
       }
       if (v.showRaw && res.curve.baseline.applied) {
@@ -69,16 +74,16 @@ export function PeelGraph() {
       }
       traces.push({
         type: 'scatter', mode: 'lines', name, meta: r.id, x: idx.map((i) => xs[i]), y: idx.map(y), line: { color, width: st.width }, opacity: st.opacity, legendgroup: r.id,
-        hovertemplate: `${name}<br>δ = %{x:.3f} mm<br>%{y:.${dg}f} ${unit}<extra></extra>`,
+        hovertemplate: `${name}<br>δ = %{x:.3f} mm<br>%{y:.${dg}f} ${ut}<extra></extra>`,
       } as unknown as Data);
       const pk = res.curve.peak;
       if (pk) {
         avoid.push(xs[pk.index]);
         traces.push({
           type: 'scatter', mode: 'markers', x: [xs[pk.index]], y: [pk.forceGf * f], marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, opacity: st.opacity, meta: r.id, showlegend: false, legendgroup: r.id,
-          hovertemplate: `${name}<br>Peak ${(pk.forceGf * f).toFixed(dg)} ${unit} at δ = ${pk.dispMm.toFixed(2)} mm<extra></extra>`,
+          hovertemplate: `${name}<br>Peak ${(pk.forceGf * f).toFixed(dg)} ${ut} at δ = ${pk.dispMm.toFixed(2)} mm<extra></extra>`,
         } as unknown as Data);
-        if (v.peakLabels && st.labels) annotations.push({ x: xs[pk.index], y: pk.forceGf * f, text: `${(pk.forceGf * f).toFixed(Math.max(1, dg - 1))} ${unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: peakLabelFont(color), bgcolor: 'rgba(255,255,255,0.8)' });
+        if (v.peakLabels && st.labels) annotations.push({ x: xs[pk.index], y: pk.forceGf * f, text: `${(pk.forceGf * f).toFixed(Math.max(1, dg - 1))} ${ut}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: peakLabelFont(color), bgcolor: 'rgba(255,255,255,0.8)' });
       }
       if (res.detach.dispMm !== null) {
         let di = -1;
@@ -90,7 +95,7 @@ export function PeelGraph() {
       ...figLayout(),
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
-      xaxis: figAxis('Peel displacement δ = |z − z₀| (mm)'),
+      xaxis: figAxis(xTitle),
       yaxis: figAxis(yTitle),
       legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 15, color: '#000' } },
       showlegend: v.labels === 'legend',
@@ -104,7 +109,7 @@ export function PeelGraph() {
     };
     return { data: traces, layout: lay };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs, v, unit]);
+  }, [runs, v, unit, xTitle, yTitle]);
 
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
@@ -120,9 +125,9 @@ export function PeelGraph() {
   return (
     <section className="graph-panel" aria-label="90° peel graph">
       <div className="graph-toolbar">
-        <label title="Stress uses each run's own gel area (length × width); force per width uses its gel width">
+        <label title="Stress uses each run's own gel area (length × width); peel energy uses its gel width and peel angle">
           Y axis
-          <select className="y-select" value={unit} onChange={(e) => set({ view: { ...v, unit: e.target.value as YUnit } })}>
+          <select className="y-select" value={unit} onChange={(e) => set({ view: { ...v, unit: e.target.value as YUnit, yTitle: '' } })}>
             {Y_OPTIONS.peel.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <span className="vs">vs displacement</span>
@@ -137,7 +142,7 @@ export function PeelGraph() {
           <button className="small" onClick={() => save('svg')}>SVG</button>
         </div>
       </div>
-      <GraphLabelControls view={v} set={(view) => set({ view })} runs={runs} suggestion={commonTitle(runs.map((r) => r.cond))} />
+      <GraphLabelControls view={v} set={(view) => set({ view })} runs={runs} suggestion={commonTitle(runs.map((r) => r.cond))} autoX={autoX} autoY={autoY} />
       <div className="graph-toolbar integration-bar">
         <label>
           Steady-state window

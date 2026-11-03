@@ -89,7 +89,10 @@ describe('strength vs displacement', () => {
     expect(Number.isNaN(yFactor('kPa', 0, 10))).toBe(true);
     const s = migrateState({ lapShear: { view: { x: 'time', unit: 'kPa' } } as never, peel: { view: { unit: 'psi' } } as never });
     expect(s.lapShear.view).toMatchObject({ x: 'disp', unit: 'kPa' });
-    expect(s.peel.view.unit).toBe('gf');
+    expect(s.peel.view.unit).toBe('N/m'); // invalid → default: peel energy (J/m²)
+    expect(s.peel.view).toMatchObject({ xTitle: '', yTitle: '' }); // older projects: automatic axis titles
+    const t = migrateState({ lapShear: { view: { unit: 'kPa', yTitle: 'Shear strength (kPa)', xTitle: 7 } } as never });
+    expect(t.lapShear.view).toMatchObject({ yTitle: 'Shear strength (kPa)', xTitle: '' });
   });
 });
 

@@ -17,7 +17,7 @@ import { DEFAULT_CONCENTRATION_M } from '../types';
 const SUBSTRATE_WORDS = [
   'glass', 'steel', 'stainless', 'aluminum', 'aluminium', 'ptfe', 'teflon', 'pet', 'pmma', 'acrylic',
   'polypropylene', 'polyethylene', 'polystyrene', 'pdms', 'silicone', 'skin', 'pigskin', 'porcine',
-  'tissue', 'wood', 'copper', 'titanium', 'gelatin', 'plastic', 'metal', 'paper', 'substrate',
+  'tissue', 'wood', 'copper', 'titanium', 'gelatin', 'plastic', 'metal', 'paper', 'substrate', 'ss',
 ];
 
 const field = <T>(value: T | null, source: MetaSource): MetaField<T> => ({ value, source });
@@ -43,6 +43,13 @@ export function findChargeRatio(segment: string): number | null {
   }
   if (/^\d*\.?\d+$/.test(withoutConc)) {
     const v = Number(withoutConc);
+    if (v > 0 && v <= 10) return v;
+  }
+  // "0.25 2.98M 90": a leading number next to a concentration is the charge ratio
+  // (later numbers, such as a peel angle, are ignored).
+  const lead = withoutConc.match(/^(\d*\.?\d+)\s/);
+  if (lead && withoutConc !== segment.trim()) {
+    const v = Number(lead[1]);
     if (v > 0 && v <= 10) return v;
   }
   return null;
@@ -103,6 +110,15 @@ export function inferMetadata(path: string): ExperimentMeta {
     }
   });
 
+  // Substrate named in the file itself ("glass.txt", "PET-2.txt" = PET, repeat 2).
+  const numbered = stem.match(/^(.*?)[\s_-]+(\d{1,3})$/) ?? stem.match(/^(.*?)\s*\((\d{1,3})\)$/);
+  const fileBase = numbered && numbered[1] ? numbered[1] : stem;
+  let fileRepeat: number | null = null;
+  if (substrate.value === null && findHoldTime(fileBase) === null && SUBSTRATE_WORDS.some((w) => new RegExp(`(^|[^a-z])${w}([^a-z]|$)`).test(fileBase.toLowerCase()))) {
+    substrate = field(fileBase, 'filename');
+    if (numbered && numbered[1]) fileRepeat = Number(numbered[2]);
+  }
+
   // If no keyword matched, assume the folder that directly contains the file
   // is the substrate when it sits below a recognized charge-ratio folder.
   if (substrate.value === null && parts.length >= 2) {
@@ -130,7 +146,7 @@ export function inferMetadata(path: string): ExperimentMeta {
     gel,
     substrate,
     nominalHoldS: field(hold, hold === null ? 'unknown' : 'filename'),
-    repeat: field(repeat, explicit ? 'filename' : 'default'),
+    repeat: fileRepeat !== null && !explicit ? field(fileRepeat, 'filename') : field(repeat, explicit ? 'filename' : 'default'),
     baseName: base,
     notes,
   };

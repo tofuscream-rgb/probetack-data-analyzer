@@ -63,3 +63,22 @@ describe('folder and file name metadata', () => {
     expect(m.notes.join(' ')).toMatch(/assumed from folder position/);
   });
 });
+
+describe('lap-shear and peel folder layouts', () => {
+  it('reads "0.25 2.98M 90" (with a trailing peel angle) and a substrate named in the file', () => {
+    const m = inferMetadata('peel 2026 Oct/0.25 2.98M 90/glass.txt');
+    expect(m.chargeRatio.value).toBe(0.25);
+    expect(m.concentrationM.value).toBe(2.98);
+    expect(m.substrate).toEqual({ value: 'glass', source: 'filename' });
+    expect(inferMetadata('peel 2026 Oct/0.25 2.5M/PET.txt').substrate.value).toBe('PET');
+    expect(inferMetadata('x/0.25 2.98M 90/SS-reused gel.txt').substrate.value).toBe('SS-reused gel');
+    expect(inferMetadata('0.5/PET-2.txt')).toMatchObject({ chargeRatio: { value: 0.5 }, substrate: { value: 'PET' }, repeat: { value: 2 } });
+  });
+
+  it('keeps reading the probe-tack layouts as before', () => {
+    expect(inferMetadata('Hydrogel Experiments/0.25/Glass/60s-2.txt')).toMatchObject({ chargeRatio: { value: 0.25 }, substrate: { value: 'Glass', source: 'path' }, nominalHoldS: { value: 60 } });
+    expect(inferMetadata('0.25 (2.5M)/Glass/30s.txt')).toMatchObject({ chargeRatio: { value: 0.25 }, concentrationM: { value: 2.5 } });
+    expect(inferMetadata('2026 Oct/60s.txt').chargeRatio.value).toBeNull(); // a date is not a charge ratio
+    expect(inferMetadata('Gels 2026/60s.txt').chargeRatio.value).toBeNull();
+  });
+});

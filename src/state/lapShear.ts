@@ -6,7 +6,7 @@
 import { useCallback, useMemo } from 'react';
 import { useApp } from './AppContext';
 import { uniqueFileNames } from './experiment';
-import { runCondition, type RunCondition } from '../analysis/runCompare';
+import { runCondition, runLabels, type RunCondition } from '../analysis/runCompare';
 import { analyzeLapShearCycle, type LapShearResult } from '../analysis/lapShear';
 import type { Cycle, LapShearRunMeta, LapShearSettings, LapShearState, ParsedFile } from '../types';
 
@@ -56,9 +56,11 @@ export function useLapShear() {
         : '';
       for (const c of l.cycles) {
         const rm = runMeta(ls, c.cycleId);
-        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: `${names.get(l.parsed.fileId) ?? l.parsed.name} – Run ${c.cycleNumber}`, condition, cond: runCondition(m), meta: rm, result: cachedResult(c, rm, ls.settings) });
+        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: '', condition, cond: runCondition(m), meta: rm, result: cachedResult(c, rm, ls.settings) });
       }
     }
+    const labels = runLabels(out.map((r) => ({ fileId: r.file.fileId, fileName: r.file.name, uniqueName: names.get(r.file.fileId) ?? r.file.name, cycleNumber: r.cycle.cycleNumber, runsInFile: r.file.blocks.length ? out.filter((x) => x.file.fileId === r.file.fileId).length : 1, cond: r.cond })));
+    out.forEach((r, i) => (r.label = labels[i]));
     return out;
   }, [files, meta, ls]);
 

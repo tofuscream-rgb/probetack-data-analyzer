@@ -112,3 +112,28 @@ export function buildRunComparison(items: CompareItem[], sel: RunCompareSelectio
     stat: (set, hold, metric) => describe((groups.get(`${set.key}|${hold}`) ?? []).map((it) => it.values[metric])),
   };
 }
+
+/** "0.25 · 2.98 M · glass", or '' when the folder and file names give no conditions. */
+export function conditionLabel(c: RunCondition): string {
+  const parts = [
+    c.chargeRatio !== '—' ? c.chargeRatio : null,
+    c.concentration !== '—' && !c.concentrationDefault ? `${c.concentration} M` : null,
+    c.substrate !== '—' ? c.substrate : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : '';
+}
+
+/**
+ * Legend labels for runs: the conditions from the folder and file names, "Run k" when a
+ * file holds several runs, and the file name (or path) only where labels would repeat.
+ */
+export function runLabels(runs: { fileId: string; fileName: string; uniqueName: string; cycleNumber: number; runsInFile: number; cond: RunCondition }[]): string[] {
+  const base = runs.map((r) => {
+    const c = conditionLabel(r.cond);
+    const run = r.runsInFile > 1 ? `Run ${r.cycleNumber}` : '';
+    return c ? [c, run].filter(Boolean).join(' – ') : `${r.uniqueName} – Run ${r.cycleNumber}`;
+  });
+  const count = (l: string, arr: string[]) => arr.filter((x) => x === l).length;
+  const step1 = base.map((l, i) => (count(l, base) > 1 && conditionLabel(runs[i].cond) ? `${l} (${runs[i].fileName})` : l));
+  return step1.map((l, i) => (count(l, step1) > 1 && conditionLabel(runs[i].cond) ? `${base[i]} (${runs[i].uniqueName})` : l));
+}

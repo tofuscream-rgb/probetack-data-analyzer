@@ -48,6 +48,10 @@ The small ticks next to each file show its runs, coloured by flag. A hollow tick
 | `0.25 (2.5M)/Glass/30s.txt` or `2.5 M/0.25/Glass/30s.txt` | concentration 2.5 M |
 | `CR 0.75/Gel B/PTFE/1s-3.txt` | charge ratio 0.75, substrate PTFE, Repeat 3 |
 | `60s.txt` | Repeat 1. `60s-2.txt`, `60s-3.txt` are separate repeats (Repeat 2, Repeat 3), never merged. |
+| `peel 2026 Oct/0.25 2.98M 90/glass.txt` | charge ratio 0.25, concentration 2.98 M, substrate glass (named in the file; a trailing number such as a peel angle in the folder name is ignored) |
+| `0.5/PET-2.txt` | charge ratio 0.5, substrate PET, Repeat 2 |
+
+In Lap Shear and 90° Peel the graph legend is built from these conditions (for example “0.25 · 2.98 M · glass”), with *Run k* when a file holds several runs and the file name only where two runs would otherwise get the same label.
 
 Concentration must be written with a capital **M** or as **mol/L** (so “mm” and “min” are never mistaken for it). If no concentration is found, 2.1 M is assumed and clearly labelled as a default. Groups with different concentrations are never merged in statistics.
 

@@ -56,3 +56,22 @@ describe('unique run labels', () => {
     expect([m.get('a'), m.get('b'), m.get('c')]).toEqual(['0.25 2.1M/ss/1s.txt', '0.25 2.5M/ss/1s.txt', 'x.txt']);
   });
 });
+
+describe('legend labels from conditions', () => {
+  it('labels runs "0.25 · 2.98 M · glass" and adds the file name only where labels repeat', async () => {
+    const { runLabels } = await import('../src/analysis/runCompare');
+    const mk = (path: string, n = 1, of = 1) => ({ fileId: path, fileName: path.split('/').pop()!, uniqueName: path, cycleNumber: n, runsInFile: of, cond: runCondition(inferMetadata(path)) });
+    const labels = runLabels([
+      mk('p/0.25 2.98M 90/glass.txt'), mk('p/0.25 2.98M 90/PET.txt'), mk('p/0.25 2.5M/glass.txt'),
+      mk('p/0.5/ss/a.txt', 1, 2), mk('p/0.5/ss/a.txt', 2, 2),
+      mk('p/0.25 2.1M/glass-1.txt'), mk('p/0.25 2.1M/glass-2.txt'),
+      mk('p/run.txt'),
+    ]);
+    expect(labels).toEqual([
+      '0.25 · 2.98 M · glass', '0.25 · 2.98 M · PET', '0.25 · 2.5 M · glass',
+      '0.5 · ss – Run 1', '0.5 · ss – Run 2',
+      '0.25 · 2.1 M · glass (glass-1.txt)', '0.25 · 2.1 M · glass (glass-2.txt)',
+      'p/run.txt – Run 1',
+    ]);
+  });
+});

@@ -4,6 +4,8 @@
  */
 import { useCallback, useMemo } from 'react';
 import { useApp } from './AppContext';
+import { uniqueFileNames } from './experiment';
+import { runCondition, type RunCondition } from '../analysis/runCompare';
 import { analyzePeelCycle, type PeelResult } from '../analysis/peel';
 import type { Cycle, ParsedFile, PeelRunMeta, PeelSettings, PeelState } from '../types';
 
@@ -13,6 +15,8 @@ export interface PeelRun {
   cycle: Cycle;
   label: string;
   condition: string;
+  /** The same conditions as separate fields (Compare tab). */
+  cond: RunCondition;
   meta: PeelRunMeta;
   result: PeelResult;
 }
@@ -40,6 +44,7 @@ export function usePeel() {
   const runs = useMemo<PeelRun[]>(() => {
     const off = new Set(ps.disabledFiles);
     const out: PeelRun[] = [];
+    const names = uniqueFileNames(files.filter((l) => !off.has(l.parsed.fileId)).map((l) => l.parsed));
     for (const l of files) {
       if (off.has(l.parsed.fileId)) continue;
       const m = meta.get(l.parsed.fileId);
@@ -48,7 +53,7 @@ export function usePeel() {
         : '';
       for (const c of l.cycles) {
         const rm = peelMeta(ps, c.cycleId);
-        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: `${l.parsed.name} – Run ${c.cycleNumber}`, condition, meta: rm, result: cachedResult(c, rm, ps.settings) });
+        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: `${names.get(l.parsed.fileId) ?? l.parsed.name} – Run ${c.cycleNumber}`, condition, cond: runCondition(m), meta: rm, result: cachedResult(c, rm, ps.settings) });
       }
     }
     return out;

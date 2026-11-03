@@ -42,13 +42,13 @@ function GelDimensions() {
 
 export function PeelSidebar() {
   const { filesByMode } = useApp();
-  const { ps, runs, selectedIds, set, setSelected } = usePeel();
+  const { ps, runs, selectedIds, setSelected } = usePeel();
   const off = new Set(ps.disabledFiles);
   return (
     <nav className="sidebar" aria-label="Open 90° peel files and choose runs">
       <ImportStep />
       <section className="step">
-        <h2>2. Choose runs</h2>
+        <h2>2. Choose files and runs to analyse</h2>
         {!runs.length ? (
           <p className="hint">
             Open your 90° peel TXT files first. Each <em>&lt;Scripts&gt;</em> or <em>&lt;Move&gt;</em> section with data is one run.
@@ -57,11 +57,9 @@ export function PeelSidebar() {
           <RunPicker
             files={filesByMode.peel.filter((l) => !off.has(l.parsed.fileId))}
             runs={runs.map((r) => ({ id: r.id, fileId: r.file.fileId, cycleNumber: r.cycle.cycleNumber, ok: r.result.ok, error: r.result.error, peakGf: r.result.peak?.forceGf ?? null }))}
-            fileId={ps.fileId}
-            onFile={(id) => set({ fileId: id })}
             selectedIds={selectedIds}
             setSelected={setSelected}
-            hint="Ticked runs are drawn on the graph and listed in the results."
+            hint="Tick any number of files (all their runs) or open a file (▸) to tick single runs. Ticked runs are drawn on the graph, listed in the results and used in Compare."
           />
         )}
       </section>

@@ -7,7 +7,8 @@
  *   README.txt        what the file contains
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord } from '../types';
+import { RUN_TABS } from '../types';
+import type { RunGraphView, ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
 import { defaultCompare, defaultExperiment, defaultLapShear, defaultPeel, defaultProject, defaultSettings } from '../state/defaults';
 
@@ -71,6 +72,13 @@ export function saveProjectZip(
 const withoutGel = (keys: GroupKey[]) => keys.filter((k) => k !== 'gel');
 const MAIN_TABS: MainTab[] = ['graph', 'analysis', 'compare', 'settings', 'files'];
 
+/** Graph options; projects from 1.5 stored `shade` as true/false (now Off by default to keep the graph readable). */
+function migrateView(d: RunGraphView, v: Partial<RunGraphView> | undefined): RunGraphView {
+  const out = { ...d, ...(v ?? {}) };
+  if (out.shade !== 'none' && out.shade !== 'highlight' && out.shade !== 'all') out.shade = d.shade;
+  return out;
+}
+
 /** Lap-shear state with every field present; unknown or damaged values fall back to defaults. */
 export function migrateLapShear(raw: Partial<LapShearState> | undefined): LapShearState {
   const d = defaultLapShear();
@@ -100,8 +108,9 @@ export function migrateLapShear(raw: Partial<LapShearState> | undefined): LapShe
     runs,
     selected: Array.isArray(r.selected) ? r.selected : null,
     fileId: typeof r.fileId === 'string' ? r.fileId : null,
-    view: { ...d.view, ...(r.view ?? {}) },
-    tab: r.tab && ['graph', 'results', 'settings', 'files'].includes(r.tab) ? r.tab : 'graph',
+    view: migrateView(d.view, r.view),
+    tab: r.tab && RUN_TABS.includes(r.tab) ? r.tab : 'graph',
+    compare: { ...d.compare, ...(r.compare ?? {}) },
     disabledFiles: Array.isArray(r.disabledFiles) ? r.disabledFiles : [],
   };
 }
@@ -137,8 +146,9 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
     runs,
     selected: Array.isArray(r.selected) ? r.selected : null,
     fileId: typeof r.fileId === 'string' ? r.fileId : null,
-    view: { ...d.view, ...(r.view ?? {}) },
-    tab: r.tab && ['graph', 'results', 'settings', 'files'].includes(r.tab) ? r.tab : 'graph',
+    view: migrateView(d.view, r.view),
+    tab: r.tab && RUN_TABS.includes(r.tab) ? r.tab : 'graph',
+    compare: { ...d.compare, ...(r.compare ?? {}) },
     disabledFiles: Array.isArray(r.disabledFiles) ? r.disabledFiles : [],
   };
 }

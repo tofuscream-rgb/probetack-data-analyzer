@@ -115,11 +115,12 @@ Choose **Experiment type → Lap Shear** at the top and open your lap-shear file
 ### Using it
 
 1. **Open your experiments** exactly as in Probe Tack mode: a folder, one or more TXT files, or a ZIP. Untick files you do not want to use.
-2. **Choose runs.** Every `<Move Relative>` section of a TXT file is one run (a file with three pulls gives Run 1, Run 2 and Run 3); runs are never merged. Use the **TXT file** box to move between files and tick the runs to compare. Runs from different files can be shown together. A run that cannot be analysed shows which measurements are missing (*Time, s*, *Position (z), mm*, *Fz, gf*). Files are not rejected just because they do not say they are lap-shear files.
-3. **Graph**: loading force vs displacement (or vs time) for the ticked runs, in gf or N. ▲ marks each peak (with optional labels), × marks complete failure, and the shaded area is exactly the interval used for the *selected integration work*. Choose the integration (full curve, start to peak, or a custom displacement range) above the graph. Zoom by dragging; save as PNG or SVG.
+2. **Choose files and runs to analyse.** Every `<Move Relative>` section of a TXT file is one run (a file with three pulls gives Run 1, Run 2 and Run 3); runs are never merged. Tick any number of files (all their runs), or open a file (▸) and tick single runs; filter the list by name or folder. Runs from different files are shown together; when files share a name, runs are labelled with their folder path. A run that cannot be analysed shows which measurements are missing (*Time, s*, *Position (z), mm*, *Fz, gf*). Files are not rejected just because they do not say they are lap-shear files.
+3. **Graph**: loading force vs displacement (or vs time) for the ticked runs, in gf or N. ▲ marks each peak (with optional labels) and × marks complete failure. To keep many curves readable, **click a curve** (or choose it under *Highlight*) to draw it bold while the others fade. **Shade area under curve** is *Off* by default; choose *Highlighted run only* or *All runs* to shade the interval used for the *selected integration work*. Choose the integration (full curve, start to peak, or a custom displacement range) above the graph. Zoom by dragging; save as PNG or SVG.
 4. **Results**: one row per run with editable **overlap length, overlap width and gel thickness** (defaults 25 × 10 × 1 mm, bonded area 250 mm²), a **failure mode** (Not specified, Adhesive, Cohesive, Mixed) and an optional **failure displacement**. All results update immediately, and the curve itself never changes. Use *Set dimensions for all selected runs* for a whole batch. Below the table: mean ± sample SD (n) of every property, also per condition when the runs come from different folders.
-5. **Settings**: integration interval, gap handling, complete-failure criterion, baseline correction, loading direction and the default dimensions.
-6. **Export Excel**: a summary sheet (every run, dimensions, bonded area, failure mode, mean ± SD), an editable Excel chart, one sheet per run (time, original position, relative displacement, original signed force, corrected force, peak, integration interval, cumulative work) and the analysis settings.
+5. **Compare charge ratios**: like the Probe Tack comparison. Tick substrates, charge ratios, concentrations and holding times (from the folder and file names); every combination with ticked runs is one data set (substrate × charge ratio × concentration). Choose the property to compare (for example apparent lap-shear strength or work per bonded area) and get pastel bars per substrate panel with mean ± SD error bars, a table, and PNG/SVG export.
+6. **Settings**: integration interval, gap handling, complete-failure criterion, baseline correction, loading direction and the default dimensions.
+7. **Export Excel**: a summary sheet (every run, dimensions, bonded area, failure mode, mean ± SD), an editable Excel chart, one sheet per run (time, original position, relative displacement, original signed force, corrected force, peak, integration interval, cumulative work) and the analysis settings.
 
 Dimensions, failure modes, manual failure points and settings are saved with the project and in the browser's autosave.
 
@@ -148,10 +149,12 @@ Work per bonded area is **apparent mechanical work per bonded area**. It can inc
 
 Choose **Experiment type → 90° Peel** and open your peel files. A Mach-1 file recorded with a `<Scripts>` section (sliding stage moving x and z together so the peel stays at 90°) is one run; files with `<Move>` sections give one run per move.
 
-1. **Choose runs** in step 2, as in Lap Shear.
+1. **Choose files and runs to analyse** in step 2, as in Lap Shear (any number of files, or single runs).
 2. **Gel dimensions** (step 3): gel length, width, thickness and peel angle (defaults 60 × 10 × 1 mm, 90°). *Apply* sets them for every selected run; single runs can be changed in the Results tab.
-3. **Graph**: peel force vs displacement (or time). The shaded part is the steady-state window used for the average peel force (dashed line); ▲ marks the peak, × the detachment. Change the window above the graph.
-4. **Results**: every run, mean ± SD, and failure mode (Adhesive, Cohesive, Mixed, chosen by you). **Export Excel** writes a summary, an editable chart, one sheet per run and the settings.
+3. **Graph**: peel force vs displacement (or time); ▲ marks the peak, × the detachment. Click a curve to highlight it. *Shade area under curve* (off by default) shows the steady-state window used for the average peel force together with that average (dashed line). Change the window above the graph.
+4. **Results**: every run, mean ± SD, and failure mode (Adhesive, Cohesive, Mixed, chosen by you).
+5. **Compare charge ratios**: as in Lap Shear, for example apparent interfacial toughness or average peel force per substrate, charge ratio and concentration.
+6. **Export Excel** writes a summary, an editable chart, one sheet per run and the settings.
 
 **What is reported, and why.** Peel test standards (ASTM D6862 and ISO 8510-1 for 90° peel of flexible-to-rigid assemblies) and hydrogel adhesion papers report more than the peak force and the area under the curve:
 

@@ -460,3 +460,10 @@ table.ls-summary td:first-child { white-space: nowrap; }
 .danger-link { color: var(--red) !important; }
 .gel-dims { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
 .gel-dims .num-field.labeled { margin: 4px 0; }
+
+/* run picker (Lap Shear, 90° Peel) */
+.run-search { width: 100%; }
+.picker-head { grid-template-columns: 16px minmax(0, 1fr) auto !important; }
+.picker-head .disclose { display: flex; align-items: center; gap: 4px; min-width: 0; padding: 0; font-weight: 600; }
+.picker-head .caret { color: var(--ink-3); width: 10px; flex: none; }
+.pad-s { padding: 6px; }

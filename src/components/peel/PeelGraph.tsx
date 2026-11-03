@@ -6,6 +6,7 @@ import { lttbIndices } from '../../plotting/downsample';
 import { CURVE_COLORS } from '../../plotting/colors';
 import { GF_TO_N } from '../../types';
 import { NumberField } from '../lapShear/NumberField';
+import { RunGraphControls, runStyle } from '../RunGraphControls';
 
 const DISPLAY_LIMIT = 4000;
 const rgba = (hex: string, a: number) => {
@@ -34,16 +35,18 @@ export function PeelGraph() {
   const { data, layout } = useMemo(() => {
     const traces: Data[] = [];
     const annotations: Partial<Layout>['annotations'] = [];
+    const ids = runs.map((r) => r.id);
     runs.forEach((r, k) => {
       const color = CURVE_COLORS[k % CURVE_COLORS.length];
+      const st = runStyle(v, r.id, ids);
       const res = r.result;
       const series = res.curve.series;
       const xs = v.x === 'disp' ? series.dispMm : r.cycle.time_s;
       const idx = displayIndices(r, xs);
       const y = (i: number) => series.loadGf[i] * f;
-      if (v.showPlateau && res.window.n > 1) {
+      if (st.shade && res.window.n > 1) {
         const inside = idx.filter((i) => series.dispMm[i] >= res.window.fromMm && series.dispMm[i] <= res.window.toMm);
-        traces.push({ type: 'scatter', mode: 'lines', x: inside.map((i) => xs[i]), y: inside.map(y), fill: 'tozeroy', fillcolor: rgba(color, 0.13), line: { width: 0 }, hoverinfo: 'skip', showlegend: false, legendgroup: r.id } as unknown as Data);
+        traces.push({ type: 'scatter', mode: 'lines', x: inside.map((i) => xs[i]), y: inside.map(y), fill: 'tozeroy', fillcolor: rgba(color, 0.18), line: { width: 0 }, hoverinfo: 'skip', showlegend: false, legendgroup: r.id } as unknown as Data);
         const x0 = xs[inside[0]];
         const x1 = xs[inside[inside.length - 1]];
         const mean = res.plateau.meanGf * f;
@@ -56,21 +59,21 @@ export function PeelGraph() {
         traces.push({ type: 'scatter', mode: 'lines', name: `${r.label} (raw)`, x: idx.map((i) => xs[i]), y: idx.map((i) => res.curve.loadingSign * r.cycle.force_gf[i] * f), line: { color, width: 1, dash: 'dot' }, legendgroup: r.id } as unknown as Data);
       }
       traces.push({
-        type: 'scatter', mode: 'lines', name: r.label, x: idx.map((i) => xs[i]), y: idx.map(y), line: { color, width: 1.8 }, legendgroup: r.id,
+        type: 'scatter', mode: 'lines', name: r.label, meta: r.id, x: idx.map((i) => xs[i]), y: idx.map(y), line: { color, width: st.width }, opacity: st.opacity, legendgroup: r.id,
         hovertemplate: `${r.label}<br>${v.x === 'disp' ? 'δ' : 't'} = %{x:.3f}<br>F = %{y:.4f} ${v.unit}<extra></extra>`,
       } as unknown as Data);
       const pk = res.curve.peak;
       if (pk) {
         traces.push({
-          type: 'scatter', mode: 'markers', x: [xs[pk.index]], y: [pk.forceGf * f], marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, showlegend: false, legendgroup: r.id,
+          type: 'scatter', mode: 'markers', x: [xs[pk.index]], y: [pk.forceGf * f], marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, opacity: st.opacity, meta: r.id, showlegend: false, legendgroup: r.id,
           hovertemplate: `${r.label}<br>Peak ${(pk.forceGf * f).toFixed(v.unit === 'N' ? 4 : 2)} ${v.unit} at δ = ${pk.dispMm.toFixed(2)} mm<extra></extra>`,
         } as unknown as Data);
-        if (v.peakLabels) annotations.push({ x: xs[pk.index], y: pk.forceGf * f, text: `${(pk.forceGf * f).toFixed(v.unit === 'N' ? 3 : 1)} ${v.unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: { size: 11, color }, bgcolor: 'rgba(255,255,255,0.8)' });
+        if (v.peakLabels && st.labels) annotations.push({ x: xs[pk.index], y: pk.forceGf * f, text: `${(pk.forceGf * f).toFixed(v.unit === 'N' ? 3 : 1)} ${v.unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: { size: 11, color }, bgcolor: 'rgba(255,255,255,0.8)' });
       }
       if (res.detach.dispMm !== null) {
         let di = -1;
         for (let i = 0; i < series.dispMm.length; i++) if (series.dispMm[i] >= res.detach.dispMm) { di = i; break; }
-        if (di >= 0) traces.push({ type: 'scatter', mode: 'markers', x: [xs[di]], y: [y(di)], marker: { symbol: 'x-thin', size: 12, line: { color, width: 2.5 } }, showlegend: false, legendgroup: r.id, hovertemplate: `${r.label}<br>Detachment (${res.detach.source}) at δ = ${res.detach.dispMm.toFixed(2)} mm<extra></extra>` } as unknown as Data);
+        if (di >= 0) traces.push({ type: 'scatter', mode: 'markers', x: [xs[di]], y: [y(di)], marker: { symbol: 'x-thin', size: 12, line: { color, width: 2.5 } }, opacity: st.opacity, showlegend: false, legendgroup: r.id, hovertemplate: `${r.label}<br>Detachment (${res.detach.source}) at δ = ${res.detach.dispMm.toFixed(2)} mm<extra></extra>` } as unknown as Data);
       }
     });
     const lay: Partial<Layout> = {
@@ -113,7 +116,7 @@ export function PeelGraph() {
           <button className={v.unit === 'N' ? 'on' : ''} onClick={() => set({ view: { ...v, unit: 'N' } })}>N</button>
         </div>
         <label className="check"><input type="checkbox" checked={v.peakLabels} onChange={(e) => set({ view: { ...v, peakLabels: e.target.checked } })} /> Peak labels</label>
-        <label className="check"><input type="checkbox" checked={v.showPlateau} onChange={(e) => set({ view: { ...v, showPlateau: e.target.checked } })} /> Show steady-state window</label>
+        <RunGraphControls view={v} set={(view) => set({ view })} runs={runs} shadeLabel="Shades the steady-state window and draws its average peel force (dashed)" />
         {runs.some((r) => r.result.curve.baseline.applied) && <label className="check"><input type="checkbox" checked={v.showRaw} onChange={(e) => set({ view: { ...v, showRaw: e.target.checked } })} /> Raw curve</label>}
         <button className="link" onClick={resetZoom}>Reset zoom</button>
         <div className="export-group">
@@ -141,7 +144,7 @@ export function PeelGraph() {
             <NumberField label="to (mm)" value={pl.toMm} min={0} onCommit={(x) => x !== null && setSettings({ plateau: { ...pl, toMm: x } })} />
           </>
         )}
-        <span className="view-help">Shaded = window used for the average peel force (dashed line) · ▲ peak · × detachment · loading force shown positive</span>
+        <span className="view-help">Click a curve to highlight it · shading = steady-state window with its average force (dashed) · ▲ peak · × detachment</span>
       </div>
       {runs.length === 0 ? (
         <div className="empty-plot">
@@ -149,7 +152,7 @@ export function PeelGraph() {
           <p>Open your 90° peel TXT files on the left and tick the runs to compare.</p>
         </div>
       ) : (
-        <PlotlyChart data={data} layout={layout} onReady={(el) => (plotEl.current = el)} config={{ toImageButtonOptions: { format: 'png', filename: 'peel_90', scale: 3 } }} />
+        <PlotlyChart data={data} layout={layout} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={{ toImageButtonOptions: { format: 'png', filename: 'peel_90', scale: 3 } }} />
       )}
     </section>
   );

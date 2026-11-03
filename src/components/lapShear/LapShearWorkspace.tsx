@@ -5,10 +5,31 @@ import { ImportStatus } from '../FilesTab';
 import { LapShearGraph } from './LapShearGraph';
 import { LapShearResults } from './LapShearResults';
 import { LapShearSettings } from './LapShearSettings';
+import { RunCompare } from '../RunCompare';
+import { SUMMARY_PROPERTIES } from '../../analysis/lapShear';
+
+const DIGITS: Record<string, number> = { gf: 2, N: 4, kPa: 3, MPa: 6, mm: 3, s: 2, mJ: 3, 'J/m²': 2 };
+const METRICS = SUMMARY_PROPERTIES.map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: DIGITS[p.unit] ?? 3 }));
+
+function LapShearCompare() {
+  const { ls, selected, set } = useLapShear();
+  const items = selected.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, values: Object.fromEntries(SUMMARY_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
+  return (
+    <RunCompare
+      items={items}
+      metrics={METRICS}
+      sel={ls.compare}
+      setSel={(patch) => set({ compare: { ...ls.compare, ...patch } })}
+      fileName="lap_shear_comparison"
+      note="Strength and work per area are computed per run with its own bonded area before averaging."
+    />
+  );
+}
 
 const TABS: { id: LapShearState['tab']; label: string; minor?: boolean }[] = [
   { id: 'graph', label: 'Graph' },
   { id: 'results', label: 'Results' },
+  { id: 'compare', label: 'Compare charge ratios' },
   { id: 'settings', label: 'Settings' },
   { id: 'files', label: 'Files', minor: true },
 ];
@@ -32,6 +53,7 @@ export function LapShearWorkspace() {
       <div className={`main-body tab-${ls.tab === 'graph' ? 'graph' : ls.tab === 'files' ? 'files' : 'summary'}`} role="tabpanel">
         {ls.tab === 'graph' && <LapShearGraph />}
         {ls.tab === 'results' && <LapShearResults />}
+        {ls.tab === 'compare' && <LapShearCompare />}
         {ls.tab === 'settings' && <LapShearSettings />}
         {ls.tab === 'files' && <ImportStatus />}
       </div>

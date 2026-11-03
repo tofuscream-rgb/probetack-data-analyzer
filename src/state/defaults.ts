@@ -62,8 +62,9 @@ export function defaultLapShear(): LapShearState {
     runs: {},
     selected: null,
     fileId: null,
-    view: { x: 'disp', unit: 'gf', peakLabels: true, shade: true, showRaw: false },
+    view: { x: 'disp', unit: 'gf', peakLabels: true, shade: 'none', highlight: null, showRaw: false },
     tab: 'graph',
+    compare: { substrates: null, chargeRatios: null, concentrations: null, holdTimes: null, hiddenSets: [], order: 'desc', metric: 'tauKPa' },
     disabledFiles: [],
   };
 }
@@ -82,8 +83,9 @@ export function defaultPeel(): PeelState {
     runs: {},
     selected: null,
     fileId: null,
-    view: { x: 'disp', unit: 'gf', peakLabels: true, showPlateau: true, showRaw: false },
+    view: { x: 'disp', unit: 'gf', peakLabels: true, shade: 'none', highlight: null, showRaw: false },
     tab: 'graph',
+    compare: { substrates: null, chargeRatios: null, concentrations: null, holdTimes: null, hiddenSets: [], order: 'desc', metric: 'toughness' },
     disabledFiles: [],
   };
 }

@@ -12,9 +12,9 @@ import { forceDigits, meanSd } from './common';
 
 type ListKey = 'substrates' | 'chargeRatios' | 'concentrations' | 'holdTimes';
 
-const AXIS = { showline: true, mirror: true, linecolor: '#18263A', linewidth: 1.2, ticks: 'outside', tickcolor: '#18263A', zeroline: false } as const;
+export const AXIS = { showline: true, mirror: true, linecolor: '#18263A', linewidth: 1.2, ticks: 'outside', tickcolor: '#18263A', zeroline: false } as const;
 
-function ChipGroup({ title, items, selected, onToggle, onAll, onNone }: {
+export function ChipGroup({ title, items, selected, onToggle, onAll, onNone }: {
   title: string;
   items: { value: string; label: string }[];
   selected: string[];

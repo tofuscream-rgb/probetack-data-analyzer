@@ -5,10 +5,30 @@ import { ImportStatus } from '../FilesTab';
 import { PeelGraph } from './PeelGraph';
 import { PeelResults } from './PeelResults';
 import { PeelSettings } from './PeelSettings';
+import { RunCompare } from '../RunCompare';
+import { PEEL_PROPERTIES } from '../../analysis/peel';
+
+const METRICS = PEEL_PROPERTIES.map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: p.digits }));
+
+function PeelCompare() {
+  const { ps, selected, set } = usePeel();
+  const items = selected.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, values: Object.fromEntries(PEEL_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
+  return (
+    <RunCompare
+      items={items}
+      metrics={METRICS}
+      sel={ps.compare}
+      setSel={(patch) => set({ compare: { ...ps.compare, ...patch } })}
+      fileName="peel_90_comparison"
+      note="Peel strength and toughness are computed per run with its own gel width before averaging."
+    />
+  );
+}
 
 const TABS: { id: PeelState['tab']; label: string; minor?: boolean }[] = [
   { id: 'graph', label: 'Graph' },
   { id: 'results', label: 'Results' },
+  { id: 'compare', label: 'Compare charge ratios' },
   { id: 'settings', label: 'Settings' },
   { id: 'files', label: 'Files', minor: true },
 ];
@@ -32,6 +52,7 @@ export function PeelWorkspace() {
       <div className={`main-body tab-${ps.tab === 'graph' ? 'graph' : ps.tab === 'files' ? 'files' : 'summary'}`} role="tabpanel">
         {ps.tab === 'graph' && <PeelGraph />}
         {ps.tab === 'results' && <PeelResults />}
+        {ps.tab === 'compare' && <PeelCompare />}
         {ps.tab === 'settings' && <PeelSettings />}
         {ps.tab === 'files' && <ImportStatus />}
       </div>

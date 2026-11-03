@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { LoadedFile } from '../parser/loader';
 import { fmt } from './common';
 
@@ -10,73 +11,59 @@ export interface PickableRun {
   peakGf: number | null;
 }
 
-const ALL = '__all__';
-
-/** Step 2 of Lap Shear and 90° Peel: navigate the test's files and tick the runs to graph and analyse. */
-export function RunPicker({
-  files,
-  runs,
-  fileId,
-  onFile,
-  selectedIds,
-  setSelected,
-  hint,
-}: {
+/**
+ * Step 2 of Lap Shear and 90° Peel: tick any number of files (all their runs) or
+ * single runs to graph and analyse. Files can be filtered by name and expanded to their runs.
+ */
+export function RunPicker({ files, runs, selectedIds, setSelected, hint }: {
   files: LoadedFile[];
   runs: PickableRun[];
-  fileId: string | null;
-  onFile: (fileId: string | null) => void;
   selectedIds: string[];
   setSelected: (ids: string[]) => void;
   hint: string;
 }) {
-  const fileFilter = fileId && files.some((l) => l.parsed.fileId === fileId) ? fileId : ALL;
-  const shownFiles = fileFilter === ALL ? files : files.filter((l) => l.parsed.fileId === fileFilter);
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const q = query.trim().toLowerCase();
+  const shown = q ? files.filter((l) => l.parsed.path.toLowerCase().includes(q)) : files;
   const byFile = (id: string) => runs.filter((r) => r.fileId === id);
   const okIds = (list: PickableRun[]) => list.filter((r) => r.ok).map((r) => r.id);
+  const shownIds = shown.flatMap((l) => okIds(byFile(l.parsed.fileId)));
   const toggle = (ids: string[], on: boolean) => setSelected(on ? [...new Set([...selectedIds, ...ids])] : selectedIds.filter((x) => !ids.includes(x)));
+  const nFiles = files.filter((l) => byFile(l.parsed.fileId).some((r) => selectedIds.includes(r.id))).length;
   return (
     <>
-      <label className="field">
-        <span>TXT file</span>
-        <select value={fileFilter} onChange={(e) => onFile(e.target.value === ALL ? null : e.target.value)}>
-          <option value={ALL}>All files ({files.length})</option>
-          {files.map((l) => (
-            <option key={l.parsed.fileId} value={l.parsed.fileId}>
-              {l.parsed.path} ({l.cycles.length} run{l.cycles.length === 1 ? '' : 's'})
-            </option>
-          ))}
-        </select>
-      </label>
+      <input type="search" className="run-search" placeholder="Filter files by name or folder" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Filter files" />
       <div className="file-select-bar">
-        <span>{selectedIds.length} of {runs.filter((r) => r.ok).length} run(s) selected</span>
-        <button className="link small" onClick={() => setSelected(okIds(runs))}>All</button>
-        <button className="link small" onClick={() => setSelected([])}>None</button>
-        {fileFilter !== ALL && <button className="link small" onClick={() => setSelected(okIds(byFile(fileFilter)))}>Only this file</button>}
+        <span>{nFiles} of {files.length} file(s), {selectedIds.length} run(s) selected</span>
+        <button className="link small" onClick={() => toggle(shownIds, true)}>{q ? 'Select shown' : 'All'}</button>
+        <button className="link small" onClick={() => (q ? toggle(shownIds, false) : setSelected([]))}>{q ? 'Clear shown' : 'None'}</button>
       </div>
-      <div className="file-list run-picker" aria-label="Runs: tick the runs to show and analyse">
-        {shownFiles.map((l) => {
+      <div className="file-list run-picker" aria-label="Files and runs: tick what to analyse">
+        {shown.length === 0 && <p className="hint pad-s">No file matches “{query}”.</p>}
+        {shown.map((l) => {
           const list = byFile(l.parsed.fileId);
           const ids = okIds(list);
           const n = ids.filter((id) => selectedIds.includes(id)).length;
+          const isOpen = open[l.parsed.fileId] ?? (list.length > 1 && files.length <= 3);
           return (
             <div key={l.parsed.fileId} className="fl-folder">
-              <label className="fl-folder-head" title={l.parsed.path}>
+              <div className="fl-folder-head picker-head" title={l.parsed.path}>
                 <input
                   type="checkbox"
                   checked={ids.length > 0 && n === ids.length}
                   disabled={!ids.length}
                   ref={(el) => { if (el) el.indeterminate = n > 0 && n < ids.length; }}
                   onChange={() => toggle(ids, n < ids.length)}
-                  aria-label={`Select all runs of ${l.parsed.name}`}
+                  aria-label={`Analyse ${l.parsed.name}`}
                 />
-                <span className="fl-name">{l.parsed.path}</span>
-                <small>{n}/{ids.length}</small>
-              </label>
-              {list.length === 0 && (
-                <p className="run-error">No &lt;Move&gt; or &lt;Scripts&gt; sections with data were found in this file, so it has no runs to analyse. {l.parsed.issues[0]?.message ?? ''}</p>
-              )}
-              {list.map((r) => (
+                <button className="disclose" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [l.parsed.fileId]: !isOpen }))}>
+                  <span className="caret">{isOpen ? '▾' : '▸'}</span> <span className="fl-name">{l.parsed.path}</span>
+                </button>
+                <small>{n}/{ids.length} run{ids.length === 1 ? '' : 's'}</small>
+              </div>
+              {list.length === 0 && <p className="run-error">No &lt;Move&gt; or &lt;Scripts&gt; sections with data were found, so this file has no runs. {l.parsed.issues[0]?.message ?? ''}</p>}
+              {isOpen && list.map((r) => (
                 <div key={r.id}>
                   <label className={`fl-file ${r.ok ? '' : 'off'}`}>
                     <input type="checkbox" checked={selectedIds.includes(r.id)} disabled={!r.ok} onChange={(e) => toggle([r.id], e.target.checked)} />

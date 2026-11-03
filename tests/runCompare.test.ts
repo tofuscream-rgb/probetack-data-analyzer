@@ -1,0 +1,58 @@
+import { describe, expect, it } from 'vitest';
+import { buildRunComparison, runCondition, type CompareItem } from '../src/analysis/runCompare';
+import { inferMetadata } from '../src/parser/pathMetadata';
+import { defaultLapShear, defaultPeel } from '../src/state/defaults';
+import { migrateState } from '../src/storage/project';
+
+const item = (path: string, value: number): CompareItem => ({ id: path + value, cond: runCondition(inferMetadata(path)), values: { tau: value } });
+
+describe('lap shear / peel: compare charge ratios', () => {
+  it('groups ticked runs into substrate × charge ratio × concentration sets with mean ± SD', () => {
+    const items = [
+      item('0.25 2.1M/ss/a.txt', 10), item('0.25 2.1M/ss/b.txt', 12),
+      item('0.25 2.5M/SS/a.txt', 20),
+      item('0.25 2.98M/ss/a.txt', 30),
+      item('0.5/ss/a.txt', 5), item('0.5/glass/a.txt', 7),
+    ];
+    const sel = { ...defaultLapShear().compare, substrates: ['ss'], chargeRatios: ['0.25'] };
+    const c = buildRunComparison(items, sel);
+    expect(c.substrates.map((s) => s.value)).toEqual(['glass', 'ss']);
+    expect(c.sets.map((s) => s.concentration)).toEqual(['2.1', '2.5', '2.98']);
+    expect(c.holdTimes).toEqual(['—']); // no holding time in these file names
+    const s0 = c.stat(c.sets[0], '—', 'tau');
+    expect(s0).toEqual({ mean: 11, sd: Math.SQRT2, n: 2 });
+    // All substrates, every charge ratio; panels in tick order with charge ratio high → low.
+    const all = buildRunComparison(items, { ...defaultLapShear().compare, substrates: ['ss', 'glass'] });
+    expect(all.sets.map((s) => `${s.substrate} ${s.chargeRatio} ${s.concentration}`)).toEqual(['ss 0.5 2.1', 'ss 0.25 2.1', 'ss 0.25 2.5', 'ss 0.25 2.98', 'glass 0.5 2.1']);
+    expect(all.sets[0].concentrationDefault).toBe(true);
+  });
+
+  it('uses holding times from the file names as bar series', () => {
+    const items = [item('0.25/glass/1s.txt', 3), item('0.25/glass/60s.txt', 9), item('0.25/glass/60s-2.txt', 11)];
+    const c = buildRunComparison(items, defaultPeel().compare);
+    expect(c.holdTimes).toEqual(['1', '60']);
+    expect(c.stat(c.sets[0], '60', 'tau')).toMatchObject({ mean: 10, n: 2 });
+  });
+
+  it('opens 1.5 projects with shading off and the new Compare tab available', () => {
+    const s = migrateState({ lapShear: { view: { shade: true }, tab: 'compare' } as never, peel: { view: { showPlateau: true } } as never });
+    expect(s.lapShear.view.shade).toBe('none');
+    expect(s.lapShear.view.highlight).toBeNull();
+    expect(s.lapShear.tab).toBe('compare');
+    expect(s.peel.view.shade).toBe('none');
+    expect(s.lapShear.compare.metric).toBe('tauKPa');
+    expect(s.peel.compare.metric).toBe('toughness');
+  });
+});
+
+describe('unique run labels', () => {
+  it('uses the folder path when file names repeat', async () => {
+    const { uniqueFileNames } = await import('../src/state/experiment');
+    const m = uniqueFileNames([
+      { fileId: 'a', name: '1s.txt', path: 'Lap/0.25 2.1M/ss/1s.txt' },
+      { fileId: 'b', name: '1s.txt', path: 'Lap/0.25 2.5M/ss/1s.txt' },
+      { fileId: 'c', name: 'x.txt', path: 'Lap/0.5/glass/x.txt' },
+    ]);
+    expect([m.get('a'), m.get('b'), m.get('c')]).toEqual(['0.25 2.1M/ss/1s.txt', '0.25 2.5M/ss/1s.txt', 'x.txt']);
+  });
+});

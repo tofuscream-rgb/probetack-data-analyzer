@@ -104,3 +104,17 @@ export function experimentTitle(r: CycleResult): string {
     m.substrate.value ?? 'substrate unknown',
   ].join(' · ');
 }
+
+/**
+ * Short, unique names for files: the file name, or the path below the folders all
+ * files share when two files have the same name (e.g. "0.25 2.1M/ss/1s.txt").
+ */
+export function uniqueFileNames(files: { fileId: string; name: string; path: string }[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const dupes = new Set(files.map((f) => f.name).filter((n, i, a) => a.indexOf(n) !== i));
+  const split = files.map((f) => f.path.split('/'));
+  let common = 0;
+  while (split.length > 1 && split.every((p) => p.length > common + 1 && p[common] === split[0][common])) common++;
+  files.forEach((f, i) => out.set(f.fileId, dupes.has(f.name) ? split[i].slice(common).join('/') : f.name));
+  return out;
+}

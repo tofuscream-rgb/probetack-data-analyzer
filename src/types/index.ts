@@ -1,6 +1,6 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.5.0';
+export const APP_VERSION = '1.6.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.1.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
@@ -259,6 +259,33 @@ export interface LapShearSettings {
   defaults: LapShearDims;
 }
 
+export type RunTab = 'graph' | 'results' | 'compare' | 'settings' | 'files';
+export const RUN_TABS: RunTab[] = ['graph', 'results', 'compare', 'settings', 'files'];
+
+/** Graph options of the Lap Shear and 90° Peel graphs. */
+export interface RunGraphView {
+  x: 'disp' | 'time';
+  unit: 'gf' | 'N';
+  peakLabels: boolean;
+  /** Area under the curve (lap shear: integration interval; peel: steady-state window). */
+  shade: 'none' | 'highlight' | 'all';
+  /** Run drawn bold while the others fade; null = all equal. */
+  highlight: string | null;
+  showRaw: boolean;
+}
+
+/** Compare charge ratios tab of Lap Shear and 90° Peel: which data sets and which property. */
+export interface RunCompareSelection {
+  substrates: string[] | null;
+  chargeRatios: string[] | null;
+  concentrations: string[] | null;
+  holdTimes: string[] | null;
+  hiddenSets: string[];
+  order: 'desc' | 'asc';
+  /** Property compared (key of the mode's property list). */
+  metric: string;
+}
+
 export interface LapShearState {
   settings: LapShearSettings;
   /** Per-run dimensions, failure mode and manual failure point, keyed by cycleId. */
@@ -267,8 +294,9 @@ export interface LapShearState {
   selected: string[] | null;
   /** File whose runs are listed first in the sidebar. */
   fileId: string | null;
-  view: { x: 'disp' | 'time'; unit: 'gf' | 'N'; peakLabels: boolean; shade: boolean; showRaw: boolean };
-  tab: 'graph' | 'results' | 'settings' | 'files';
+  view: RunGraphView;
+  tab: RunTab;
+  compare: RunCompareSelection;
   /** Lap-shear files the user unticked (by fileId). */
   disabledFiles: string[];
 }
@@ -304,8 +332,9 @@ export interface PeelState {
   runs: Record<string, PeelRunMeta>;
   selected: string[] | null;
   fileId: string | null;
-  view: { x: 'disp' | 'time'; unit: 'gf' | 'N'; peakLabels: boolean; showPlateau: boolean; showRaw: boolean };
-  tab: 'graph' | 'results' | 'settings' | 'files';
+  view: RunGraphView;
+  tab: RunTab;
+  compare: RunCompareSelection;
   disabledFiles: string[];
 }
 

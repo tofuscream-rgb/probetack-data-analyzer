@@ -7,6 +7,7 @@ import { lttbIndices } from '../../plotting/downsample';
 import { CURVE_COLORS } from '../../plotting/colors';
 import { GF_TO_N, type IntegrationMode } from '../../types';
 import { NumberField } from './NumberField';
+import { RunGraphControls, runStyle } from '../RunGraphControls';
 
 const DISPLAY_LIMIT = 4000;
 
@@ -43,8 +44,10 @@ export function LapShearGraph() {
   const { data, layout } = useMemo(() => {
     const traces: Data[] = [];
     const annotations: Partial<Layout>['annotations'] = [];
+    const ids = runs.map((r) => r.id);
     runs.forEach((r, k) => {
       const color = CURVE_COLORS[k % CURVE_COLORS.length];
+      const st = runStyle(v, r.id, ids);
       const res = r.result;
       const xs = v.x === 'disp' ? res.series.dispMm : (Float64Array.from(r.cycle.time_s) as Float64Array);
       const idx = displayIndices(r, xs);
@@ -52,7 +55,7 @@ export function LapShearGraph() {
       const name = r.label;
 
       // Shaded integration interval (the one used for "Selected integration work").
-      if (v.shade && Number.isFinite(res.work.selectedMJ)) {
+      if (st.shade && Number.isFinite(res.work.selectedMJ)) {
         const lo = res.work.selectedFromMm;
         const hi = res.work.selectedToMm;
         const inside = idx.filter((i) => res.series.dispMm[i] >= lo && res.series.dispMm[i] <= hi);
@@ -63,7 +66,7 @@ export function LapShearGraph() {
             x: inside.map((i) => xs[i]),
             y: inside.map(y),
             fill: 'tozeroy',
-            fillcolor: hexToRgba(color, 0.14),
+            fillcolor: hexToRgba(color, 0.18),
             line: { width: 0 },
             hoverinfo: 'skip',
             showlegend: false,
@@ -87,9 +90,11 @@ export function LapShearGraph() {
         type: 'scatter',
         mode: 'lines',
         name,
+        meta: r.id,
         x: idx.map((i) => xs[i]),
         y: idx.map(y),
-        line: { color, width: 1.8 },
+        line: { color, width: st.width },
+        opacity: st.opacity,
         legendgroup: r.id,
         hovertemplate: `${name}<br>${v.x === 'disp' ? 'δ' : 't'} = %{x:.4f}<br>F = %{y:.4f} ${v.unit}<extra></extra>`,
       } as unknown as Data);
@@ -102,11 +107,13 @@ export function LapShearGraph() {
           x: [px],
           y: [py],
           marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } },
+          opacity: st.opacity,
+          meta: r.id,
           legendgroup: r.id,
           showlegend: false,
           hovertemplate: `${name}<br>Peak ${py.toFixed(v.unit === 'N' ? 4 : 2)} ${v.unit} at δ = ${res.peak.dispMm.toFixed(3)} mm, t = ${res.peak.timeS.toFixed(2)} s<extra></extra>`,
         } as unknown as Data);
-        if (v.peakLabels) {
+        if (v.peakLabels && st.labels) {
           annotations.push({ x: px, y: py, text: `${py.toFixed(v.unit === 'N' ? 3 : 1)} ${v.unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: { size: 11, color }, bgcolor: 'rgba(255,255,255,0.8)' });
         }
       }
@@ -121,6 +128,7 @@ export function LapShearGraph() {
             x: [xs[fi]],
             y: [y(fi)],
             marker: { symbol: 'x-thin', size: 12, color: '#18263A', line: { color, width: 2.5 } },
+            opacity: st.opacity,
             legendgroup: r.id,
             showlegend: false,
             hovertemplate: `${name}<br>Failure (${res.failure.source}) at δ = ${res.failure.dispMm.toFixed(3)} mm<extra></extra>`,
@@ -169,7 +177,7 @@ export function LapShearGraph() {
           <button className={v.unit === 'N' ? 'on' : ''} onClick={() => set({ view: { ...v, unit: 'N' } })}>N</button>
         </div>
         <label className="check"><input type="checkbox" checked={v.peakLabels} onChange={(e) => set({ view: { ...v, peakLabels: e.target.checked } })} /> Peak labels</label>
-        <label className="check"><input type="checkbox" checked={v.shade} onChange={(e) => set({ view: { ...v, shade: e.target.checked } })} /> Shade integration region</label>
+        <RunGraphControls view={v} set={(view) => set({ view })} runs={runs} shadeLabel="Shades the interval used for the selected integration work" />
         {anyBaseline && <label className="check"><input type="checkbox" checked={v.showRaw} onChange={(e) => set({ view: { ...v, showRaw: e.target.checked } })} /> Raw curve</label>}
         <button className="link" onClick={resetZoom}>Reset zoom</button>
         <div className="export-group">
@@ -192,7 +200,7 @@ export function LapShearGraph() {
           </>
         )}
         <span className="view-help">
-          Baseline correction {s.baseline.enabled ? 'ON' : 'off'} · loading force shown as a positive magnitude (raw signed data kept) · ▲ peak · × complete failure
+          Click a curve to highlight it · baseline correction {s.baseline.enabled ? 'ON' : 'off'} · loading force shown positive · ▲ peak · × complete failure
         </span>
       </div>
       {runs.length === 0 ? (
@@ -201,7 +209,7 @@ export function LapShearGraph() {
           <p>Open your lap-shear TXT files on the left and tick the runs to compare.</p>
         </div>
       ) : (
-        <PlotlyChart data={data} layout={layout} onReady={(el) => (plotEl.current = el)} config={{ toImageButtonOptions: { format: 'png', filename: 'lap_shear', scale: 3 } }} />
+        <PlotlyChart data={data} layout={layout} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={{ toImageButtonOptions: { format: 'png', filename: 'lap_shear', scale: 3 } }} />
       )}
     </section>
   );

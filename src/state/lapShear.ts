@@ -5,6 +5,8 @@
  */
 import { useCallback, useMemo } from 'react';
 import { useApp } from './AppContext';
+import { uniqueFileNames } from './experiment';
+import { runCondition, type RunCondition } from '../analysis/runCompare';
 import { analyzeLapShearCycle, type LapShearResult } from '../analysis/lapShear';
 import type { Cycle, LapShearRunMeta, LapShearSettings, LapShearState, ParsedFile } from '../types';
 
@@ -16,6 +18,8 @@ export interface LapShearRun {
   label: string;
   /** Charge ratio · concentration · substrate read from the folder names (for grouping). */
   condition: string;
+  /** The same conditions as separate fields (Compare tab). */
+  cond: RunCondition;
   meta: LapShearRunMeta;
   result: LapShearResult;
 }
@@ -43,6 +47,7 @@ export function useLapShear() {
   const runs = useMemo<LapShearRun[]>(() => {
     const off = new Set(project.lapShear.disabledFiles);
     const out: LapShearRun[] = [];
+    const names = uniqueFileNames(files.filter((l) => !off.has(l.parsed.fileId)).map((l) => l.parsed));
     for (const l of files) {
       if (off.has(l.parsed.fileId)) continue;
       const m = meta.get(l.parsed.fileId);
@@ -51,7 +56,7 @@ export function useLapShear() {
         : '';
       for (const c of l.cycles) {
         const rm = runMeta(ls, c.cycleId);
-        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: `${l.parsed.name} – Run ${c.cycleNumber}`, condition, meta: rm, result: cachedResult(c, rm, ls.settings) });
+        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: `${names.get(l.parsed.fileId) ?? l.parsed.name} – Run ${c.cycleNumber}`, condition, cond: runCondition(m), meta: rm, result: cachedResult(c, rm, ls.settings) });
       }
     }
     return out;

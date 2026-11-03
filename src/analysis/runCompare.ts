@@ -1,0 +1,114 @@
+/**
+ * Compare charge ratios for Lap Shear and 90° Peel: the ticked runs are grouped into
+ * data sets (substrate × charge ratio × concentration, read from the folder names),
+ * summarised per holding time (from the file name, when present) as mean ± SD.
+ * Substrates are compared case-insensitively; concentrations are never mixed.
+ */
+import type { ExperimentMeta, RunCompareSelection } from '../types';
+import { byNumber, type Choice } from './compare';
+import { describe } from './lapShear';
+
+/** Conditions of one run, read from its folder and file names. */
+export interface RunCondition {
+  substrate: string;
+  chargeRatio: string;
+  concentration: string;
+  concentrationDefault: boolean;
+  /** Holding time from the file name ("60s.txt"), or "—". */
+  hold: string;
+}
+
+export function runCondition(m: ExperimentMeta | undefined): RunCondition {
+  return {
+    substrate: m?.substrate.value ?? '—',
+    chargeRatio: m?.chargeRatio.value === null || m?.chargeRatio.value === undefined ? '—' : String(m.chargeRatio.value),
+    concentration: m?.concentrationM.value === null || m?.concentrationM.value === undefined ? '—' : String(m.concentrationM.value),
+    concentrationDefault: m?.concentrationM.source === 'default',
+    hold: m?.nominalHoldS.value === null || m?.nominalHoldS.value === undefined ? '—' : String(m.nominalHoldS.value),
+  };
+}
+
+export interface CompareItem {
+  id: string;
+  cond: RunCondition;
+  /** Property values of the run (e.g. strength, work per area), keyed like the mode's property list. */
+  values: Record<string, number>;
+}
+
+export interface RunDataSet {
+  key: string;
+  substrate: string;
+  substrateLabel: string;
+  chargeRatio: string;
+  concentration: string;
+  concentrationDefault: boolean;
+  hidden: boolean;
+}
+
+export interface RunComparison {
+  substrates: Choice[];
+  chargeRatios: string[];
+  concentrations: string[];
+  holdTimes: string[];
+  selected: { substrates: string[]; chargeRatios: string[]; concentrations: string[]; holdTimes: string[] };
+  sets: RunDataSet[];
+  /** mean ± SD (n) of a property for one data set and holding time. */
+  stat: (set: RunDataSet, hold: string, metric: string) => { mean: number; sd: number; n: number };
+}
+
+const sub = (c: RunCondition) => c.substrate.trim().toLowerCase();
+const uniq = (v: string[]) => [...new Set(v)].sort(byNumber);
+const keep = (sel: string[] | null, avail: string[], fallback: string[]) => (sel === null ? fallback : sel.filter((v) => avail.includes(v)));
+
+export function buildRunComparison(items: CompareItem[], sel: RunCompareSelection): RunComparison {
+  const spell = new Map<string, Map<string, number>>();
+  for (const it of items) {
+    const m = spell.get(sub(it.cond)) ?? new Map<string, number>();
+    m.set(it.cond.substrate, (m.get(it.cond.substrate) ?? 0) + 1);
+    spell.set(sub(it.cond), m);
+  }
+  const substrates = [...spell].map(([value, m]) => ({ value, label: [...m].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => a.label.localeCompare(b.label));
+  const subValues = substrates.map((s) => s.value);
+  const selSubs = keep(sel.substrates, subValues, subValues);
+  const onSubs = items.filter((it) => selSubs.includes(sub(it.cond)));
+  const chargeRatios = uniq(onSubs.map((it) => it.cond.chargeRatio));
+  const selCr = keep(sel.chargeRatios, chargeRatios, chargeRatios);
+  const onCr = onSubs.filter((it) => selCr.includes(it.cond.chargeRatio));
+  const concentrations = uniq(onCr.map((it) => it.cond.concentration));
+  const selConc = keep(sel.concentrations, concentrations, concentrations);
+  const inSets = onCr.filter((it) => selConc.includes(it.cond.concentration));
+  const holdTimes = uniq(inSets.map((it) => it.cond.hold));
+  const selHold = keep(sel.holdTimes, holdTimes, holdTimes);
+
+  const groups = new Map<string, CompareItem[]>();
+  const sets = new Map<string, RunDataSet>();
+  for (const it of inSets) {
+    const key = `${sub(it.cond)}|${it.cond.chargeRatio}|${it.cond.concentration}`;
+    groups.set(`${key}|${it.cond.hold}`, [...(groups.get(`${key}|${it.cond.hold}`) ?? []), it]);
+    const prev = sets.get(key);
+    if (prev) prev.concentrationDefault = prev.concentrationDefault && it.cond.concentrationDefault;
+    else
+      sets.set(key, {
+        key,
+        substrate: sub(it.cond),
+        substrateLabel: substrates.find((x) => x.value === sub(it.cond))?.label ?? it.cond.substrate,
+        chargeRatio: it.cond.chargeRatio,
+        concentration: it.cond.concentration,
+        concentrationDefault: it.cond.concentrationDefault,
+        hidden: sel.hiddenSets.includes(key),
+      });
+  }
+  const dir = sel.order === 'asc' ? 1 : -1;
+  const ordered = [...sets.values()].sort(
+    (a, b) => selSubs.indexOf(a.substrate) - selSubs.indexOf(b.substrate) || dir * byNumber(a.chargeRatio, b.chargeRatio) || byNumber(a.concentration, b.concentration),
+  );
+  return {
+    substrates,
+    chargeRatios,
+    concentrations,
+    holdTimes,
+    selected: { substrates: selSubs, chargeRatios: selCr, concentrations: selConc, holdTimes: selHold },
+    sets: ordered,
+    stat: (set, hold, metric) => describe((groups.get(`${set.key}|${hold}`) ?? []).map((it) => it.values[metric])),
+  };
+}

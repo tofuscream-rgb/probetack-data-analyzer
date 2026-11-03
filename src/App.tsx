@@ -12,6 +12,8 @@ import { ImportStatus } from './components/FilesTab';
 import type { MainTab } from './types';
 import { LapShearSidebar } from './components/lapShear/LapShearSidebar';
 import { LapShearWorkspace } from './components/lapShear/LapShearWorkspace';
+import { PeelSidebar } from './components/peel/PeelSidebar';
+import { PeelWorkspace } from './components/peel/PeelWorkspace';
 
 const TABS: { id: MainTab; label: string; minor?: boolean }[] = [
   { id: 'graph', label: 'Graph' },
@@ -112,6 +114,11 @@ function Shell() {
           <>
             <LapShearSidebar />
             <LapShearWorkspace />
+          </>
+        ) : project.mode === 'peel' ? (
+          <>
+            <PeelSidebar />
+            <PeelWorkspace />
           </>
         ) : (
           <>

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
-import { loadProjectZip, matchSources, migrateState, remapState, saveProjectZip } from '../src/storage/project';
+import { loadProjectZip, matchSources, migrateState, remapState, saveProjectZip, sourceKey } from '../src/storage/project';
 import { clearSession, loadSession, saveSessionFiles, saveSessionState } from '../src/storage/idb';
 import { defaultProject, defaultSettings } from '../src/state/defaults';
 import { PROJECT_SCHEMA_VERSION, type SourceFileRecord } from '../src/types';
@@ -35,11 +35,28 @@ describe('project save and load', () => {
 
   it('includes the original bytes in a complete project', async () => {
     const loaded = await loadSynthetic();
-    const bytes = new Map(loaded.map((l) => [l.parsed.fileId, l.bytes]));
+    const bytes = new Map(loaded.map((l) => [sourceKey({ fileId: l.parsed.fileId }), l.bytes]));
     const back = loadProjectZip(saveProjectZip(defaultProject(), loaded.map(record), 'complete', bytes));
     expect(back.files).toHaveLength(loaded.length);
     const first = back.files.find((f) => f.path === loaded[0].parsed.path)!;
     expect(Array.from(first.bytes)).toEqual(Array.from(loaded[0].bytes));
+    expect(first.mode).toBeUndefined(); // probe-tack files keep the original archive layout
+  });
+
+  it('keeps the files of each test apart, even the same file imported for two tests', async () => {
+    const [l] = await loadSynthetic();
+    const rec = record(l);
+    const sources = [rec, { ...rec, mode: 'lapShear' as const }, { ...rec, mode: 'peel' as const }];
+    const bytes = new Map(sources.map((r) => [sourceKey(r), l.bytes]));
+    const back = loadProjectZip(saveProjectZip(defaultProject(), sources, 'complete', bytes));
+    expect(back.files.map((f) => f.mode ?? 'tack').sort()).toEqual(['lapShear', 'peel', 'tack']);
+    expect(back.files.every((f) => f.path === l.parsed.path)).toBe(true);
+    expect(back.json.sources.map((r) => r.mode ?? 'tack').sort()).toEqual(['lapShear', 'peel', 'tack']);
+    // Per-test lists of unticked files are separate.
+    const st = migrateState({ disabledFiles: ['a'], lapShear: { disabledFiles: ['b'] } as never, peel: { disabledFiles: ['c'] } as never });
+    expect([st.disabledFiles, st.lapShear.disabledFiles, st.peel.disabledFiles]).toEqual([['a'], ['b'], ['c']]);
+    const r = remapState(st, new Map([['b', 'b2'], ['c', 'c2']]));
+    expect([r.lapShear.disabledFiles, r.peel.disabledFiles]).toEqual([['b2'], ['c2']]);
   });
 
   it('rejects invalid or newer project files with clear messages', () => {

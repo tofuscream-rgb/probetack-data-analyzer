@@ -36,11 +36,12 @@ export function runMeta(ls: LapShearState, id: string): LapShearRunMeta {
 }
 
 export function useLapShear() {
-  const { files, project, update, meta } = useApp();
+  const { filesByMode, project, update, meta } = useApp();
+  const files = filesByMode.lapShear;
   const ls = project.lapShear;
 
   const runs = useMemo<LapShearRun[]>(() => {
-    const off = new Set(project.disabledFiles);
+    const off = new Set(project.lapShear.disabledFiles);
     const out: LapShearRun[] = [];
     for (const l of files) {
       if (off.has(l.parsed.fileId)) continue;
@@ -54,7 +55,7 @@ export function useLapShear() {
       }
     }
     return out;
-  }, [files, project.disabledFiles, meta, ls]);
+  }, [files, meta, ls]);
 
   const valid = runs.filter((r) => r.result.ok);
   const selectedIds = ls.selected === null ? valid.map((r) => r.id) : ls.selected.filter((id) => runs.some((r) => r.id === id));

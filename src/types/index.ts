@@ -1,10 +1,10 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.4.0';
+export const APP_VERSION = '1.5.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.1.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
-export const PROJECT_SCHEMA_VERSION = 3; // 3: forceSign; displacement shown as distance from each run's start
+export const PROJECT_SCHEMA_VERSION = 4; // 3: forceSign, distance displacement; 4: files kept per test, 90° peel
 export const GF_TO_N = 0.00980665;
 export const DEFAULT_CONCENTRATION_M = 2.1;
 
@@ -221,8 +221,9 @@ export interface ExperimentSelection {
   overlayFileIds: string[];
 }
 
-/** Which experimental method the interface shows. Imported files are shared by both. */
-export type ExperimentMode = 'tack' | 'lapShear';
+/** Which experimental method the interface shows. Each method has its own imported files. */
+export type ExperimentMode = 'tack' | 'lapShear' | 'peel';
+export const EXPERIMENT_MODES: ExperimentMode[] = ['tack', 'lapShear', 'peel'];
 
 /* ---------------------------------------------------------------- Lap shear */
 
@@ -268,6 +269,44 @@ export interface LapShearState {
   fileId: string | null;
   view: { x: 'disp' | 'time'; unit: 'gf' | 'N'; peakLabels: boolean; shade: boolean; showRaw: boolean };
   tab: 'graph' | 'results' | 'settings' | 'files';
+  /** Lap-shear files the user unticked (by fileId). */
+  disabledFiles: string[];
+}
+
+/* ---------------------------------------------------------------- 90° peel */
+
+/** Gel strip of one peel run. Width enters peel strength and toughness; length is the bonded length. */
+export interface PeelRunMeta {
+  lengthMm: number;
+  widthMm: number;
+  thicknessMm: number;
+  /** Peel angle (°); Γ = F/w · (1 − cos θ), = F/w at 90°. */
+  angleDeg: number;
+  failureMode: FailureMode;
+  /** Detachment (end of peeling) picked by hand (mm); overrides the automatic criterion. */
+  manualDetachMm: number | null;
+}
+
+export interface PeelSettings {
+  /** Steady-state (plateau) window used for the average peel force. */
+  plateau: { mode: 'auto' | 'custom'; startFrac: number; endFrac: number; fromMm: number; toMm: number };
+  integration: { mode: IntegrationMode; fromMm: number; toMm: number };
+  baseline: { enabled: boolean; points: number; maxSpreadGf: number };
+  /** Detachment: force below `fraction` × peak for `consecutive` points after the peak. */
+  detach: { auto: boolean; fraction: number; consecutive: number };
+  direction: 'auto' | 'negative' | 'positive';
+  gapFactor: number;
+  defaults: { lengthMm: number; widthMm: number; thicknessMm: number; angleDeg: number };
+}
+
+export interface PeelState {
+  settings: PeelSettings;
+  runs: Record<string, PeelRunMeta>;
+  selected: string[] | null;
+  fileId: string | null;
+  view: { x: 'disp' | 'time'; unit: 'gf' | 'N'; peakLabels: boolean; showPlateau: boolean; showRaw: boolean };
+  tab: 'graph' | 'results' | 'settings' | 'files';
+  disabledFiles: string[];
 }
 
 export interface ProjectState {
@@ -277,7 +316,7 @@ export interface ProjectState {
   overrides: Record<string, MetaOverride>;
   /** Keyed by cycleId. */
   runOverrides: Record<string, RunOverride>;
-  /** Imported files the user deselected: kept in the file list but left out of every calculation. */
+  /** Probe-tack files the user deselected: kept in the file list but left out of every calculation. */
   disabledFiles: string[];
   /** Legacy (schema 1): manual run exclusions. Converted to runOverrides by migrateState. */
   excludedCycles?: Record<string, ManualExclusion>;
@@ -289,6 +328,7 @@ export interface ProjectState {
   mainTab: MainTab;
   mode: ExperimentMode;
   lapShear: LapShearState;
+  peel: PeelState;
   experiment: ExperimentSelection;
   compare: CompareSelection;
   selection: string[];
@@ -301,4 +341,6 @@ export interface SourceFileRecord {
   name: string;
   sha256: string;
   sizeBytes: number;
+  /** Test the file was imported for (missing in projects saved before files were kept per test). */
+  mode?: ExperimentMode;
 }

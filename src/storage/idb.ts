@@ -3,7 +3,14 @@
  * on this computer. Browser storage is NOT a backup: it can be cleared by the
  * user, by privacy settings, or evicted by the browser when disk space is low.
  */
-import type { ProjectState, SourceFileRecord } from '../types';
+import type { ExperimentMode, ProjectState, SourceFileRecord } from '../types';
+
+/** A stored data file; `mode` is missing for sessions saved before files were kept per test. */
+export interface StoredFile {
+  path: string;
+  bytes: Uint8Array;
+  mode?: ExperimentMode;
+}
 
 const DB_NAME = 'mach1-analyzer';
 const STORE = 'kv';
@@ -43,13 +50,13 @@ export async function saveSessionState(session: StoredSession): Promise<void> {
   await tx('readwrite', (s) => s.put(session, 'session'));
 }
 
-export async function saveSessionFiles(files: { path: string; bytes: Uint8Array }[]): Promise<void> {
+export async function saveSessionFiles(files: StoredFile[]): Promise<void> {
   await tx('readwrite', (s) => s.put(files, 'files'));
 }
 
-export async function loadSession(): Promise<{ session: StoredSession | null; files: { path: string; bytes: Uint8Array }[] }> {
+export async function loadSession(): Promise<{ session: StoredSession | null; files: StoredFile[] }> {
   const session = ((await tx('readonly', (s) => s.get('session'))) as StoredSession | undefined) ?? null;
-  const files = ((await tx('readonly', (s) => s.get('files'))) as { path: string; bytes: Uint8Array }[] | undefined) ?? [];
+  const files = ((await tx('readonly', (s) => s.get('files'))) as StoredFile[] | undefined) ?? [];
   return { session, files };
 }
 

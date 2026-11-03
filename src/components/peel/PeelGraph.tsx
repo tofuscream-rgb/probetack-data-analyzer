@@ -1,0 +1,156 @@
+import { useMemo, useRef } from 'react';
+import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
+import { usePeel, type PeelRun } from '../../state/peel';
+import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
+import { lttbIndices } from '../../plotting/downsample';
+import { CURVE_COLORS } from '../../plotting/colors';
+import { GF_TO_N } from '../../types';
+import { NumberField } from '../lapShear/NumberField';
+
+const DISPLAY_LIMIT = 4000;
+const rgba = (hex: string, a: number) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+};
+
+function displayIndices(r: PeelRun, xs: ArrayLike<number>): number[] {
+  const { loadGf } = r.result.curve.series;
+  const valid: number[] = [];
+  for (let i = 0; i < xs.length; i++) if (Number.isFinite(xs[i]) && Number.isFinite(loadGf[i])) valid.push(i);
+  if (valid.length <= DISPLAY_LIMIT) return valid;
+  const keep = new Set(lttbIndices(Float64Array.from(valid, (i) => xs[i]), Float64Array.from(valid, (i) => loadGf[i]), DISPLAY_LIMIT).map((k) => valid[k]));
+  if (r.result.curve.peak) keep.add(r.result.curve.peak.index);
+  return [...keep].sort((a, b) => a - b);
+}
+
+export function PeelGraph() {
+  const { ps, selected, set, setSettings } = usePeel();
+  const v = ps.view;
+  const s = ps.settings;
+  const plotEl = useRef<PlotlyHTMLElement | null>(null);
+  const f = v.unit === 'N' ? GF_TO_N : 1;
+  const runs = selected.filter((r) => r.result.ok);
+
+  const { data, layout } = useMemo(() => {
+    const traces: Data[] = [];
+    const annotations: Partial<Layout>['annotations'] = [];
+    runs.forEach((r, k) => {
+      const color = CURVE_COLORS[k % CURVE_COLORS.length];
+      const res = r.result;
+      const series = res.curve.series;
+      const xs = v.x === 'disp' ? series.dispMm : r.cycle.time_s;
+      const idx = displayIndices(r, xs);
+      const y = (i: number) => series.loadGf[i] * f;
+      if (v.showPlateau && res.window.n > 1) {
+        const inside = idx.filter((i) => series.dispMm[i] >= res.window.fromMm && series.dispMm[i] <= res.window.toMm);
+        traces.push({ type: 'scatter', mode: 'lines', x: inside.map((i) => xs[i]), y: inside.map(y), fill: 'tozeroy', fillcolor: rgba(color, 0.13), line: { width: 0 }, hoverinfo: 'skip', showlegend: false, legendgroup: r.id } as unknown as Data);
+        const x0 = xs[inside[0]];
+        const x1 = xs[inside[inside.length - 1]];
+        const mean = res.plateau.meanGf * f;
+        traces.push({
+          type: 'scatter', mode: 'lines', x: [x0, x1], y: [mean, mean], line: { color, width: 2, dash: 'dash' }, showlegend: false, legendgroup: r.id,
+          hovertemplate: `${r.label}<br>Average plateau force ${mean.toFixed(v.unit === 'N' ? 4 : 2)} ${v.unit} (window ${res.window.fromMm.toFixed(1)}–${res.window.toMm.toFixed(1)} mm)<extra></extra>`,
+        } as unknown as Data);
+      }
+      if (v.showRaw && res.curve.baseline.applied) {
+        traces.push({ type: 'scatter', mode: 'lines', name: `${r.label} (raw)`, x: idx.map((i) => xs[i]), y: idx.map((i) => res.curve.loadingSign * r.cycle.force_gf[i] * f), line: { color, width: 1, dash: 'dot' }, legendgroup: r.id } as unknown as Data);
+      }
+      traces.push({
+        type: 'scatter', mode: 'lines', name: r.label, x: idx.map((i) => xs[i]), y: idx.map(y), line: { color, width: 1.8 }, legendgroup: r.id,
+        hovertemplate: `${r.label}<br>${v.x === 'disp' ? 'δ' : 't'} = %{x:.3f}<br>F = %{y:.4f} ${v.unit}<extra></extra>`,
+      } as unknown as Data);
+      const pk = res.curve.peak;
+      if (pk) {
+        traces.push({
+          type: 'scatter', mode: 'markers', x: [xs[pk.index]], y: [pk.forceGf * f], marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, showlegend: false, legendgroup: r.id,
+          hovertemplate: `${r.label}<br>Peak ${(pk.forceGf * f).toFixed(v.unit === 'N' ? 4 : 2)} ${v.unit} at δ = ${pk.dispMm.toFixed(2)} mm<extra></extra>`,
+        } as unknown as Data);
+        if (v.peakLabels) annotations.push({ x: xs[pk.index], y: pk.forceGf * f, text: `${(pk.forceGf * f).toFixed(v.unit === 'N' ? 3 : 1)} ${v.unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: { size: 11, color }, bgcolor: 'rgba(255,255,255,0.8)' });
+      }
+      if (res.detach.dispMm !== null) {
+        let di = -1;
+        for (let i = 0; i < series.dispMm.length; i++) if (series.dispMm[i] >= res.detach.dispMm) { di = i; break; }
+        if (di >= 0) traces.push({ type: 'scatter', mode: 'markers', x: [xs[di]], y: [y(di)], marker: { symbol: 'x-thin', size: 12, line: { color, width: 2.5 } }, showlegend: false, legendgroup: r.id, hovertemplate: `${r.label}<br>Detachment (${res.detach.source}) at δ = ${res.detach.dispMm.toFixed(2)} mm<extra></extra>` } as unknown as Data);
+      }
+    });
+    const lay: Partial<Layout> = {
+      margin: { l: 70, r: 10, t: 16, b: 52 },
+      font: { family: 'IBM Plex Sans, system-ui, sans-serif', size: 12, color: '#18263A' },
+      paper_bgcolor: '#ffffff',
+      plot_bgcolor: '#ffffff',
+      xaxis: { title: { text: v.x === 'disp' ? 'Peel displacement δ = |z − z₀| (mm)' : 'Time (s)' }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
+      yaxis: { title: { text: `Peel force (${v.unit})` }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
+      legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 10 } },
+      annotations,
+      dragmode: 'zoom',
+      hovermode: 'closest',
+      uirevision: `${v.x}|${v.unit}`,
+    };
+    return { data: traces, layout: lay };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runs, v, f]);
+
+  const save = async (format: 'png' | 'svg') => {
+    if (!plotEl.current) return;
+    const Plotly = await loadPlotly();
+    await Plotly.downloadImage(plotEl.current, { format, filename: 'peel_90', width: 1200, height: 750, scale: format === 'png' ? 4 : 1 } as never);
+  };
+  const resetZoom = async () => {
+    if (!plotEl.current) return;
+    const Plotly = await loadPlotly();
+    await Plotly.relayout(plotEl.current, { 'xaxis.autorange': true, 'yaxis.autorange': true });
+  };
+  const pl = s.plateau;
+  return (
+    <section className="graph-panel" aria-label="90° peel graph">
+      <div className="graph-toolbar">
+        <div className="segmented small" role="group" aria-label="X axis">
+          <button className={v.x === 'disp' ? 'on' : ''} onClick={() => set({ view: { ...v, x: 'disp' } })}>Force vs displacement</button>
+          <button className={v.x === 'time' ? 'on' : ''} onClick={() => set({ view: { ...v, x: 'time' } })}>Force vs time</button>
+        </div>
+        <div className="segmented small" role="group" aria-label="Force unit">
+          <button className={v.unit === 'gf' ? 'on' : ''} onClick={() => set({ view: { ...v, unit: 'gf' } })}>gf</button>
+          <button className={v.unit === 'N' ? 'on' : ''} onClick={() => set({ view: { ...v, unit: 'N' } })}>N</button>
+        </div>
+        <label className="check"><input type="checkbox" checked={v.peakLabels} onChange={(e) => set({ view: { ...v, peakLabels: e.target.checked } })} /> Peak labels</label>
+        <label className="check"><input type="checkbox" checked={v.showPlateau} onChange={(e) => set({ view: { ...v, showPlateau: e.target.checked } })} /> Show steady-state window</label>
+        {runs.some((r) => r.result.curve.baseline.applied) && <label className="check"><input type="checkbox" checked={v.showRaw} onChange={(e) => set({ view: { ...v, showRaw: e.target.checked } })} /> Raw curve</label>}
+        <button className="link" onClick={resetZoom}>Reset zoom</button>
+        <div className="export-group">
+          <span>Save graph</span>
+          <button className="small" onClick={() => save('png')}>PNG</button>
+          <button className="small" onClick={() => save('svg')}>SVG</button>
+        </div>
+      </div>
+      <div className="graph-toolbar integration-bar">
+        <label>
+          Steady-state window
+          <select value={pl.mode} onChange={(e) => setSettings({ plateau: { ...pl, mode: e.target.value as 'auto' | 'custom' } })}>
+            <option value="auto">Fraction of peeled length</option>
+            <option value="custom">Custom displacement range</option>
+          </select>
+        </label>
+        {pl.mode === 'auto' ? (
+          <>
+            <NumberField label="from (%)" value={+(pl.startFrac * 100).toFixed(4)} min={0} onCommit={(x) => x !== null && setSettings({ plateau: { ...pl, startFrac: Math.min(x, 100) / 100 } })} />
+            <NumberField label="to (%)" value={+(pl.endFrac * 100).toFixed(4)} min={0} onCommit={(x) => x !== null && setSettings({ plateau: { ...pl, endFrac: Math.min(x, 100) / 100 } })} />
+          </>
+        ) : (
+          <>
+            <NumberField label="from (mm)" value={pl.fromMm} min={0} onCommit={(x) => x !== null && setSettings({ plateau: { ...pl, fromMm: x } })} />
+            <NumberField label="to (mm)" value={pl.toMm} min={0} onCommit={(x) => x !== null && setSettings({ plateau: { ...pl, toMm: x } })} />
+          </>
+        )}
+        <span className="view-help">Shaded = window used for the average peel force (dashed line) · ▲ peak · × detachment · loading force shown positive</span>
+      </div>
+      {runs.length === 0 ? (
+        <div className="empty-plot">
+          <p>No runs selected.</p>
+          <p>Open your 90° peel TXT files on the left and tick the runs to compare.</p>
+        </div>
+      ) : (
+        <PlotlyChart data={data} layout={layout} onReady={(el) => (plotEl.current = el)} config={{ toImageButtonOptions: { format: 'png', filename: 'peel_90', scale: 3 } }} />
+      )}
+    </section>
+  );
+}

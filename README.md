@@ -4,6 +4,9 @@ A browser-based tool for analysing Biomomentum Mach-1 mechanical test files (TXT
 
 - **Probe Tack**: imports whole experiment folders, separates every movement (run), extracts peak forces, screens for outliers and compares conditions.
 - **Lap Shear**: peak load, apparent nominal lap-shear strength, mechanical work and work per bonded area for every run, with editable specimen dimensions and failure modes (see [Lap Shear analysis](#lap-shear-analysis)).
+- **90° Peel**: average (plateau) peel force, peel strength, apparent interfacial toughness, peak and initiation forces, work and work per peeled area, with editable gel dimensions (see [90° peel analysis](#90-peel-analysis)).
+
+**Each test has its own files.** Files opened while Probe Tack is selected belong to Probe Tack only; switch to Lap Shear or 90° Peel and you start with an empty file list and import that test's files there. Each test's files, ticks and settings are kept separately in autosave and in saved projects. Remove files with × (one file or folder) or *Remove all*; the files on your computer are never changed.
 
 Both export Excel workbooks with editable charts and save projects.
 
@@ -107,7 +110,7 @@ Statistics are grouped by the variables you choose; concentration is always incl
 
 ## Lap Shear analysis
 
-Choose **Experiment type → Lap Shear** at the top. Imported files are shared with Probe Tack mode, and Probe Tack's settings and results are not changed.
+Choose **Experiment type → Lap Shear** at the top and open your lap-shear files there (they are separate from the Probe Tack and 90° Peel files). Probe Tack's settings and results are not changed.
 
 ### Using it
 
@@ -140,6 +143,30 @@ Work per bonded area is **apparent mechanical work per bonded area**. It can inc
 **Data quality.** Points with missing or non-finite time, position or force are skipped. Work is never integrated across skipped points or time steps longer than 5 × the median step. Only displacement beyond everything reached before is integrated, so small backward steps of the stage (common in real files) neither cancel nor double-count work; the signed work including reversals is also exported. Steps with no displacement change add nothing. The raw data are never sorted or modified, and each run lists these events (hover ⚠ in the Results table).
 
 **Zero-force baseline correction** (off by default): the median force of the first 30 valid points is subtracted, but only if they look unloaded (spread ≤ 2 gf and small compared with the largest force); otherwise the run says why no correction was applied. Raw values are kept; when correction is on, the raw curve can be shown dashed on the graph.
+
+## 90° peel analysis
+
+Choose **Experiment type → 90° Peel** and open your peel files. A Mach-1 file recorded with a `<Scripts>` section (sliding stage moving x and z together so the peel stays at 90°) is one run; files with `<Move>` sections give one run per move.
+
+1. **Choose runs** in step 2, as in Lap Shear.
+2. **Gel dimensions** (step 3): gel length, width, thickness and peel angle (defaults 60 × 10 × 1 mm, 90°). *Apply* sets them for every selected run; single runs can be changed in the Results tab.
+3. **Graph**: peel force vs displacement (or time). The shaded part is the steady-state window used for the average peel force (dashed line); ▲ marks the peak, × the detachment. Change the window above the graph.
+4. **Results**: every run, mean ± SD, and failure mode (Adhesive, Cohesive, Mixed, chosen by you). **Export Excel** writes a summary, an editable chart, one sheet per run and the settings.
+
+**What is reported, and why.** Peel test standards (ASTM D6862 and ISO 8510-1 for 90° peel of flexible-to-rigid assemblies) and hydrogel adhesion papers report more than the peak force and the area under the curve:
+
+| Quantity | Definition |
+|---|---|
+| Average (plateau) peel force F̄ | Mean force in the steady-state window, leaving out the initiation peak and the final release. ASTM D6862 records at least 76 mm of peel and disregards the first 25 mm; short gel strips use a fraction of the peeled length instead (default 20–80%, adjustable, or a custom mm range). Peak forces scatter much more than the plateau, so F̄ is the main result. |
+| Plateau SD, CV, min and max | Variability and stick–slip within the window (ISO 8510-1 reports max, min and average). |
+| Peel strength | F̄ / w, in N/m and N/mm. |
+| Apparent interfacial toughness Γ | Γ = F̄ / w · (1 − cos θ), in J/m²; at 90° this equals F̄ / w. Elastic stretching of the strip is neglected. (A 180° peel would give 2F̄/w.) |
+| Peak force, peak per width, initiation peak | Largest force overall (often the final release) and largest force before the steady state. |
+| Work and work per peeled area | W = ∫ F dδ (mJ); work to detachment / (w × peeled length) is an energy-based estimate that should be close to Γ for a steady peel. |
+| Peeled length, detachment | End of peeling: force below 5% of the peak for 20 points (adjustable; a typed value overrides it). If none is found, the end of the recording is used and the run says so. |
+| Peel rate, angle, width, failure mode | Test conditions to report alongside the results. |
+
+Force, displacement, baseline, loading direction, data-quality handling and work integration are the same as in Lap Shear mode.
 
 ## Excel export
 
@@ -180,6 +207,8 @@ Project files carry a schema version, the app and algorithm versions, and are va
 | Automatic run exclusion, Keep/Exclude overrides, raw vs processed statistics | Implemented, tested (logic) and exercised in the browser |
 | Two-step sidebar (open, choose experiment) and tabs (Graph, Data analysis, Compare charge ratios, Settings, Files) | Implemented; exercised in Chromium at 1280 px width |
 | Lap Shear mode: runs, dimensions, strength, work, failure endpoint, baseline, statistics, Excel | Implemented and tested (synthetic cases with known answers); exercised in the browser with a real two-run lap-shear file |
+| 90° Peel mode: Script-section runs, gel dimensions, plateau force, peel strength, toughness, work, detachment, Excel | Implemented and tested (synthetic cases with known answers); exercised in the browser with a real peel file |
+| Separate files per test, remove files, per-test autosave and projects | Implemented and tested; older sessions are sorted into tests by file content |
 | Grouped statistics with run- and repeat-level variation | Implemented and tested |
 | Excel export with native charts | Implemented and tested; **verify in Microsoft Excel** |
 | PNG / SVG / graph-data export | Implemented; exercised in the browser |
@@ -197,11 +226,11 @@ The code is TypeScript + React, built with Vite. Main parts:
 
 ```
 src/parser/      Mach-1 parser, folder-name metadata, ZIP import, hashing, Web Worker
-src/analysis/    statistics, per-run metrics, point and run screening, grouping; lapShear.ts = lap-shear calculations
+src/analysis/    statistics, per-run metrics, point and run screening, grouping; lapShear.ts and peel.ts = lap-shear and 90° peel calculations
 src/plotting/    Plotly wrapper, axis definitions, colours, display-only downsampling
 src/export/      XLSX writer with native charts, workbook builder
 src/storage/     IndexedDB autosave, project files
-src/components/  interface panels (lapShear/ = Lap Shear mode)
+src/components/  interface panels (lapShear/ = Lap Shear mode, peel/ = 90° Peel mode)
 tests/           automated tests (Vitest)
 examples/        synthetic, non-confidential example data (and its generator in scripts/)
 ```

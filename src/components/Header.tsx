@@ -6,11 +6,12 @@ import { useExperiment } from '../state/experiment';
 import { SHEETS, type SheetKey } from '../export/workbook';
 import { useCurrentGraph } from './GraphPanel';
 import { LapShearExportDialog } from './lapShear/LapShearExport';
+import { PeelExportDialog } from './peel/PeelExport';
 
 function SaveDialog({ onClose }: { onClose: () => void }) {
-  const { saveProject, files, pending } = useApp();
+  const { saveProject, filesByMode, pending } = useApp();
   const [mode, setMode] = useState<'settings' | 'complete'>('settings');
-  const size = files.reduce((s, f) => s + f.parsed.sizeBytes, 0);
+  const size = [...filesByMode.tack, ...filesByMode.lapShear, ...filesByMode.peel].reduce((s, f) => s + f.parsed.sizeBytes, 0);
   return (
     <Dialog title="Save project" onClose={onClose}>
       <label className="choice">
@@ -127,7 +128,8 @@ function PrivacyDialog({ onClose }: { onClose: () => void }) {
 }
 
 export function Header() {
-  const { project, update, files, loadProject, storageNote } = useApp();
+  const { project, update, files, filesByMode, loadProject, storageNote } = useApp();
+  const anyFiles = filesByMode.tack.length + filesByMode.lapShear.length + filesByMode.peel.length > 0;
   const [dialog, setDialog] = useState<'save' | 'export' | 'privacy' | null>(null);
   const projectInput = useRef<HTMLInputElement>(null);
   const hasExclusions = Object.keys(project.runOverrides).length + Object.keys(project.excludedPoints).length > 0 || project.settings.exclusionRule !== 'keepAll';
@@ -145,13 +147,14 @@ export function Header() {
         <div className="segmented">
           <button className={project.mode === 'tack' ? 'on' : ''} aria-pressed={project.mode === 'tack'} onClick={() => update((p) => ({ ...p, mode: 'tack' }))}>Probe Tack</button>
           <button className={project.mode === 'lapShear' ? 'on' : ''} aria-pressed={project.mode === 'lapShear'} onClick={() => update((p) => ({ ...p, mode: 'lapShear' }))}>Lap Shear</button>
+          <button className={project.mode === 'peel' ? 'on' : ''} aria-pressed={project.mode === 'peel'} onClick={() => update((p) => ({ ...p, mode: 'peel' }))}>90° Peel</button>
         </div>
       </div>
       {storageNote && <span className="storage-note" title={storageNote}>Autosave limited</span>}
       <div className="spacer" />
       <button onClick={() => projectInput.current?.click()}>Load project</button>
       <input ref={projectInput} type="file" hidden accept=".zip" onChange={(e) => { const f = e.target.files?.[0]; if (f) loadProject(f); e.target.value = ''; }} />
-      <button onClick={() => setDialog('save')} disabled={!files.length && !Object.keys(project.overrides).length}>Save project</button>
+      <button onClick={() => setDialog('save')} disabled={!anyFiles && !Object.keys(project.overrides).length}>Save project</button>
       <button className="primary" onClick={() => setDialog('export')} disabled={!files.length}>Export Excel</button>
       <button
         hidden={project.mode !== 'tack'}
@@ -167,7 +170,8 @@ export function Header() {
       </button>
       <button className="link privacy" onClick={() => setDialog('privacy')}>Privacy</button>
       {dialog === 'save' && <SaveDialog onClose={() => setDialog(null)} />}
-      {dialog === 'export' && (project.mode === 'lapShear' ? <LapShearExportDialog onClose={() => setDialog(null)} /> : <ExportDialog onClose={() => setDialog(null)} />)}
+      {dialog === 'export' &&
+        (project.mode === 'lapShear' ? <LapShearExportDialog onClose={() => setDialog(null)} /> : project.mode === 'peel' ? <PeelExportDialog onClose={() => setDialog(null)} /> : <ExportDialog onClose={() => setDialog(null)} />)}
       {dialog === 'privacy' && <PrivacyDialog onClose={() => setDialog(null)} />}
     </header>
   );

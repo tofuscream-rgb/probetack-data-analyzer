@@ -451,3 +451,12 @@ table.ls-table select { font-size: 12px; padding: 2px 4px; }
 table.ls-summary td:first-child { white-space: nowrap; }
 .ls-definitions p { margin: 4px 0; max-width: 120ch; }
 .main-body.tab-summary { padding: 10px 12px; }
+
+/* per-test file list, peel */
+.fl-folder-head, .fl-file { grid-template-columns: 16px minmax(0, 1fr) auto auto; }
+.fl-remove { padding: 0 4px; font-size: 15px; opacity: 0.45; }
+.fl-folder-head:hover .fl-remove, .fl-file:hover .fl-remove { opacity: 1; }
+.fl-remove:hover { color: var(--red) !important; }
+.danger-link { color: var(--red) !important; }
+.gel-dims { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.gel-dims .num-field.labeled { margin: 4px 0; }

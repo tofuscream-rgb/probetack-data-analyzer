@@ -5,7 +5,8 @@ import { buildLapShearWorkbook } from '../../export/lapShearWorkbook';
 import { Dialog } from '../Dialog';
 
 export function LapShearExportDialog({ onClose }: { onClose: () => void }) {
-  const { project, files, notify } = useApp();
+  const { project, filesByMode, notify } = useApp();
+  const files = filesByMode.lapShear;
   const { ls, runs, selected } = useLapShear();
   const [scope, setScope] = useState<'selected' | 'all'>('selected');
   const [runData, setRunData] = useState(true);
@@ -15,7 +16,7 @@ export function LapShearExportDialog({ onClose }: { onClose: () => void }) {
 
   const go = () => {
     try {
-      const off = new Set(project.disabledFiles);
+      const off = new Set(project.lapShear.disabledFiles);
       const bytes = buildLapShearWorkbook({
         projectName: project.name,
         settings: ls.settings,

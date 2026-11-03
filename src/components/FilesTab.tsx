@@ -1,9 +1,9 @@
-import { useApp } from '../state/AppContext';
+import { disabledOf, useApp } from '../state/AppContext';
 
 /** Import status of every file: OK, with warnings, or without usable data. Nothing is skipped silently. */
 export function ImportStatus() {
   const { files, skipped, pending, project } = useApp();
-  const off = new Set(project.disabledFiles);
+  const off = new Set(disabledOf(project, project.mode));
   const ok = files.filter((f) => f.parsed.status === 'ok').length;
   const warn = files.filter((f) => f.parsed.status === 'warning').length;
   const err = files.filter((f) => f.parsed.status === 'error').length;

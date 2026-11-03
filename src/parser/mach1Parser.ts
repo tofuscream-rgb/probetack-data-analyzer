@@ -217,7 +217,7 @@ export function parseMach1Text(text: string, path: string, sha256: string, sizeB
       current = { index: blocks.length, type: tagName, info: pendingInfo, params: {}, data: null, startLine: lineNo };
       pendingInfo = {};
       blocks.push(current);
-      if (!/^(wait|move)/i.test(tagName)) unrecognized.add(tagName);
+      if (!/^(wait|move|scripts?$)/i.test(tagName)) unrecognized.add(tagName);
       mode = 'params';
       continue;
     }
@@ -231,6 +231,8 @@ export function parseMach1Text(text: string, path: string, sha256: string, sizeB
       case 'params': {
         const kv = splitKeyValue(raw);
         if (kv && current) current.params[kv[0]] = kv[1];
+        // Script sections hold motion commands (e.g. "1VA5;2VA5;", "1PR-65;2PR-65;") instead of key/value lines.
+        else if (current && isScriptBlock(current.type)) current.params['Script'] = [current.params['Script'], line].filter(Boolean).join(' ');
         break;
       }
       case 'dataHeader': {
@@ -293,7 +295,7 @@ export function parseMach1Text(text: string, path: string, sha256: string, sizeB
           : 'No usable measurement rows were found. No force values were calculated.',
     });
   }
-  if (blocks.length > 0 && !blocks.some((b) => /^move/i.test(b.type))) {
+  if (blocks.length > 0 && !blocks.some((b) => isRunBlock(b.type))) {
     issues.push({ severity: 'warning', message: 'No movement (Move) operations were found, so there are no runs to analyse.' });
   }
 
@@ -317,6 +319,17 @@ export function parseMach1Text(text: string, path: string, sha256: string, sizeB
   };
 }
 
+/** A run is a Move block, or a Script block with recorded data (used e.g. for 90° peel on a sliding stage). */
+export const isScriptBlock = (type: string) => /^scripts?$/i.test(type.trim());
+export const isRunBlock = (type: string) => /^move/i.test(type) || isScriptBlock(type);
+
+/** First value of a script command for axis 1, e.g. "1VA5;2VA5;" -> VA = 5, "1PR-65;" -> PR = -65. */
+function scriptCommand(script: string | undefined, cmd: 'PR' | 'VA'): number | null {
+  if (!script) return null;
+  const m = script.match(new RegExp(`(?:^|[;\\s])1?${cmd}(-?\\d+(?:\\.\\d+)?)`));
+  return m ? Number(m[1]) : null;
+}
+
 function findColumn(columns: string[], pattern: RegExp): number {
   return columns.findIndex((c) => pattern.test(c));
 }
@@ -329,13 +342,13 @@ export function extractCycles(file: ParsedFile): Cycle[] {
   const cycles: Cycle[] = [];
   let moveCount = 0;
   for (const block of file.blocks) {
-    if (!/^move/i.test(block.type)) continue;
+    if (!isRunBlock(block.type)) continue;
     moveCount++;
     const issues: ParseIssue[] = [];
     const data = block.data;
     const prev = block.index > 0 ? file.blocks[block.index - 1] : null;
     const hold = prev && /^wait/i.test(prev.type) ? prev : null;
-    if (!hold) issues.push({ severity: 'info', message: 'No Wait (holding) block precedes this movement.' });
+    if (!hold && !isScriptBlock(block.type)) issues.push({ severity: 'info', message: 'No Wait (holding) block precedes this movement.' });
 
     const cycleId = `${file.fileId}#c${moveCount}`;
     const empty = new Float64Array(0);
@@ -396,8 +409,8 @@ export function extractCycles(file: ParsedFile): Cycle[] {
       holdBlockIndex: hold ? hold.index : null,
       operation: block.type,
       holdTimeS: hold ? parseDuration(hold.params['Wait'] ?? Object.values(hold.params)[0]) : null,
-      amplitudeMm: parseNumberParam(block.params, /amplitude/i),
-      velocityMmS: parseNumberParam(block.params, /velocity/i),
+      amplitudeMm: parseNumberParam(block.params, /amplitude/i) ?? scriptCommand(block.params['Script'], 'PR'),
+      velocityMmS: parseNumberParam(block.params, /velocity/i) ?? scriptCommand(block.params['Script'], 'VA'),
       stageAxis: block.params['Stage Axis'] ?? null,
       date,
       time,

@@ -1,4 +1,4 @@
-import type { AnalysisSettings, CompareSelection, ExperimentSelection, GraphConfig, LapShearState, ProjectState } from '../types';
+import type { AnalysisSettings, CompareSelection, ExperimentSelection, GraphConfig, LapShearState, PeelState, ProjectState } from '../types';
 import { PROJECT_SCHEMA_VERSION } from '../types';
 
 export function defaultSettings(): AnalysisSettings {
@@ -64,6 +64,27 @@ export function defaultLapShear(): LapShearState {
     fileId: null,
     view: { x: 'disp', unit: 'gf', peakLabels: true, shade: true, showRaw: false },
     tab: 'graph',
+    disabledFiles: [],
+  };
+}
+
+export function defaultPeel(): PeelState {
+  return {
+    settings: {
+      plateau: { mode: 'auto', startFrac: 0.2, endFrac: 0.8, fromMm: 10, toMm: 40 },
+      integration: { mode: 'full', fromMm: 0, toMm: 10 },
+      baseline: { enabled: false, points: 30, maxSpreadGf: 2 },
+      detach: { auto: true, fraction: 0.05, consecutive: 20 },
+      direction: 'auto',
+      gapFactor: 5,
+      defaults: { lengthMm: 60, widthMm: 10, thicknessMm: 1, angleDeg: 90 },
+    },
+    runs: {},
+    selected: null,
+    fileId: null,
+    view: { x: 'disp', unit: 'gf', peakLabels: true, showPlateau: true, showRaw: false },
+    tab: 'graph',
+    disabledFiles: [],
   };
 }
 
@@ -83,6 +104,7 @@ export function defaultProject(): ProjectState {
     mainTab: 'graph',
     mode: 'tack',
     lapShear: defaultLapShear(),
+    peel: defaultPeel(),
     experiment: defaultExperiment(),
     compare: defaultCompare(),
     selection: [],

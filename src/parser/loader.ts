@@ -3,9 +3,9 @@
  * Mach-1 files. Runs entirely in the browser; nothing is sent anywhere.
  */
 import { unzipSync } from 'fflate';
-import type { Cycle, ParsedFile } from '../types';
+import type { Cycle, ExperimentMode, ParsedFile } from '../types';
 import { decodeText, sha256Hex } from './hash';
-import { extractCycles, parseMach1Text } from './mach1Parser';
+import { extractCycles, isScriptBlock, parseMach1Text } from './mach1Parser';
 
 export interface SourceFile {
   path: string; // relative path with folders, "/"-separated
@@ -73,4 +73,15 @@ export async function collectFromFileList(
     }
   }
   return { files, skipped };
+}
+
+/**
+ * Test a file most likely belongs to, for sessions and projects saved before files
+ * were kept per test: hold (Wait) blocks before the moves = probe tack, a Script
+ * block = 90° peel, otherwise lap shear.
+ */
+export function guessMode(l: LoadedFile): ExperimentMode {
+  if (l.cycles.some((c) => c.holdBlockIndex !== null)) return 'tack';
+  if (l.parsed.blocks.some((b) => isScriptBlock(b.type))) return 'peel';
+  return l.cycles.length ? 'lapShear' : 'tack';
 }

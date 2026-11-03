@@ -7,9 +7,9 @@
  *   README.txt        what the file contains
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, ProjectState, RunOverride, SourceFileRecord } from '../types';
+import type { ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
-import { defaultCompare, defaultExperiment, defaultLapShear, defaultProject, defaultSettings } from '../state/defaults';
+import { defaultCompare, defaultExperiment, defaultLapShear, defaultPeel, defaultProject, defaultSettings } from '../state/defaults';
 
 export interface ProjectFileJson {
   format: 'mach1-analyzer-project';
@@ -24,9 +24,15 @@ export interface ProjectFileJson {
 
 export interface LoadedProject {
   json: ProjectFileJson;
-  files: { path: string; bytes: Uint8Array }[];
+  /** `mode` is set for files stored per test; files without it are probe-tack files (or from older projects). */
+  files: { path: string; bytes: Uint8Array; mode?: ExperimentMode }[];
   warnings: string[];
 }
+
+/** Files are kept per test: the same TXT file may be imported for two tests. */
+export const sourceKey = (r: { fileId: string; mode?: ExperimentMode }) => `${r.mode ?? 'tack'}|${r.fileId}`;
+/** Archive path of a data file: probe-tack files keep the original layout (data/<path>), others go to data/@<test>/<path>. */
+const dataPath = (r: SourceFileRecord) => (r.mode && r.mode !== 'tack' ? `data/@${r.mode}/${r.path}` : `data/${r.path}`);
 
 export function saveProjectZip(
   state: ProjectState,
@@ -54,8 +60,8 @@ export function saveProjectZip(
   };
   if (mode === 'complete') {
     for (const src of sources) {
-      const bytes = fileBytes.get(src.fileId);
-      if (bytes) entries[`data/${src.path}`] = bytes;
+      const bytes = fileBytes.get(sourceKey(src));
+      if (bytes) entries[dataPath(src)] = bytes;
     }
   }
   return zipSync(entries, { level: 6 });
@@ -96,6 +102,44 @@ export function migrateLapShear(raw: Partial<LapShearState> | undefined): LapShe
     fileId: typeof r.fileId === 'string' ? r.fileId : null,
     view: { ...d.view, ...(r.view ?? {}) },
     tab: r.tab && ['graph', 'results', 'settings', 'files'].includes(r.tab) ? r.tab : 'graph',
+    disabledFiles: Array.isArray(r.disabledFiles) ? r.disabledFiles : [],
+  };
+}
+
+/** 90° peel state with every field present; damaged values fall back to defaults. */
+export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
+  const d = defaultPeel();
+  const r = raw ?? {};
+  const s: Partial<PeelSettings> = r.settings ?? {};
+  const pos = (v: unknown, fb: number) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fb);
+  const runs: Record<string, PeelRunMeta> = {};
+  for (const [id, m] of Object.entries(r.runs ?? {})) {
+    if (!m || typeof m !== 'object') continue;
+    runs[id] = {
+      lengthMm: pos(m.lengthMm, d.settings.defaults.lengthMm),
+      widthMm: pos(m.widthMm, d.settings.defaults.widthMm),
+      thicknessMm: pos(m.thicknessMm, d.settings.defaults.thicknessMm),
+      angleDeg: pos(m.angleDeg, d.settings.defaults.angleDeg),
+      failureMode: ['adhesive', 'cohesive', 'mixed'].includes(m.failureMode) ? m.failureMode : 'unspecified',
+      manualDetachMm: typeof m.manualDetachMm === 'number' && Number.isFinite(m.manualDetachMm) ? m.manualDetachMm : null,
+    };
+  }
+  return {
+    settings: {
+      plateau: { ...d.settings.plateau, ...(s.plateau ?? {}) },
+      integration: { ...d.settings.integration, ...(s.integration ?? {}) },
+      baseline: { ...d.settings.baseline, ...(s.baseline ?? {}) },
+      detach: { ...d.settings.detach, ...(s.detach ?? {}) },
+      direction: s.direction === 'negative' || s.direction === 'positive' ? s.direction : 'auto',
+      gapFactor: pos(s.gapFactor, d.settings.gapFactor),
+      defaults: { ...d.settings.defaults, ...(s.defaults ?? {}) },
+    },
+    runs,
+    selected: Array.isArray(r.selected) ? r.selected : null,
+    fileId: typeof r.fileId === 'string' ? r.fileId : null,
+    view: { ...d.view, ...(r.view ?? {}) },
+    tab: r.tab && ['graph', 'results', 'settings', 'files'].includes(r.tab) ? r.tab : 'graph',
+    disabledFiles: Array.isArray(r.disabledFiles) ? r.disabledFiles : [],
   };
 }
 
@@ -130,8 +174,9 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
     excludedPoints: raw.excludedPoints ?? {},
     graphs: Array.isArray(raw.graphs) && raw.graphs.length ? raw.graphs.map((g) => ({ ...g, showExcluded: g.showExcluded ?? true })) : d.graphs,
     // 'summary' was the per-condition summary tab of 1.3; it became part of Data analysis.
-    mode: raw.mode === 'lapShear' ? 'lapShear' : 'tack',
+    mode: raw.mode === 'lapShear' || raw.mode === 'peel' ? raw.mode : 'tack',
     lapShear: migrateLapShear(raw.lapShear),
+    peel: migratePeel(raw.peel),
     mainTab: (raw.mainTab as string) === 'summary' ? 'analysis' : raw.mainTab && MAIN_TABS.includes(raw.mainTab) ? raw.mainTab : 'graph',
     experiment: { ...defaultExperiment(), ...(raw.experiment ?? {}) },
     compare: { ...defaultCompare(), ...(raw.compare ?? {}) },
@@ -169,9 +214,12 @@ export function loadProjectZip(bytes: Uint8Array): LoadedProject {
   }
   json.state = migrateState(json.state ?? {});
   json.sources = Array.isArray(json.sources) ? json.sources : [];
-  const files: { path: string; bytes: Uint8Array }[] = [];
+  const files: { path: string; bytes: Uint8Array; mode?: ExperimentMode }[] = [];
   for (const [name, data] of Object.entries(entries)) {
-    if (name.startsWith('data/') && !name.endsWith('/')) files.push({ path: name.slice(5), bytes: data });
+    if (!name.startsWith('data/') || name.endsWith('/')) continue;
+    const m = name.match(/^data\/@(lapShear|peel)\/(.+)$/);
+    if (m) files.push({ path: m[2], bytes: data, mode: m[1] as ExperimentMode });
+    else files.push({ path: name.slice(5), bytes: data });
   }
   return { json, files, warnings };
 }
@@ -224,6 +272,14 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
       runs: remapKeys(state.lapShear.runs, mapCycle),
       selected: state.lapShear.selected ? state.lapShear.selected.map(mapCycle) : null,
       fileId: state.lapShear.fileId ? idMap.get(state.lapShear.fileId) ?? state.lapShear.fileId : null,
+      disabledFiles: state.lapShear.disabledFiles.map((id) => idMap.get(id) ?? id),
+    },
+    peel: {
+      ...state.peel,
+      runs: remapKeys(state.peel.runs, mapCycle),
+      selected: state.peel.selected ? state.peel.selected.map(mapCycle) : null,
+      fileId: state.peel.fileId ? idMap.get(state.peel.fileId) ?? state.peel.fileId : null,
+      disabledFiles: state.peel.disabledFiles.map((id) => idMap.get(id) ?? id),
     },
     excludedPoints: remapKeys(state.excludedPoints, mapCycle),
     selection: state.selection.map(mapCycle),

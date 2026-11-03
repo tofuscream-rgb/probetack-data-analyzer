@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useApp } from '../state/AppContext';
+import { MODE_LABEL, disabledOf, useApp, withDisabled } from '../state/AppContext';
 import { useExperiment, type ExperimentFile } from '../state/experiment';
 import { isIncluded, STATUS_LABEL, type CycleResult } from '../analysis/engine';
 import { QC_LABEL } from '../analysis/pointOutliers';
@@ -29,14 +29,18 @@ function TriCheck({ on, some, onChange, label }: { on: boolean; some: boolean; o
 
 /** The imported files, grouped by folder. Unticked files stay listed but are left out of every calculation. */
 function FileSelector() {
-  const { files, project, update } = useApp();
-  const off = new Set(project.disabledFiles);
+  const { files, project, update, removeFiles } = useApp();
+  const mode = project.mode;
+  const off = new Set(disabledOf(project, mode));
   const setOff = (ids: string[], disable: boolean) =>
     update((p) => {
-      const cur = new Set(p.disabledFiles);
+      const cur = new Set(disabledOf(p, mode));
       ids.forEach((id) => (disable ? cur.add(id) : cur.delete(id)));
-      return { ...p, disabledFiles: [...cur] };
+      return withDisabled(p, mode, [...cur]);
     });
+  const remove = (ids: string[], what: string) => {
+    if (window.confirm(`Remove ${what} from ${MODE_LABEL[mode]}? The files on your computer are not changed; you can import them again.`)) removeFiles(ids);
+  };
   const folders = new Map<string, typeof files>();
   for (const l of files) {
     const dir = l.parsed.path.split('/').slice(0, -1).join('/') || '(top level)';
@@ -49,6 +53,7 @@ function FileSelector() {
         <span>{used} of {files.length} TXT file(s) used</span>
         <button className="link small" onClick={() => setOff(files.map((l) => l.parsed.fileId), false)}>Select all</button>
         <button className="link small" onClick={() => setOff(files.map((l) => l.parsed.fileId), true)}>None</button>
+        <button className="link small danger-link" onClick={() => remove(files.map((l) => l.parsed.fileId), `all ${files.length} file(s)`)} title="Remove every file from this test">Remove all</button>
       </div>
       <div className="file-list" aria-label="Imported files: untick a file to leave it out">
         {[...folders].sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true })).map(([dir, list]) => {
@@ -60,6 +65,7 @@ function FileSelector() {
                 <TriCheck on={n === ids.length} some={n > 0} onChange={() => setOff(ids, n === ids.length)} label={`Use all files in ${dir}`} />
                 <span className="fl-name">{dir}</span>
                 <small>{n}/{ids.length}</small>
+                <button className="icon fl-remove" title={`Remove the ${ids.length} file(s) of this folder from ${MODE_LABEL[mode]}`} onClick={(e) => { e.preventDefault(); remove(ids, `the ${ids.length} file(s) in “${dir}”`); }}>×</button>
               </label>
               {list
                 .slice()
@@ -69,13 +75,14 @@ function FileSelector() {
                     <input type="checkbox" checked={!off.has(l.parsed.fileId)} onChange={(e) => setOff([l.parsed.fileId], !e.target.checked)} />
                     <span className="fl-name">{l.parsed.name}</span>
                     <small>{sizeLabel(l.parsed.sizeBytes)}{l.parsed.status !== 'ok' ? ' · see Files tab' : ''}</small>
+                    <button className="icon fl-remove" title={`Remove ${l.parsed.name} from ${MODE_LABEL[mode]}`} onClick={(e) => { e.preventDefault(); remove([l.parsed.fileId], l.parsed.name); }}>×</button>
                   </label>
                 ))}
             </div>
           );
         })}
       </div>
-      <p className="hint">Untick a file to leave it out of the graphs, averages, comparisons and Excel export. Subfolders are preserved; files are read on this computer only.</p>
+      <p className="hint">These files belong to {MODE_LABEL[mode]} only. Untick a file to leave it out of the graphs, results and Excel export, or × to remove it. Subfolders are preserved; files are read on this computer only.</p>
     </>
   );
 }
@@ -97,7 +104,7 @@ export function ImportStep() {
   };
   return (
       <section className="step">
-        <h2>1. Open your experiments</h2>
+        <h2>1. Open your {project.mode === 'tack' ? 'probe-tack' : project.mode === 'lapShear' ? 'lap-shear' : '90° peel'} files</h2>
         <fieldset className="radio-group">
           <legend>Import</legend>
           {([
@@ -119,7 +126,7 @@ export function ImportStep() {
         {files.length > 0 ? (
           <FileSelector />
         ) : (
-          <p className="hint">You can also drag a folder onto the page. Files are read on this computer only.</p>
+          <p className="hint">Files opened here are used for {MODE_LABEL[project.mode]} only. You can also drag a folder onto the page. Files are read on this computer only.</p>
         )}
         {pending.length > 0 && (
           <div className="banner warn">

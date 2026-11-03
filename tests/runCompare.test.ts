@@ -75,3 +75,20 @@ describe('legend labels from conditions', () => {
     ]);
   });
 });
+
+describe('strength vs displacement', () => {
+  it('converts force to stress with each run’s own area, and to force per width', async () => {
+    const { yFactor } = await import('../src/components/RunGraphControls');
+    const { GF_TO_N } = await import('../src/types');
+    const gf = 1.25 / GF_TO_N; // 1.25 N
+    expect(gf * yFactor('kPa', 250, 10)).toBeCloseTo(5, 10); // 1.25 N / 250 mm² = 5 kPa
+    expect(gf * yFactor('MPa', 250, 10)).toBeCloseTo(0.005, 12);
+    expect(gf * yFactor('kPa', 500, 20)).toBeCloseTo(2.5, 10); // a run with twice the area
+    expect(gf * yFactor('N/m', 1250, 25)).toBeCloseTo(50, 10); // 1.25 N / 25 mm = 50 N/m
+    expect(yFactor('N', 0, 0)).toBe(GF_TO_N);
+    expect(Number.isNaN(yFactor('kPa', 0, 10))).toBe(true);
+    const s = migrateState({ lapShear: { view: { x: 'time', unit: 'kPa' } } as never, peel: { view: { unit: 'psi' } } as never });
+    expect(s.lapShear.view).toMatchObject({ x: 'disp', unit: 'kPa' });
+    expect(s.peel.view.unit).toBe('gf');
+  });
+});

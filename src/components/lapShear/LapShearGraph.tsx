@@ -5,9 +5,9 @@ import { INTEGRATION_LABEL } from '../../analysis/lapShear';
 import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
 import { lttbIndices } from '../../plotting/downsample';
 import { CURVE_COLORS } from '../../plotting/colors';
-import { GF_TO_N, type IntegrationMode } from '../../types';
+import type { IntegrationMode } from '../../types';
 import { NumberField } from './NumberField';
-import { RunGraphControls, runStyle } from '../RunGraphControls';
+import { RunGraphControls, Y_OPTIONS, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
 
 const DISPLAY_LIMIT = 4000;
 
@@ -36,9 +36,11 @@ export function LapShearGraph() {
   const v = ls.view;
   const s = ls.settings;
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
-  const f = v.unit === 'N' ? GF_TO_N : 1;
-  const xTitle = v.x === 'disp' ? 'Displacement δ = |z − z₀| (mm)' : 'Time (s)';
-  const yTitle = `Loading force (${v.unit})`;
+  const unit = v.unit === 'N/m' ? 'gf' : v.unit; // N/m is a peel-only choice
+  const stress = unit === 'kPa' || unit === 'MPa';
+  const dg = yDigits(unit);
+  const xTitle = 'Displacement δ = |z − z₀| (mm)';
+  const yTitle = stress ? `Apparent shear stress τ = F/A (${unit})` : `Loading force (${unit})`;
   const runs = selected.filter((r) => r.result.ok);
 
   const { data, layout } = useMemo(() => {
@@ -49,7 +51,9 @@ export function LapShearGraph() {
       const color = CURVE_COLORS[k % CURVE_COLORS.length];
       const st = runStyle(v, r.id, ids);
       const res = r.result;
-      const xs = v.x === 'disp' ? res.series.dispMm : (Float64Array.from(r.cycle.time_s) as Float64Array);
+      const f = yFactor(unit, res.areaMm2, res.dims.widthMm); // each run with its own bonded area
+      if (!Number.isFinite(f)) return;
+      const xs = res.series.dispMm;
       const idx = displayIndices(r, xs);
       const y = (i: number) => res.series.loadGf[i] * f;
       const name = r.label;
@@ -83,7 +87,7 @@ export function LapShearGraph() {
           y: idx.map((i) => res.loadingSign * r.cycle.force_gf[i] * f),
           line: { color, width: 1, dash: 'dot' },
           legendgroup: r.id,
-          hovertemplate: `${name} raw<br>x = %{x:.4f}<br>F = %{y:.4f} ${v.unit}<extra></extra>`,
+          hovertemplate: `${name} raw<br>δ = %{x:.4f} mm<br>%{y:.${dg}f} ${unit}<extra></extra>`,
         } as unknown as Data);
       }
       traces.push({
@@ -96,7 +100,7 @@ export function LapShearGraph() {
         line: { color, width: st.width },
         opacity: st.opacity,
         legendgroup: r.id,
-        hovertemplate: `${name}<br>${v.x === 'disp' ? 'δ' : 't'} = %{x:.4f}<br>F = %{y:.4f} ${v.unit}<extra></extra>`,
+        hovertemplate: `${name}<br>δ = %{x:.4f} mm<br>${stress ? 'τ' : 'F'} = %{y:.${dg}f} ${unit}${stress ? ` (A = ${res.areaMm2} mm²)` : ''}<extra></extra>`,
       } as unknown as Data);
       if (res.peak) {
         const px = xs[res.peak.index];
@@ -111,10 +115,10 @@ export function LapShearGraph() {
           meta: r.id,
           legendgroup: r.id,
           showlegend: false,
-          hovertemplate: `${name}<br>Peak ${py.toFixed(v.unit === 'N' ? 4 : 2)} ${v.unit} at δ = ${res.peak.dispMm.toFixed(3)} mm, t = ${res.peak.timeS.toFixed(2)} s<extra></extra>`,
+          hovertemplate: `${name}<br>Peak ${py.toFixed(dg)} ${unit} at δ = ${res.peak.dispMm.toFixed(3)} mm<extra></extra>`,
         } as unknown as Data);
         if (v.peakLabels && st.labels) {
-          annotations.push({ x: px, y: py, text: `${py.toFixed(v.unit === 'N' ? 3 : 1)} ${v.unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: { size: 11, color }, bgcolor: 'rgba(255,255,255,0.8)' });
+          annotations.push({ x: px, y: py, text: `${py.toFixed(Math.max(1, dg - 1))} ${unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: { size: 11, color }, bgcolor: 'rgba(255,255,255,0.8)' });
         }
       }
       if (res.failure.dispMm !== null) {
@@ -147,11 +151,11 @@ export function LapShearGraph() {
       annotations,
       dragmode: 'zoom',
       hovermode: 'closest',
-      uirevision: `${v.x}|${v.unit}`,
+      uirevision: unit,
     };
     return { data: traces, layout: lay };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs, v, f]);
+  }, [runs, v, unit]);
 
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
@@ -168,14 +172,13 @@ export function LapShearGraph() {
   return (
     <section className="graph-panel" aria-label="Lap-shear graph">
       <div className="graph-toolbar">
-        <div className="segmented small" role="group" aria-label="X axis">
-          <button className={v.x === 'disp' ? 'on' : ''} onClick={() => set({ view: { ...v, x: 'disp' } })}>Force vs displacement</button>
-          <button className={v.x === 'time' ? 'on' : ''} onClick={() => set({ view: { ...v, x: 'time' } })}>Force vs time</button>
-        </div>
-        <div className="segmented small" role="group" aria-label="Force unit">
-          <button className={v.unit === 'gf' ? 'on' : ''} onClick={() => set({ view: { ...v, unit: 'gf' } })}>gf</button>
-          <button className={v.unit === 'N' ? 'on' : ''} onClick={() => set({ view: { ...v, unit: 'N' } })}>N</button>
-        </div>
+        <label title="Stress uses each run's own bonded area A = overlap length × width">
+          Y axis
+          <select className="y-select" value={unit} onChange={(e) => set({ view: { ...v, unit: e.target.value as YUnit } })}>
+            {Y_OPTIONS.lapShear.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <span className="vs">vs displacement</span>
+        </label>
         <label className="check"><input type="checkbox" checked={v.peakLabels} onChange={(e) => set({ view: { ...v, peakLabels: e.target.checked } })} /> Peak labels</label>
         <RunGraphControls view={v} set={(view) => set({ view })} runs={runs} shadeLabel="Shades the interval used for the selected integration work" />
         {anyBaseline && <label className="check"><input type="checkbox" checked={v.showRaw} onChange={(e) => set({ view: { ...v, showRaw: e.target.checked } })} /> Raw curve</label>}

@@ -4,9 +4,8 @@ import { usePeel, type PeelRun } from '../../state/peel';
 import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
 import { lttbIndices } from '../../plotting/downsample';
 import { CURVE_COLORS } from '../../plotting/colors';
-import { GF_TO_N } from '../../types';
 import { NumberField } from '../lapShear/NumberField';
-import { RunGraphControls, runStyle } from '../RunGraphControls';
+import { RunGraphControls, Y_OPTIONS, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
 
 const DISPLAY_LIMIT = 4000;
 const rgba = (hex: string, a: number) => {
@@ -29,7 +28,9 @@ export function PeelGraph() {
   const v = ps.view;
   const s = ps.settings;
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
-  const f = v.unit === 'N' ? GF_TO_N : 1;
+  const unit = v.unit;
+  const dg = yDigits(unit);
+  const yTitle = unit === 'kPa' || unit === 'MPa' ? `Nominal stress F/A (${unit})` : unit === 'N/m' ? 'Force per width F/w (N/m)' : `Peel force (${unit})`;
   const runs = selected.filter((r) => r.result.ok);
 
   const { data, layout } = useMemo(() => {
@@ -41,7 +42,9 @@ export function PeelGraph() {
       const st = runStyle(v, r.id, ids);
       const res = r.result;
       const series = res.curve.series;
-      const xs = v.x === 'disp' ? series.dispMm : r.cycle.time_s;
+      const f = yFactor(unit, r.meta.lengthMm * r.meta.widthMm, r.meta.widthMm); // each run with its own gel area / width
+      if (!Number.isFinite(f)) return;
+      const xs = series.dispMm;
       const idx = displayIndices(r, xs);
       const y = (i: number) => series.loadGf[i] * f;
       if (st.shade && res.window.n > 1) {
@@ -52,7 +55,7 @@ export function PeelGraph() {
         const mean = res.plateau.meanGf * f;
         traces.push({
           type: 'scatter', mode: 'lines', x: [x0, x1], y: [mean, mean], line: { color, width: 2, dash: 'dash' }, showlegend: false, legendgroup: r.id,
-          hovertemplate: `${r.label}<br>Average plateau force ${mean.toFixed(v.unit === 'N' ? 4 : 2)} ${v.unit} (window ${res.window.fromMm.toFixed(1)}–${res.window.toMm.toFixed(1)} mm)<extra></extra>`,
+          hovertemplate: `${r.label}<br>Steady-state average ${mean.toFixed(dg)} ${unit} (window ${res.window.fromMm.toFixed(1)}–${res.window.toMm.toFixed(1)} mm)<extra></extra>`,
         } as unknown as Data);
       }
       if (v.showRaw && res.curve.baseline.applied) {
@@ -60,15 +63,15 @@ export function PeelGraph() {
       }
       traces.push({
         type: 'scatter', mode: 'lines', name: r.label, meta: r.id, x: idx.map((i) => xs[i]), y: idx.map(y), line: { color, width: st.width }, opacity: st.opacity, legendgroup: r.id,
-        hovertemplate: `${r.label}<br>${v.x === 'disp' ? 'δ' : 't'} = %{x:.3f}<br>F = %{y:.4f} ${v.unit}<extra></extra>`,
+        hovertemplate: `${r.label}<br>δ = %{x:.3f} mm<br>%{y:.${dg}f} ${unit}<extra></extra>`,
       } as unknown as Data);
       const pk = res.curve.peak;
       if (pk) {
         traces.push({
           type: 'scatter', mode: 'markers', x: [xs[pk.index]], y: [pk.forceGf * f], marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, opacity: st.opacity, meta: r.id, showlegend: false, legendgroup: r.id,
-          hovertemplate: `${r.label}<br>Peak ${(pk.forceGf * f).toFixed(v.unit === 'N' ? 4 : 2)} ${v.unit} at δ = ${pk.dispMm.toFixed(2)} mm<extra></extra>`,
+          hovertemplate: `${r.label}<br>Peak ${(pk.forceGf * f).toFixed(dg)} ${unit} at δ = ${pk.dispMm.toFixed(2)} mm<extra></extra>`,
         } as unknown as Data);
-        if (v.peakLabels && st.labels) annotations.push({ x: xs[pk.index], y: pk.forceGf * f, text: `${(pk.forceGf * f).toFixed(v.unit === 'N' ? 3 : 1)} ${v.unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: { size: 11, color }, bgcolor: 'rgba(255,255,255,0.8)' });
+        if (v.peakLabels && st.labels) annotations.push({ x: xs[pk.index], y: pk.forceGf * f, text: `${(pk.forceGf * f).toFixed(Math.max(1, dg - 1))} ${unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: { size: 11, color }, bgcolor: 'rgba(255,255,255,0.8)' });
       }
       if (res.detach.dispMm !== null) {
         let di = -1;
@@ -81,17 +84,17 @@ export function PeelGraph() {
       font: { family: 'IBM Plex Sans, system-ui, sans-serif', size: 12, color: '#18263A' },
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
-      xaxis: { title: { text: v.x === 'disp' ? 'Peel displacement δ = |z − z₀| (mm)' : 'Time (s)' }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
-      yaxis: { title: { text: `Peel force (${v.unit})` }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
+      xaxis: { title: { text: 'Peel displacement δ = |z − z₀| (mm)' }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
+      yaxis: { title: { text: yTitle }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
       legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 10 } },
       annotations,
       dragmode: 'zoom',
       hovermode: 'closest',
-      uirevision: `${v.x}|${v.unit}`,
+      uirevision: unit,
     };
     return { data: traces, layout: lay };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs, v, f]);
+  }, [runs, v, unit]);
 
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
@@ -107,14 +110,13 @@ export function PeelGraph() {
   return (
     <section className="graph-panel" aria-label="90° peel graph">
       <div className="graph-toolbar">
-        <div className="segmented small" role="group" aria-label="X axis">
-          <button className={v.x === 'disp' ? 'on' : ''} onClick={() => set({ view: { ...v, x: 'disp' } })}>Force vs displacement</button>
-          <button className={v.x === 'time' ? 'on' : ''} onClick={() => set({ view: { ...v, x: 'time' } })}>Force vs time</button>
-        </div>
-        <div className="segmented small" role="group" aria-label="Force unit">
-          <button className={v.unit === 'gf' ? 'on' : ''} onClick={() => set({ view: { ...v, unit: 'gf' } })}>gf</button>
-          <button className={v.unit === 'N' ? 'on' : ''} onClick={() => set({ view: { ...v, unit: 'N' } })}>N</button>
-        </div>
+        <label title="Stress uses each run's own gel area (length × width); force per width uses its gel width">
+          Y axis
+          <select className="y-select" value={unit} onChange={(e) => set({ view: { ...v, unit: e.target.value as YUnit } })}>
+            {Y_OPTIONS.peel.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <span className="vs">vs displacement</span>
+        </label>
         <label className="check"><input type="checkbox" checked={v.peakLabels} onChange={(e) => set({ view: { ...v, peakLabels: e.target.checked } })} /> Peak labels</label>
         <RunGraphControls view={v} set={(view) => set({ view })} runs={runs} shadeLabel="Shades the steady-state window and draws its average peel force (dashed)" />
         {runs.some((r) => r.result.curve.baseline.applied) && <label className="check"><input type="checkbox" checked={v.showRaw} onChange={(e) => set({ view: { ...v, showRaw: e.target.checked } })} /> Raw curve</label>}

@@ -76,6 +76,8 @@ const MAIN_TABS: MainTab[] = ['graph', 'analysis', 'compare', 'settings', 'files
 function migrateView(d: RunGraphView, v: Partial<RunGraphView> | undefined): RunGraphView {
   const out = { ...d, ...(v ?? {}) };
   if (out.shade !== 'none' && out.shade !== 'highlight' && out.shade !== 'all') out.shade = d.shade;
+  if (!['gf', 'N', 'kPa', 'MPa', 'N/m'].includes(out.unit)) out.unit = d.unit;
+  out.x = 'disp';
   return out;
 }
 

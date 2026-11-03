@@ -1,6 +1,6 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.6.0';
+export const APP_VERSION = '1.7.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.1.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
@@ -264,8 +264,10 @@ export const RUN_TABS: RunTab[] = ['graph', 'results', 'compare', 'settings', 'f
 
 /** Graph options of the Lap Shear and 90° Peel graphs. */
 export interface RunGraphView {
+  /** Always displacement (force vs time was removed in 1.7); kept for saved projects. */
   x: 'disp' | 'time';
-  unit: 'gf' | 'N';
+  /** y axis: force (gf, N), stress = force / bonded area (kPa, MPa) or force per width (N/m, peel). */
+  unit: 'gf' | 'N' | 'kPa' | 'MPa' | 'N/m';
   peakLabels: boolean;
   /** Area under the curve (lap shear: integration interval; peel: steady-state window). */
   shade: 'none' | 'highlight' | 'all';

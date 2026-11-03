@@ -1,4 +1,5 @@
 import { GF_TO_N, type RunGraphView } from '../types';
+import { LINE } from '../plotting/figureStyle';
 
 /** Shading and highlighting controls shared by the Lap Shear and 90° Peel graphs. */
 export function RunGraphControls({ view, set, runs, shadeLabel }: { view: RunGraphView; set: (v: RunGraphView) => void; runs: { id: string; label: string }[]; shadeLabel: string }) {
@@ -30,7 +31,7 @@ export function runStyle(view: RunGraphView, id: string, runIds: string[]) {
   const dim = hl !== null && hl !== id;
   return {
     dim,
-    width: hl === id ? 3 : dim ? 1.2 : 1.8,
+    width: hl === id ? LINE.bold : dim ? LINE.faded : LINE.normal,
     opacity: dim ? 0.25 : 1,
     shade: view.shade === 'all' ? !dim : view.shade === 'highlight' ? hl === id : false,
     labels: !dim,

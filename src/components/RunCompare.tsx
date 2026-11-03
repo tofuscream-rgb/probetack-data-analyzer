@@ -3,6 +3,7 @@ import type { Data, Layout, PlotlyHTMLElement, Shape } from 'plotly.js';
 import { buildRunComparison, type CompareItem, type RunDataSet } from '../analysis/runCompare';
 import { PlotlyChart, loadPlotly } from '../plotting/PlotlyChart';
 import { PASTEL_COLORS } from '../plotting/colors';
+import { EXPORT_SIZE, FIG_FONT_FAMILY } from '../plotting/figureStyle';
 import type { RunCompareSelection } from '../types';
 import { AXIS, ChipGroup } from './CompareChargeRatios';
 import { fmt } from './common';
@@ -67,19 +68,19 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
     });
     const shapes: Partial<Shape>[] = panels.slice(1).map((p) => ({ type: 'line', xref: 'x', yref: 'paper', x0: p.from - 0.5, x1: p.from - 0.5, y0: 0, y1: 1, line: { color: '#4A5A70', width: 1.2, dash: 'dash' } }));
     const layout: Partial<Layout> = {
-      margin: { l: 76, r: 14, t: 14, b: manyConc ? 78 : 62 },
-      font: { family: 'IBM Plex Sans, Arial, sans-serif', size: 13, color: '#18263A' },
+      margin: { l: 90, r: 16, t: 16, b: manyConc ? 96 : 78 },
+      font: { family: FIG_FONT_FAMILY, size: 15, color: '#000' },
       plot_bgcolor: '#ffffff',
       paper_bgcolor: '#ffffff',
       barmode: 'group',
       bargap: 0.22,
       bargroupgap: 0.04,
       showlegend: !noHold,
-      xaxis: { ...AXIS, type: 'category', tickvals: x, ticktext: visible.map(tick), title: { text: 'Gel charge ratio', font: { size: 16 } } },
-      yaxis: { ...AXIS, rangemode: 'tozero', ...(bottom >= 0 && top > 0 ? { range: [0, top * 1.22] } : {}), title: { text: yTitle, font: { size: 15 } } },
-      legend: { x: 0.995, y: 0.99, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#18263A', borderwidth: 1 },
+      xaxis: { ...AXIS, type: 'category', tickvals: x, ticktext: visible.map(tick), title: { text: '<b>Gel charge ratio</b>', font: { size: 20 } } },
+      yaxis: { ...AXIS, rangemode: 'tozero', ...(bottom >= 0 && top > 0 ? { range: [0, top * 1.22] } : {}), title: { text: `<b>${yTitle}</b>`, font: { size: 20 } } },
+      legend: { x: 0.995, y: 0.99, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#000', borderwidth: 1.5, font: { size: 16 } },
       shapes,
-      annotations: panels.map((p) => ({ x: (p.from + p.to) / 2, xref: 'x', y: 0.95, yref: 'paper', text: `<b>${p.label}</b>`, showarrow: false, font: { size: 15, color: '#7B8899' } })),
+      annotations: panels.map((p) => ({ x: (p.from + p.to) / 2, xref: 'x', y: 0.95, yref: 'paper', text: `<b>${p.label}</b>`, showarrow: false, font: { size: 18, color: '#6B7684' } })),
       hovermode: 'closest',
     };
     return { data, layout };
@@ -89,7 +90,7 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
     const Plotly = await loadPlotly();
-    await Plotly.downloadImage(plotEl.current, { format, filename: fileName, width: 1200, height: 760, scale: format === 'png' ? 4 : 1 } as never);
+    await Plotly.downloadImage(plotEl.current, { format, filename: fileName, ...EXPORT_SIZE, scale: format === 'png' ? 4 : 1 } as never);
   };
 
   if (!items.length) return <p className="note pad">Tick runs in step 2 on the left; their folder names give the substrate, charge ratio and concentration to compare.</p>;

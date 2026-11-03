@@ -266,7 +266,7 @@ table.summary-table td { padding: 5px 6px; }
 .ms { font-weight: 500; }
 .ms.repeat { font-weight: 400; color: var(--ink-2); font-size: 11.5px; }
 .excl { color: var(--ink-3); font-size: 11px; }
-.plot.summary { flex: none; height: 360px; }
+.plot.summary { flex: none; height: 420px; }
 
 /* settings */
 .settings-panel { padding: 10px 14px; }
@@ -413,7 +413,7 @@ table.grid th.num { text-align: right; }
 .check-chip.on { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
 .sets-list { border: none; padding: 0; }
 .sets-list .chips { margin-top: 6px; }
-.plot.compare-bars { flex: none; height: 480px; }
+.plot.compare-bars { flex: none; height: 520px; }
 
 /* experiment type switch (header) */
 .mode-switch { display: inline-flex; align-items: center; gap: 8px; margin-left: 6px; padding-left: 12px; border-left: 1px solid var(--rule); }
@@ -469,3 +469,17 @@ table.ls-summary td:first-child { white-space: nowrap; }
 .pad-s { padding: 6px; }
 .graph-toolbar label .vs { color: var(--ink-3); font-size: 12px; margin-left: 2px; }
 .graph-toolbar select.y-select { max-width: none; width: 268px; }
+
+/* header: keep brand, test switch and buttons on one line on laptops */
+.app-header .brand-name { white-space: nowrap; }
+.mode-switch, .mode-switch .segmented { flex: none; }
+.mode-switch > span { white-space: nowrap; }
+@media (max-width: 1440px) {
+  .app-header { gap: 6px; }
+  .project-name { width: 160px; }
+  .mode-switch .segmented button { padding: 5px 10px; }
+}
+@media (max-width: 1320px) {
+  .mode-switch > span { display: none; }
+  .project-name { width: 130px; }
+}

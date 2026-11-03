@@ -5,6 +5,7 @@ import { useExperiment } from '../state/experiment';
 import { PlotlyChart, loadPlotly } from '../plotting/PlotlyChart';
 import { axisLabel, axisOptions, axisValues } from '../plotting/axes';
 import { lttbIndices } from '../plotting/downsample';
+import { EXPORT_SIZE, LINE, figAxis, figLayout } from '../plotting/figureStyle';
 import { CURVE_COLORS } from '../plotting/colors';
 import { STATUS_LABEL, isIncluded, type CycleResult } from '../analysis/engine';
 import { QC_LABEL } from '../analysis/pointOutliers';
@@ -72,7 +73,7 @@ export function GraphPanel() {
         legendgroup: multi ? r.file.fileId : meta,
         connectgaps: false,
         name,
-        line: excluded ? { color, width: 1, dash: 'dash' } : { color, width: 1.8 },
+        line: excluded ? { color, width: LINE.faded, dash: 'dash' } : { color, width: LINE.normal },
         hovertemplate: `${name}<br>x = %{x:.4f}<br>y = %{y:.4f}<br>point %{customdata}<extra></extra>`,
       } as unknown as Data);
       if (graph.showMarkers) {
@@ -98,15 +99,14 @@ export function GraphPanel() {
       }
     }
     const lay: Partial<Layout> = {
-      margin: { l: 64, r: 8, t: 36, b: 52 },
-      title: { text: graph.title, font: { size: 14, family: 'IBM Plex Sans, sans-serif' }, x: 0.01, xanchor: 'left' },
-      font: { family: 'IBM Plex Sans, system-ui, sans-serif', size: 12, color: '#18263A' },
+      ...figLayout({ margin: { l: 90, r: 16, t: 46, b: 78 } }),
+      title: { text: `<b>${graph.title}</b>`, font: { size: 18, color: '#000' }, x: 0.01, xanchor: 'left' },
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
-      xaxis: { title: { text: axisLabel(graph.x, s) }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
-      yaxis: { title: { text: axisLabel(graph.y, s) }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
+      xaxis: figAxis(axisLabel(graph.x, s)),
+      yaxis: figAxis(axisLabel(graph.y, s)),
       showlegend: curves.length <= 15,
-      legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 10 }, bgcolor: 'rgba(255,255,255,0.85)' },
+      legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 14, color: '#000' }, bgcolor: 'rgba(255,255,255,0.85)' },
       dragmode: 'zoom',
       hovermode: 'closest',
       uirevision: `${graph.x}|${graph.y}|${ex.main?.file.fileId}`,
@@ -124,7 +124,7 @@ export function GraphPanel() {
   const exportImage = async (format: 'png' | 'svg', scale: number) => {
     if (!plotEl.current) return;
     const Plotly = await loadPlotly();
-    await Plotly.downloadImage(plotEl.current, { format, filename: fileName, width: 1200, height: 750, scale } as never);
+    await Plotly.downloadImage(plotEl.current, { format, filename: fileName, ...EXPORT_SIZE, scale } as never);
   };
   const resetZoom = async () => {
     if (!plotEl.current) return;

@@ -7,12 +7,14 @@ import type { SummaryStats } from '../analysis/engine';
 import { displayFactor, peakLabel } from '../analysis/cycleMetrics';
 import { PlotlyChart, loadPlotly } from '../plotting/PlotlyChart';
 import { PASTEL_COLORS } from '../plotting/colors';
+import { EXPORT_SIZE, FIG_FONT_FAMILY } from '../plotting/figureStyle';
 import type { CompareSelection } from '../types';
 import { forceDigits, meanSd } from './common';
 
 type ListKey = 'substrates' | 'chargeRatios' | 'concentrations' | 'holdTimes';
 
-export const AXIS = { showline: true, mirror: true, linecolor: '#18263A', linewidth: 1.2, ticks: 'outside', tickcolor: '#18263A', zeroline: false } as const;
+/** Bar-chart axes in the shared figure style (thick black frame, bold ticks). */
+export const AXIS = { showline: true, mirror: true, linecolor: '#000', linewidth: 2, ticks: 'outside', ticklen: 7, tickwidth: 2, tickcolor: '#000', zeroline: false, automargin: true, tickfont: { size: 17, color: '#000', weight: 'bold' } } as const;
 
 export function ChipGroup({ title, items, selected, onToggle, onAll, onNone }: {
   title: string;
@@ -111,18 +113,18 @@ export function CompareChargeRatios() {
       type: 'line', xref: 'x', yref: 'paper', x0: p.from - 0.5, x1: p.from - 0.5, y0: 0, y1: 1, line: { color: '#4A5A70', width: 1.2, dash: 'dash' },
     }));
     const layout: Partial<Layout> = {
-      margin: { l: 70, r: 14, t: 14, b: manyConc ? 78 : 62 },
-      font: { family: 'IBM Plex Sans, Arial, sans-serif', size: 13, color: '#18263A' },
+      margin: { l: 90, r: 16, t: 16, b: manyConc ? 96 : 78 },
+      font: { family: FIG_FONT_FAMILY, size: 15, color: '#000' },
       plot_bgcolor: '#ffffff',
       paper_bgcolor: '#ffffff',
       barmode: 'group',
       bargap: 0.22,
       bargroupgap: 0.04,
-      xaxis: { ...AXIS, type: 'category', tickvals: x, ticktext: visible.map(tick), tickfont: { size: 13 }, title: { text: 'Gel charge ratio', font: { size: 16 } } },
-      yaxis: { ...AXIS, rangemode: 'tozero', ...(range ? { range } : {}), gridcolor: 'rgba(0,0,0,0)', title: { text: yTitle, font: { size: 16 } } },
-      legend: { x: 0.995, y: 0.99, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#18263A', borderwidth: 1 },
+      xaxis: { ...AXIS, type: 'category', tickvals: x, ticktext: visible.map(tick), title: { text: '<b>Gel charge ratio</b>', font: { size: 20 } } },
+      yaxis: { ...AXIS, rangemode: 'tozero', ...(range ? { range } : {}), gridcolor: 'rgba(0,0,0,0)', title: { text: `<b>${yTitle}</b>`, font: { size: 20 } } },
+      legend: { x: 0.995, y: 0.99, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#000', borderwidth: 1.5, font: { size: 16 } },
       shapes,
-      annotations: panels.map((p) => ({ x: (p.from + p.to) / 2, xref: 'x', y: 0.95, yref: 'paper', text: `<b>${p.label}</b>`, showarrow: false, font: { size: 15, color: '#7B8899' } })),
+      annotations: panels.map((p) => ({ x: (p.from + p.to) / 2, xref: 'x', y: 0.95, yref: 'paper', text: `<b>${p.label}</b>`, showarrow: false, font: { size: 18, color: '#6B7684' } })),
       hovermode: 'closest',
     };
     return { data, layout };
@@ -149,11 +151,11 @@ export function CompareChargeRatios() {
       } as unknown as Data;
     });
     const layout: Partial<Layout> = {
-      margin: { l: 70, r: 14, t: 14, b: 56 },
-      font: { family: 'IBM Plex Sans, Arial, sans-serif', size: 12, color: '#18263A' },
-      xaxis: { ...AXIS, title: { text: 'Holding time (s)' } },
-      yaxis: { ...AXIS, rangemode: 'tozero', title: { text: yTitle } },
-      legend: { orientation: 'h', y: -0.22 },
+      margin: { l: 90, r: 16, t: 16, b: 78 },
+      font: { family: FIG_FONT_FAMILY, size: 15, color: '#000' },
+      xaxis: { ...AXIS, title: { text: '<b>Holding time (s)</b>', font: { size: 20 } } },
+      yaxis: { ...AXIS, rangemode: 'tozero', title: { text: `<b>${yTitle}</b>`, font: { size: 20 } } },
+      legend: { orientation: 'h', y: -0.28, font: { size: 15 } },
       hovermode: 'closest',
     };
     return { data, layout };
@@ -163,7 +165,7 @@ export function CompareChargeRatios() {
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
     const Plotly = await loadPlotly();
-    await Plotly.downloadImage(plotEl.current, { format, filename: 'tack_comparison', width: 1200, height: 760, scale: format === 'png' ? 4 : 1 } as never);
+    await Plotly.downloadImage(plotEl.current, { format, filename: 'tack_comparison', ...EXPORT_SIZE, scale: format === 'png' ? 4 : 1 } as never);
   };
 
   if (!derived.ordered.length) return <p className="note">Open your experiment folder in step 1 on the left to compare charge ratios.</p>;

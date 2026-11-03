@@ -3,6 +3,7 @@ import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { usePeel, type PeelRun } from '../../state/peel';
 import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
 import { lttbIndices } from '../../plotting/downsample';
+import { EXPORT_SIZE, figAxis, figLayout, peakLabelFont } from '../../plotting/figureStyle';
 import { CURVE_COLORS } from '../../plotting/colors';
 import { NumberField } from '../lapShear/NumberField';
 import { RunGraphControls, Y_OPTIONS, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
@@ -71,7 +72,7 @@ export function PeelGraph() {
           type: 'scatter', mode: 'markers', x: [xs[pk.index]], y: [pk.forceGf * f], marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, opacity: st.opacity, meta: r.id, showlegend: false, legendgroup: r.id,
           hovertemplate: `${r.label}<br>Peak ${(pk.forceGf * f).toFixed(dg)} ${unit} at δ = ${pk.dispMm.toFixed(2)} mm<extra></extra>`,
         } as unknown as Data);
-        if (v.peakLabels && st.labels) annotations.push({ x: xs[pk.index], y: pk.forceGf * f, text: `${(pk.forceGf * f).toFixed(Math.max(1, dg - 1))} ${unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: { size: 11, color }, bgcolor: 'rgba(255,255,255,0.8)' });
+        if (v.peakLabels && st.labels) annotations.push({ x: xs[pk.index], y: pk.forceGf * f, text: `${(pk.forceGf * f).toFixed(Math.max(1, dg - 1))} ${unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: peakLabelFont(color), bgcolor: 'rgba(255,255,255,0.8)' });
       }
       if (res.detach.dispMm !== null) {
         let di = -1;
@@ -80,13 +81,12 @@ export function PeelGraph() {
       }
     });
     const lay: Partial<Layout> = {
-      margin: { l: 70, r: 10, t: 16, b: 52 },
-      font: { family: 'IBM Plex Sans, system-ui, sans-serif', size: 12, color: '#18263A' },
+      ...figLayout(),
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
-      xaxis: { title: { text: 'Peel displacement δ = |z − z₀| (mm)' }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
-      yaxis: { title: { text: yTitle }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
-      legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 10 } },
+      xaxis: figAxis('Peel displacement δ = |z − z₀| (mm)'),
+      yaxis: figAxis(yTitle),
+      legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 15, color: '#000' } },
       annotations,
       dragmode: 'zoom',
       hovermode: 'closest',
@@ -99,7 +99,7 @@ export function PeelGraph() {
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
     const Plotly = await loadPlotly();
-    await Plotly.downloadImage(plotEl.current, { format, filename: 'peel_90', width: 1200, height: 750, scale: format === 'png' ? 4 : 1 } as never);
+    await Plotly.downloadImage(plotEl.current, { format, filename: 'peel_90', ...EXPORT_SIZE, scale: format === 'png' ? 4 : 1 } as never);
   };
   const resetZoom = async () => {
     if (!plotEl.current) return;

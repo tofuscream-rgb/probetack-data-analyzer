@@ -4,6 +4,7 @@ import { useLapShear, type LapShearRun } from '../../state/lapShear';
 import { INTEGRATION_LABEL } from '../../analysis/lapShear';
 import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
 import { lttbIndices } from '../../plotting/downsample';
+import { EXPORT_SIZE, figAxis, figLayout, peakLabelFont } from '../../plotting/figureStyle';
 import { CURVE_COLORS } from '../../plotting/colors';
 import type { IntegrationMode } from '../../types';
 import { NumberField } from './NumberField';
@@ -118,7 +119,7 @@ export function LapShearGraph() {
           hovertemplate: `${name}<br>Peak ${py.toFixed(dg)} ${unit} at δ = ${res.peak.dispMm.toFixed(3)} mm<extra></extra>`,
         } as unknown as Data);
         if (v.peakLabels && st.labels) {
-          annotations.push({ x: px, y: py, text: `${py.toFixed(Math.max(1, dg - 1))} ${unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: { size: 11, color }, bgcolor: 'rgba(255,255,255,0.8)' });
+          annotations.push({ x: px, y: py, text: `${py.toFixed(Math.max(1, dg - 1))} ${unit}`, showarrow: true, arrowhead: 0, ax: 0, ay: -22, font: peakLabelFont(color), bgcolor: 'rgba(255,255,255,0.8)' });
         }
       }
       if (res.failure.dispMm !== null) {
@@ -141,13 +142,12 @@ export function LapShearGraph() {
       }
     });
     const lay: Partial<Layout> = {
-      margin: { l: 70, r: 10, t: 16, b: 52 },
-      font: { family: 'IBM Plex Sans, system-ui, sans-serif', size: 12, color: '#18263A' },
+      ...figLayout(),
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
-      xaxis: { title: { text: xTitle }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
-      yaxis: { title: { text: yTitle }, zeroline: true, zerolinecolor: '#C9D2DD', gridcolor: '#EEF2F6', linecolor: '#9AA6B5', mirror: true },
-      legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 10 } },
+      xaxis: figAxis(xTitle),
+      yaxis: figAxis(yTitle),
+      legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 15, color: '#000' } },
       annotations,
       dragmode: 'zoom',
       hovermode: 'closest',
@@ -160,7 +160,7 @@ export function LapShearGraph() {
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
     const Plotly = await loadPlotly();
-    await Plotly.downloadImage(plotEl.current, { format, filename: 'lap_shear', width: 1200, height: 750, scale: format === 'png' ? 4 : 1 } as never);
+    await Plotly.downloadImage(plotEl.current, { format, filename: 'lap_shear', ...EXPORT_SIZE, scale: format === 'png' ? 4 : 1 } as never);
   };
   const resetZoom = async () => {
     if (!plotEl.current) return;

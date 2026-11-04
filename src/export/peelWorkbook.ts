@@ -1,7 +1,7 @@
 /** 90° peel Excel workbook: summary, editable chart, one sheet per run, analysis settings. */
 import { ALGORITHM_VERSION, APP_VERSION, GF_TO_N, type FailureMode, type PeelSettings } from '../types';
 import { FAILURE_MODE_LABEL, INTEGRATION_LABEL, describe } from '../analysis/lapShear';
-import { PEEL_PROPERTIES, type PeelResult } from '../analysis/peel';
+import { PEEL_DEFINITIONS, PEEL_PROPERTIES, type PeelResult } from '../analysis/peel';
 import { lttbIndices } from '../plotting/downsample';
 import { buildXlsx, cellRef, safeSheetName, type CellValue, type ChartSpec, type SheetSpec } from './xlsxWriter';
 
@@ -29,12 +29,12 @@ const num = (v: number | null | undefined): CellValue => (v === null || v === un
 
 export const PEEL_SUMMARY_HEADER = [
   'Run', 'File path', 'Condition (from folder names)', 'Gel length (mm)', 'Gel width (mm)', 'Gel thickness (mm)', 'Bonded area (mm²)', 'Peel angle (°)',
-  'Average (plateau) peel force (N)', 'Average (plateau) peel force (gf)', 'Plateau force median (N)', 'Plateau force SD (N)', 'Plateau force CV (%)',
-  'Plateau force min (N)', 'Plateau force max (N)', 'Steady-state window from (mm)', 'Steady-state window to (mm)', 'Points in window',
-  'Peel strength F̄/w (N/m)', 'Peel strength F̄/w (N/mm)', 'Apparent interfacial toughness Γ (J/m²)',
-  'Peak force (N)', 'Peak force (gf)', 'Peak force per width (N/m)', 'Displacement at peak (mm)', 'Time at peak (s)', 'Initiation peak force (N)',
-  'Peeled length (mm)', 'Detachment displacement (mm)', 'Detachment source', 'Work, full curve (mJ)', 'Work to detachment (mJ)',
-  'Selected integration work (mJ)', 'Work per peeled area (J/m²)', 'Peel rate (mm/s)', 'Failure mode', 'Valid data points', 'Notes',
+  'Average peel force, steady state (N)', 'Average peel force, steady state (gf)', 'Steady-state force median (N)', 'Steady-state force SD (N)', 'Steady-state force CV (%)',
+  'Steady-state force min (N)', 'Steady-state force max (N)', 'Steady-state window from (mm)', 'Steady-state window to (mm)', 'Points in window',
+  'Peel strength F̄/w (N/m)', 'Peel strength F̄/w (N/mm)', 'Peel energy G (J/m²)',
+  'Peak force, maximum (N)', 'Peak force, maximum (gf)', 'Peak force per width (N/m)', 'Displacement at peak (mm)', 'Time at peak (s)', 'Initiation peak force (N)',
+  'Peeled length (mm)', 'Detachment displacement (mm)', 'Detachment source', 'Area under the graph (work), full curve (mJ)', 'Area under the graph (work) to detachment (mJ)',
+  'Area under the graph (work), chosen range (mJ)', 'Work per peeled area (J/m²)', 'Peel rate (mm/s)', 'Failure mode', 'Valid data points', 'Notes',
 ];
 
 export function buildPeelSheets(o: PeelExportOptions): SheetSpec[] {
@@ -136,14 +136,17 @@ export function buildPeelSheets(o: PeelExportOptions): SheetSpec[] {
       ['Application version', APP_VERSION, ''],
       ['Steady-state window', s.plateau.mode === 'auto' ? `${s.plateau.startFrac * 100}–${s.plateau.endFrac * 100}% of peeled length` : `${s.plateau.fromMm}–${s.plateau.toMm} mm`, 'Average peel force F̄ = mean loading force in this window (initiation peak and final release excluded; cf. ASTM D6862, which disregards the first 25 mm).'],
       ['Peel strength', 'F̄ / w', 'N/m and N/mm.'],
-      ['Apparent interfacial toughness', 'Γ = F̄ / w · (1 − cos θ)', 'J/m²; equals F̄ / w at 90°. Elastic stretching of the strip neglected.'],
+      ['Peel energy G', 'G = F̄ / w · (1 − cos θ)', 'J/m²; equals F̄ / w at 90°. Elastic stretching of the strip neglected (Rivlin 1944; Kendall 1975).'],
       ['Work per peeled area', 'W to detachment / (w × peeled length)', 'Energy-based estimate of Γ (J/m²).'],
       ['Detachment', s.detach.auto ? `force < ${s.detach.fraction * 100}% of peak for ${s.detach.consecutive} consecutive points after the peak` : 'manual only', 'Gives the peeled length. Manual values override.'],
-      ['Work integration', INTEGRATION_LABEL[s.integration.mode], s.integration.mode === 'custom' ? `${s.integration.fromMm}–${s.integration.toMm} mm` : 'Trapezoidal rule, N·mm = mJ; displacement reversals excluded.'],
+      ['Area under the graph, chosen range', INTEGRATION_LABEL[s.integration.mode], s.integration.mode === 'custom' ? `${s.integration.fromMm}–${s.integration.toMm} mm` : 'Trapezoidal rule, N·mm = mJ; displacement reversals excluded.'],
       ['Baseline correction', s.baseline.enabled ? 'ON' : 'OFF', s.baseline.enabled ? `Median of the first ${s.baseline.points} points if their spread ≤ ${s.baseline.maxSpreadGf} gf.` : 'Raw force used.'],
       ['Loading direction', s.direction, 'Shown as a positive peel force; original signed values kept.'],
       ['Force conversion', `1 gf = ${GF_TO_N} N`, ''],
       ['Peel rate', 'slope of δ vs t in the window', 'mm/s'],
+      [],
+      ['Term', 'Definition'],
+      ...PEEL_DEFINITIONS.map(([t, d]) => [t, d]),
       [],
       ['Files deselected by the user (not used)'],
       ...(o.deselectedFiles?.length ? o.deselectedFiles.map((f) => [f.path, f.sha256]) : [['none']]),

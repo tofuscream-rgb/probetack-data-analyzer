@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react';
 import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { useLapShear, type LapShearRun } from '../../state/lapShear';
-import { INTEGRATION_LABEL } from '../../analysis/lapShear';
+import { INTEGRATION_LABEL, LAP_INTEGRATION_MODES } from '../../analysis/lapShear';
 import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
 import { lttbIndices } from '../../plotting/downsample';
 import { EXPORT_SIZE, figAxis, figLayout, peakLabelFont } from '../../plotting/figureStyle';
@@ -205,7 +205,7 @@ export function LapShearGraph() {
         <label>
           Integration
           <select value={s.integration.mode} onChange={(e) => setSettings({ integration: { ...s.integration, mode: e.target.value as IntegrationMode } })}>
-            {(Object.keys(INTEGRATION_LABEL) as IntegrationMode[]).map((k) => <option key={k} value={k}>{INTEGRATION_LABEL[k]}</option>)}
+            {LAP_INTEGRATION_MODES.map((k) => <option key={k} value={k}>{INTEGRATION_LABEL[k]}</option>)}
           </select>
         </label>
         {s.integration.mode === 'custom' && (

@@ -1,6 +1,6 @@
 import { usePeel, type PeelRun } from '../../state/peel';
 import { FAILURE_MODE_LABEL, INTEGRATION_LABEL, describe } from '../../analysis/lapShear';
-import { PEEL_PROPERTIES } from '../../analysis/peel';
+import { PEEL_DEFINITIONS, PEEL_PROPERTIES } from '../../analysis/peel';
 import type { FailureMode } from '../../types';
 import { CURVE_COLORS } from '../../plotting/colors';
 import { fmt } from '../common';
@@ -82,7 +82,7 @@ export function PeelResults() {
     <div className="ls-results">
       <p className="note">
         Steady-state window: <strong>{s.plateau.mode === 'auto' ? `${(s.plateau.startFrac * 100).toFixed(0)}–${(s.plateau.endFrac * 100).toFixed(0)}% of each run's peeled length` : `${s.plateau.fromMm}–${s.plateau.toMm} mm`}</strong> ·
-        work integration <strong>{INTEGRATION_LABEL[s.integration.mode]}</strong> · baseline correction <strong>{s.baseline.enabled ? 'ON' : 'off'}</strong> · detachment{' '}
+        area under graph, chosen range: <strong>{INTEGRATION_LABEL[s.integration.mode]}</strong> · baseline correction <strong>{s.baseline.enabled ? 'ON' : 'off'}</strong> · detachment{' '}
         {s.detach.auto ? `when force < ${(s.detach.fraction * 100).toFixed(1)}% of peak for ${s.detach.consecutive} points` : 'only when typed'}. Type a detachment displacement to set it by hand; clear the box for automatic. Hover ⚠ for notes.
       </p>
       <div className="table-scroll ls-table-wrap">
@@ -91,12 +91,12 @@ export function PeelResults() {
             <tr>
               <th className="sticky-col">Run</th>
               <th>Gel length (mm)</th><th>Gel width (mm)</th><th>Gel thickness (mm)</th><th>Peel angle (°)</th>
-              <th className="num">Avg. peel force F̄ (N)</th><th className="num">F̄ (gf)</th><th className="num">Plateau SD (N)</th><th className="num">Plateau CV (%)</th><th className="num">Plateau min–max (N)</th>
+              <th className="num" title="Mean force in the steady-state window">Average peel force F̄, steady state (N)</th><th className="num">F̄ (gf)</th><th className="num">Steady-state SD (N)</th><th className="num" title="SD / F̄ × 100: how steady the peel was">Steady-state CV (%)</th><th className="num">Steady-state min–max (N)</th>
               <th className="num" title="F̄ / width">Peel strength (N/m)</th><th className="num">Peel strength (N/mm)</th>
-              <th className="num" title="Γ = F̄/w · (1 − cos θ)">Apparent interfacial toughness Γ (J/m²)</th>
-              <th className="num">Peak force (N)</th><th className="num">Peak force (gf)</th><th className="num">Peak / width (N/m)</th><th className="num">Displ. at peak (mm)</th>
-              <th className="num">Initiation peak (N)</th><th className="num">Window (mm)</th><th className="num">Peeled length (mm)</th>
-              <th className="num">Work, full curve (mJ)</th><th className="num">Work to detachment (mJ)</th><th className="num">Selected work (mJ)</th><th className="num" title="Work to detachment / (width × peeled length)">Work / peeled area (J/m²)</th>
+              <th className="num" title="G = F̄/w · (1 − cos θ); = F̄/w at 90°">Peel energy G (J/m²)</th>
+              <th className="num" title="Highest force anywhere in the run">Peak force, max (N)</th><th className="num">Peak force, max (gf)</th><th className="num">Peak / width (N/m)</th><th className="num">Displ. at peak (mm)</th>
+              <th className="num" title="Highest force before the steady-state window">Initiation peak force (N)</th><th className="num">Steady-state window (mm)</th><th className="num">Peeled length (mm)</th>
+              <th className="num">Area under graph, full curve (mJ)</th><th className="num">Area under graph to detachment (mJ)</th><th className="num" title={`Chosen under Settings › Work: ${INTEGRATION_LABEL[s.integration.mode]}`}>Area under graph, chosen range (mJ)</th><th className="num" title="Work to detachment / (width × peeled length)">Work / peeled area (J/m²)</th>
               <th className="num">Peel rate (mm/s)</th><th>Failure mode</th><th>Detachment (mm)</th><th className="num">Valid points</th>
             </tr>
           </thead>
@@ -138,12 +138,13 @@ export function PeelResults() {
           </tbody>
         </table>
       </div>
-      <div className="ls-definitions note">
-        <p><strong>Average (plateau) peel force</strong> F̄: mean loading force in the steady-state window, which leaves out the initiation peak and the final release (ASTM D6862 likewise disregards the first 25 mm of peel). Its SD, CV and range describe stick–slip and variability. Peak forces scatter much more than the plateau, so F̄ is the main result.</p>
-        <p><strong>Peel strength</strong> = F̄ / w. <strong>Apparent interfacial toughness</strong> Γ = F̄ / w · (1 − cos θ), which at 90° equals F̄ / w (1 N/m = 1 J/m²). Elastic stretching of the strip is neglected, as is usual for a stiff backing.</p>
-        <p><strong>Work</strong> W = ∫ F dδ by the trapezoidal rule (mJ). <strong>Work per peeled area</strong> = work to detachment / (w × peeled length) is an energy-based estimate that should be close to Γ for a steady peel.</p>
-        <p><strong>Failure mode</strong> is your observation of the specimen (adhesive, cohesive, mixed); it is never inferred from the curve.</p>
-      </div>
+      <h3 className="ls-h">Definitions</h3>
+      <dl className="ls-definitions note">
+        {PEEL_DEFINITIONS.map(([t, d]) => (
+          <div key={t}><dt>{t}</dt><dd>{d}</dd></div>
+        ))}
+        <div><dt>Failure mode</dt><dd>Your observation of the specimen (adhesive, cohesive, mixed); it is never inferred from the curve.</dd></div>
+      </dl>
     </div>
   );
 }

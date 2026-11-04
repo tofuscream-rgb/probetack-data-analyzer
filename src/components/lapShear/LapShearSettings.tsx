@@ -1,5 +1,5 @@
 import { useLapShear } from '../../state/lapShear';
-import { INTEGRATION_LABEL } from '../../analysis/lapShear';
+import { INTEGRATION_LABEL, LAP_INTEGRATION_MODES } from '../../analysis/lapShear';
 import { defaultLapShear } from '../../state/defaults';
 import type { IntegrationMode, LapShearSettings as Settings } from '../../types';
 import { Section } from '../common';
@@ -16,7 +16,7 @@ export function LapShearSettings() {
           <label className="field">
             <span>Integration interval</span>
             <select value={s.integration.mode} onChange={(e) => sub('integration', { mode: e.target.value as IntegrationMode })}>
-              {(Object.keys(INTEGRATION_LABEL) as IntegrationMode[]).map((k) => <option key={k} value={k}>{INTEGRATION_LABEL[k]}</option>)}
+              {LAP_INTEGRATION_MODES.map((k) => <option key={k} value={k}>{INTEGRATION_LABEL[k]}</option>)}
             </select>
           </label>
           {s.integration.mode === 'custom' && (

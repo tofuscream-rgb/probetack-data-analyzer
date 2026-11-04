@@ -149,3 +149,26 @@ describe('short on-curve labels', () => {
     expect(Math.abs((a[0].x as number) - 55)).toBeGreaterThan(4);
   });
 });
+
+describe('peel work in the steady-state window', () => {
+  it('integrates only the window when chosen', async () => {
+    const { analyzePeel } = await import('../src/analysis/peel');
+    const { defaultPeel } = await import('../src/state/defaults');
+    const { GF_TO_N } = await import('../src/types');
+    // 0–50 mm, constant 100 gf (rises over the first 1 mm), then released
+    const n = 2001;
+    const z = Array.from({ length: n }, (_, i) => i * 0.03);
+    const f = z.map((d) => (d < 1 ? 100 * d : d < 50 ? 100 : 0));
+    const run = { time_s: z.map((d) => d), z_mm: z, force_gf: f, amplitudeMm: 60 };
+    const st = defaultPeel().settings;
+    const meta = { lengthMm: 60, widthMm: 10, thicknessMm: 1, angleDeg: 90, failureMode: 'unspecified' as const, manualDetachMm: null };
+    const full = analyzePeel(run, meta, st);
+    const win = analyzePeel(run, meta, { ...st, integration: { ...st.integration, mode: 'window' } });
+    expect(win.work.selectedFromMm).toBeCloseTo(full.window.fromMm, 6);
+    expect(win.work.selectedToMm).toBeCloseTo(full.window.toMm, 6);
+    // force is constant in the window: W = F · (to − from)
+    expect(win.work.selectedMJ).toBeCloseTo(100 * GF_TO_N * (full.window.toMm - full.window.fromMm), 2);
+    expect(win.work.fullMJ).toBeCloseTo(full.work.fullMJ, 9); // other results unchanged
+    expect(win.toughnessJm2).toBeCloseTo(full.toughnessJm2, 9);
+  });
+});

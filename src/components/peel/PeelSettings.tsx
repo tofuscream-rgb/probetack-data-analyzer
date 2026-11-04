@@ -12,7 +12,7 @@ export function PeelSettings() {
   return (
     <div className="settings-panel">
       <div className="settings-grid">
-        <Section title="Steady-state (plateau) window">
+        <Section title="Steady-state window">
           <label className="field">
             <span>Window</span>
             <select value={s.plateau.mode} onChange={(e) => sub('plateau', { mode: e.target.value as 'auto' | 'custom' })}>
@@ -47,7 +47,7 @@ export function PeelSettings() {
         </Section>
         <Section title="Work">
           <label className="field">
-            <span>Selected integration</span>
+            <span>Area under the graph, chosen range</span>
             <select value={s.integration.mode} onChange={(e) => sub('integration', { mode: e.target.value as IntegrationMode })}>
               {(Object.keys(INTEGRATION_LABEL) as IntegrationMode[]).map((k) => <option key={k} value={k}>{INTEGRATION_LABEL[k]}</option>)}
             </select>

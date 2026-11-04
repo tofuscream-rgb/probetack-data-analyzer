@@ -25,7 +25,7 @@ function GelDimensions() {
       <h2>3. Gel dimensions</h2>
       <div className="gel-dims">
         <NumberField label="Gel length (mm)" value={d.lengthMm} positive onCommit={(v) => v !== null && setD({ ...d, lengthMm: v })} title="Bonded length of the gel strip" />
-        <NumberField label="Gel width (mm)" value={d.widthMm} positive onCommit={(v) => v !== null && setD({ ...d, widthMm: v })} title="Width w: peel strength and toughness are force / w" />
+        <NumberField label="Gel width (mm)" value={d.widthMm} positive onCommit={(v) => v !== null && setD({ ...d, widthMm: v })} title="Width w: peel strength and peel energy are force / w" />
         <NumberField label="Gel thickness (mm)" value={d.thicknessMm} positive onCommit={(v) => v !== null && setD({ ...d, thicknessMm: v })} />
         <NumberField label="Peel angle (°)" value={d.angleDeg} positive onCommit={(v) => v !== null && setD({ ...d, angleDeg: v })} title="90 for a 90° peel; Γ = F/w · (1 − cos θ)" />
       </div>

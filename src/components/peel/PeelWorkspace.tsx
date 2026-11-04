@@ -20,7 +20,7 @@ function PeelCompare() {
       sel={ps.compare}
       setSel={(patch) => set({ compare: { ...ps.compare, ...patch } })}
       fileName="peel_90_comparison"
-      note="Peel strength and toughness are computed per run with its own gel width before averaging."
+      note="Peel strength and peel energy are computed per run with its own gel width before averaging."
     />
   );
 }

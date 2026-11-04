@@ -4,7 +4,7 @@ A browser-based tool for analysing Biomomentum Mach-1 mechanical test files (TXT
 
 - **Probe Tack**: imports whole experiment folders, separates every movement (run), extracts peak forces, screens for outliers and compares conditions.
 - **Lap Shear**: peak load, apparent nominal lap-shear strength, mechanical work and work per bonded area for every run, with editable specimen dimensions and failure modes (see [Lap Shear analysis](#lap-shear-analysis)).
-- **90° Peel**: average (plateau) peel force, peel strength, apparent interfacial toughness, peak and initiation forces, work and work per peeled area, with editable gel dimensions (see [90° peel analysis](#90-peel-analysis)).
+- **90° Peel**: average peel force (steady state), peel strength, peel energy, peak and initiation peak forces, area under the graph (work) and work per peeled area, with editable gel dimensions (see [90° peel analysis](#90-peel-analysis)).
 
 **Each test has its own files.** Files opened while Probe Tack is selected belong to Probe Tack only; switch to Lap Shear or 90° Peel and you start with an empty file list and import that test's files there. Each test's files, ticks and settings are kept separately in autosave and in saved projects. Remove files with × (one file or folder) or *Remove all*; the files on your computer are never changed.
 
@@ -157,19 +157,20 @@ Choose **Experiment type → 90° Peel** and open your peel files. A Mach-1 file
 2. **Gel dimensions** (step 3): gel length, width, thickness and peel angle (defaults 60 × 10 × 1 mm, 90°). *Apply* sets them for every selected run; single runs can be changed in the Results tab.
 3. **Graph**: the ticked runs vs peel displacement. Choose the **Y axis**: **peel energy G = F/w · (1 − cos θ) in J/m²** (the default; each run with its own gel width and peel angle, so its steady-state average equals Γ in the Results tab), peel force (gf or N) or nominal stress F/A (kPa or MPa, with each run's gel length × width). F/A is nominal: in a peel the load is carried at the peel front, not by the whole bonded area. ▲ marks the peak, × the detachment. Click a curve to highlight it. *Shade area under curve* (off by default) shows the steady-state window used for the average peel force together with that average (dashed line). Change the window above the graph. **Curve labels**: keep the *Legend box*, choose *Label on curves* to write each curve's name next to the curve in its own colour (as you would by hand; only the conditions that differ between the curves are written, e.g. “glass”, “PET”), or *None*. Drag a label to move it. **Rename curves** gives any curve your own name (for example “stainless steel”), used in the legend and on the curves. **Axis titles** lets you type your own X and Y axis titles (leave empty for the automatic one; the Y title goes back to automatic when you change the Y quantity). **Graph title** adds an optional bold title above the graph; *Use …* fills in the conditions all curves share (e.g. “0.25 · 2.5 M”). Labels and title are saved with the project and included in PNG/SVG downloads.
 4. **Results**: every run, mean ± SD, and failure mode (Adhesive, Cohesive, Mixed, chosen by you).
-5. **Compare charge ratios**: as in Lap Shear, for example apparent interfacial toughness or average peel force per substrate, charge ratio and concentration.
+5. **Compare charge ratios**: as in Lap Shear, for example peel energy or average peel force per substrate, charge ratio and concentration.
 6. **Export Excel** writes a summary, an editable chart, one sheet per run and the settings.
 
 **What is reported, and why.** Peel test standards (ASTM D6862 and ISO 8510-1 for 90° peel of flexible-to-rigid assemblies) and hydrogel adhesion papers report more than the peak force and the area under the curve:
 
 | Quantity | Definition |
 |---|---|
-| Average (plateau) peel force F̄ | Mean force in the steady-state window, leaving out the initiation peak and the final release. ASTM D6862 records at least 76 mm of peel and disregards the first 25 mm; short gel strips use a fraction of the peeled length instead (default 20–80%, adjustable, or a custom mm range). Peak forces scatter much more than the plateau, so F̄ is the main result. |
-| Plateau SD, CV, min and max | Variability and stick–slip within the window (ISO 8510-1 reports max, min and average). |
+| Average peel force F̄ (steady state) | Mean force in the steady-state window, leaving out the initiation peak and the final release. ASTM D6862 records at least 76 mm of peel and disregards the first 25 mm; short gel strips use a fraction of the peeled length instead (default 20–80%, adjustable, or a custom mm range). Peak forces scatter much more than the plateau, so F̄ is the main result. |
+| Steady-state force SD, CV and range | Spread of the force points in the window: CV = SD / F̄ × 100%. A low CV (roughly below 10%) means a smooth, steady peel; a high CV means stick–slip, uneven bonding, or a window that still includes part of the initiation or the release (ISO 8510-1 reports max, min and average). |
 | Peel strength | F̄ / w, in N/m and N/mm. |
-| Apparent interfacial toughness Γ | Γ = F̄ / w · (1 − cos θ), in J/m²; at 90° this equals F̄ / w. Elastic stretching of the strip is neglected. (A 180° peel would give 2F̄/w.) |
-| Peak force, peak per width, initiation peak | Largest force overall (often the final release) and largest force before the steady state. |
-| Work and work per peeled area | W = ∫ F dδ (mJ); work to detachment / (w × peeled length) is an energy-based estimate that should be close to Γ for a steady peel. |
+| Peel energy G | G = F̄ / w · (1 − cos θ), in J/m²; at 90° this equals F̄ / w. The energy balance of a steady peel of a strip that does not stretch (Rivlin 1944; Kendall 1975, J. Phys. D 8, 1449, with the elastic term neglected), as used for the interfacial toughness of hydrogels in 90° peel (e.g. Yuk et al. 2016, Nature Materials 15, 190). A 180° peel would give 2F̄/w. Called “apparent interfacial toughness Γ” before version 1.10. |
+| Peak force (maximum), peak per width | Highest force anywhere in the run. In many gel strips this is the last rise before detachment, not the start of peeling. |
+| Initiation peak force | Highest force between the start of the run and the start of the steady-state window: the force needed to start the peel front. |
+| Area under the graph (work) and work per peeled area | W = ∫ F dδ (mJ) over the full curve, to detachment, and over a chosen range (Settings › Work: full curve, start to peak, **steady-state window**, or a custom mm range); work to detachment / (w × peeled length) is an energy-based estimate that should be close to Γ for a steady peel. |
 | Peeled length, detachment | End of peeling: force below 5% of the peak for 20 points (adjustable; a typed value overrides it). If none is found, the end of the recording is used and the run says so. |
 | Peel rate, angle, width, failure mode | Test conditions to report alongside the results. |
 
@@ -214,7 +215,7 @@ Project files carry a schema version, the app and algorithm versions, and are va
 | Automatic run exclusion, Keep/Exclude overrides, raw vs processed statistics | Implemented, tested (logic) and exercised in the browser |
 | Two-step sidebar (open, choose experiment) and tabs (Graph, Data analysis, Compare charge ratios, Settings, Files) | Implemented; exercised in Chromium at 1280 px width |
 | Lap Shear mode: runs, dimensions, strength, work, failure endpoint, baseline, statistics, Excel | Implemented and tested (synthetic cases with known answers); exercised in the browser with a real two-run lap-shear file |
-| 90° Peel mode: Script-section runs, gel dimensions, plateau force, peel strength, toughness, work, detachment, Excel | Implemented and tested (synthetic cases with known answers); exercised in the browser with a real peel file |
+| 90° Peel mode: Script-section runs, gel dimensions, average peel force, peel strength, peel energy, work, detachment, Excel | Implemented and tested (synthetic cases with known answers); exercised in the browser with a real peel file |
 | Separate files per test, remove files, per-test autosave and projects | Implemented and tested; older sessions are sorted into tests by file content |
 | Grouped statistics with run- and repeat-level variation | Implemented and tested |
 | Excel export with native charts | Implemented and tested; **verify in Microsoft Excel** |

@@ -22,7 +22,11 @@ export const INTEGRATION_LABEL = {
   full: 'Full curve',
   toPeak: 'Start to peak',
   custom: 'Custom displacement range',
+  window: 'Steady-state window',
 } as const;
+
+/** Integration choices of Lap Shear (the steady-state window exists only in 90° peel). */
+export const LAP_INTEGRATION_MODES = ['full', 'toPeak', 'custom'] as const;
 
 export const FAILURE_MODE_LABEL = {
   unspecified: 'Not specified',

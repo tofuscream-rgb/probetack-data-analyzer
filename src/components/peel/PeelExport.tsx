@@ -52,7 +52,7 @@ export function PeelExportDialog({ onClose }: { onClose: () => void }) {
       </fieldset>
       <fieldset>
         <legend>What to include</legend>
-        <label className="radio"><input type="checkbox" checked disabled /> <span><strong>Peel Summary</strong> <small>every run's plateau force, peel strength, toughness, peak, work, gel dimensions, failure mode, and mean ± SD</small></span></label>
+        <label className="radio"><input type="checkbox" checked disabled /> <span><strong>Peel Summary</strong> <small>every run's average peel force, peel strength, peel energy, peak, area under the graph, gel dimensions, failure mode, and mean ± SD</small></span></label>
         <label className="radio"><input type="checkbox" checked={chart} onChange={(e) => setChart(e.target.checked)} /> <span><strong>Peel Chart</strong> <small>editable Excel chart of peel force vs displacement</small></span></label>
         <label className="radio"><input type="checkbox" checked={runData} onChange={(e) => setRunData(e.target.checked)} /> <span><strong>One sheet per run</strong> <small>time, original position, displacement, original signed force, corrected force, peak, steady-state window, cumulative work ({points.toLocaleString()} rows in total)</small></span></label>
         <label className="radio"><input type="checkbox" checked disabled /> <span><strong>Analysis Settings</strong> <small>steady-state window, detachment, integration, baseline and formulas</small></span></label>

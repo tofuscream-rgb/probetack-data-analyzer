@@ -450,6 +450,10 @@ table.ls-table select { font-size: 12px; padding: 2px 4px; }
 .ls-h { font-size: 14px; margin-top: 8px; }
 table.ls-summary td:first-child { white-space: nowrap; }
 .ls-definitions p { margin: 4px 0; max-width: 120ch; }
+.ls-definitions > div { margin: 6px 0; max-width: 120ch; }
+.ls-definitions dt { font-weight: 700; display: inline; }
+.ls-definitions dt::after { content: ": "; }
+.ls-definitions dd { display: inline; margin: 0; }
 .main-body.tab-summary { padding: 10px 12px; }
 
 /* per-test file list, peel */

@@ -1,6 +1,6 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.10.0';
+export const APP_VERSION = '1.11.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.1.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
@@ -148,6 +148,11 @@ export interface AnalysisSettings {
   runExclusion: RunExclusionSettings;
   /** Advanced: automatic exclusion of individual points inside a run. */
   exclusionRule: ExclusionRule;
+  /**
+   * Probe and gel layer for the nominal stress–strain curve (Creton & Ciccotti 2016):
+   * σN = F / Amax with Amax = π (d / 2)² of a flat probe, ε = Δh / h₀. 0 = not entered.
+   */
+  probe: { diameterMm: number; thicknessMm: number };
 }
 
 export interface MetaOverride {

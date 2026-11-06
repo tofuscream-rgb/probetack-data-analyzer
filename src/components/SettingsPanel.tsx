@@ -5,6 +5,7 @@ import { QC_LABEL } from '../analysis/pointOutliers';
 import type { AnalysisSettings, ForceSign, GroupKey, PeakMetric, QCClass } from '../types';
 import { defaultSettings } from '../state/defaults';
 import { Section } from './common';
+import { ProbeFields } from './ProbeFields';
 
 function Num({ label, value, onChange, step = 0.1, min, max, help }: { label: string; value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number; help?: string }) {
   return (
@@ -121,6 +122,17 @@ export function SettingsPanel() {
             </div>
           )}
           <p className="note">The baseline region is never chosen automatically. Raw forces are kept; corrected values appear separately.</p>
+        </Section>
+
+        <Section title="Stress–strain curve (probe and gel)">
+          <div className="pair">
+            <ProbeFields />
+          </div>
+          <p className="note">
+            For the nominal stress–strain curve (Graph tab, Stress–strain): σN = F / Amax, where Amax = π (d/2)² is the contact area of the flat probe, and
+            ε = (h − h₀) / h₀, where h − h₀ is the displacement of each run from its start (as set above) and h₀ the initial gel thickness. This follows
+            Creton &amp; Ciccotti, Rep. Prog. Phys. 79, 046601 (2016), eq. 9. Peak adhesion force results are not changed.
+          </p>
         </Section>
 
         <Section title="Advanced: single-point screening" open={false}>

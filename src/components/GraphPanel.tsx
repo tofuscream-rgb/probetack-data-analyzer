@@ -3,7 +3,8 @@ import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { useApp, useGraphActions, download } from '../state/AppContext';
 import { useExperiment } from '../state/experiment';
 import { PlotlyChart, loadPlotly } from '../plotting/PlotlyChart';
-import { axisLabel, axisOptions, axisValues } from '../plotting/axes';
+import { axisLabel, axisOptions, axisValues, needsProbe } from '../plotting/axes';
+import { ProbeFields } from './ProbeFields';
 import { lttbIndices } from '../plotting/downsample';
 import { EXPORT_SIZE, LINE, figAxis, figLayout } from '../plotting/figureStyle';
 import { CURVE_COLORS } from '../plotting/colors';
@@ -37,6 +38,8 @@ export function GraphPanel() {
   const pos = s.forceSign === 'positive';
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
   const multi = ex.graphFiles.length > 1;
+  const probeAxes = needsProbe(graph.x) || needsProbe(graph.y);
+  const probeMissing = (graph.x === 'strain' || graph.y === 'strain' ? !(s.probe.thicknessMm > 0) : false) || ([graph.x, graph.y].some((a) => a.startsWith('stress_')) ? !(s.probe.diameterMm > 0) : false);
 
   const extraCols = useMemo(() => [...new Set(ex.graphRuns.flatMap((r) => Object.keys(r.cycle.extra)))], [ex.graphRuns]);
   const options = axisOptions(s, extraCols);
@@ -162,6 +165,14 @@ export function GraphPanel() {
           </select>
         </label>
         <button className="link" onClick={() => setGraph({ x: graph.y, y: graph.x })} title="Swap X and Y">Swap axes</button>
+        <button
+          className={`small ${graph.x === 'strain' && graph.y.startsWith('stress_') ? 'on' : ''}`}
+          onClick={() => setGraph({ x: 'strain', y: 'stress_kPa' })}
+          title="Nominal stress σN = F / Amax vs nominal strain ε = Δh / h₀ (Creton & Ciccotti 2016)"
+        >
+          Stress–strain
+        </button>
+        <button className="small" onClick={() => setGraph({ x: 'disp_mm', y: 'force' })} title="Force vs displacement">Force–displacement</button>
         <label className="check" title={pos ? "Mark each run's peak adhesion force (▲)" : "Mark each run's minimum force (▼)"}>
           <input type="checkbox" checked={graph.showMarkers} onChange={(e) => setGraph({ showMarkers: e.target.checked })} /> {pos ? 'Peak marker' : 'Min marker'}
         </label>
@@ -176,6 +187,15 @@ export function GraphPanel() {
           <button className="small" onClick={exportGraphData} title="Plotted data with an editable Excel chart">XLSX</button>
         </div>
       </div>
+      {probeAxes && (
+        <div className="graph-toolbar integration-bar probe-bar">
+          <ProbeFields />
+          <span className="view-help">
+            σN = F / Amax, Amax = π (d/2)² of the flat probe · ε = Δh / h₀, Δh = displacement of each run from its start (Creton &amp; Ciccotti 2016, eq. 9).
+            {probeMissing ? ' Enter the probe diameter and gel thickness to draw the curve.' : ''}
+          </span>
+        </div>
+      )}
       <p className="view-help">
         Drag to zoom.{' '}
         {nExcluded > 0 ? `${nExcluded} of ${curves.length} run(s) are outliers left out of the averages${graph.showExcluded ? ' (grey dashed)' : ' and hidden'}.` : ''}

@@ -91,6 +91,23 @@ describe('peak extraction and units', () => {
     expect(GF_TO_N).toBe(0.00980665);
   });
 
+  it('gives the nominal stress–strain curve only when probe diameter and gel thickness are entered', async () => {
+    const l = await load([curve(40)]);
+    const p = defaultProject();
+    const r = derive([l], p).ordered[0];
+    expect(axisValues(r, 'stress_kPa', p.settings)).toBeNull(); // nothing guessed
+    expect(axisValues(r, 'strain', p.settings)).toBeNull();
+    p.settings.probe = { diameterMm: 4, thicknessMm: 2 };
+    const area = Math.PI * 2 * 2; // π (d/2)², mm²
+    const s = axisValues(r, 'stress_kPa', p.settings)!;
+    expect(s[50]).toBeCloseTo((-r.cycle.force_gf[50] * GF_TO_N / area) * 1000, 10); // adhesion positive, N/mm² × 1000 = kPa
+    expect(axisValues(r, 'stress_MPa', p.settings)![50]).toBeCloseTo(s[50] / 1000, 12);
+    const d = axisValues(r, 'disp_mm', p.settings)!;
+    const e = axisValues(r, 'strain', p.settings)!;
+    expect(e[30]).toBeCloseTo(d[30] / 2, 12);
+    expect(r.peakRaw).toBe(derive([l]).ordered[0].peakRaw); // results unchanged
+  });
+
   it('defines displacement relative to the first z of the movement', () => {
     const z = [10, 9.5, 9, 8];
     expect(Array.from(displacement(z, 'signed'))).toEqual([0, -0.5, -1, -2]);

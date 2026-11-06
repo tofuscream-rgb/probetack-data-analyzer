@@ -27,6 +27,21 @@ export function axisOptions(settings: AnalysisSettings, extraColumns: string[] =
     { id: 'time_s', label: 'Time (s)', description: 'Time since the start of the movement, as recorded.' },
     { id: 'z_mm', label: 'Absolute Z position (mm)', description: 'Position (z) column, as recorded.' },
     {
+      id: 'stress_kPa',
+      label: 'Nominal stress σN (kPa)',
+      description: `σN = F / Amax, with Amax = π (d/2)² of the flat probe (diameter d under Settings).${signNote} Creton & Ciccotti, Rep. Prog. Phys. 79, 046601 (2016), eq. 9.`,
+    },
+    {
+      id: 'stress_MPa',
+      label: 'Nominal stress σN (MPa)',
+      description: 'σN = F / Amax in MPa (N/mm²).',
+    },
+    {
+      id: 'strain',
+      label: 'Nominal strain ε',
+      description: 'ε = (h − h₀) / h₀: the displacement of each run divided by the initial gel thickness h₀ under Settings.',
+    },
+    {
       id: 'disp_mm',
       label: settings.displacementMode === 'distance' ? 'Displacement from start (mm)' : 'Relative Z displacement (mm)',
       description: `Displacement = ${DISPLACEMENT_LABEL[settings.displacementMode]}, where z₀ is the first recorded z of each run, so every run starts at 0.`,
@@ -60,11 +75,32 @@ export function axisValues(r: CycleResult, id: string, settings: AnalysisSetting
       return c.z_mm.length ? c.z_mm : null;
     case 'disp_mm':
       return c.z_mm.length ? displacement(c.z_mm, settings.displacementMode) : null;
+    case 'stress_kPa':
+    case 'stress_MPa': {
+      const a = probeAreaMm2(settings);
+      if (!a) return null;
+      const k = (GF_TO_N / a) * sign * (id === 'stress_kPa' ? 1000 : 1); // N/mm² = MPa
+      return c.force_gf.map((v) => v * k);
+    }
+    case 'strain': {
+      const h0 = settings.probe?.thicknessMm;
+      if (!c.z_mm.length || !(h0 > 0)) return null;
+      return displacement(c.z_mm, settings.displacementMode).map((d) => d / h0);
+    }
     default:
       if (id.startsWith('extra:')) return c.extra[id.slice(6)] ?? null;
       return null;
   }
 }
+
+/** Contact area of the flat probe, π (d/2)² in mm², or null when no diameter is entered. */
+export function probeAreaMm2(settings: Pick<AnalysisSettings, 'probe'>): number | null {
+  const d = settings.probe?.diameterMm;
+  return d > 0 && Number.isFinite(d) ? Math.PI * (d / 2) ** 2 : null;
+}
+
+/** Axes that need the probe diameter or gel thickness. */
+export const needsProbe = (id: string) => id.startsWith('stress_') || id === 'strain';
 
 export function isForceAxis(id: string): boolean {
   return id.startsWith('force');

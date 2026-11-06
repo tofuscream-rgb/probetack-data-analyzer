@@ -25,6 +25,7 @@ export function defaultSettings(): AnalysisSettings {
     },
     runExclusion: { excludeClasses: ['red', 'orange'] },
     exclusionRule: 'keepAll', // advanced: point-level exclusion inside a run
+    probe: { diameterMm: 0, thicknessMm: 0 }, // entered by the user for the stress–strain curve; never guessed
   };
 }
 

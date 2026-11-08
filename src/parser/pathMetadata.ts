@@ -7,6 +7,8 @@
  *   "0.25 (2.5M)/Glass/30s.txt" or "2.5 M/0.25/Glass/30s.txt"
  *       -> concentration 2.5 M taken from the folder name
  *   "CR 0.75/Gel B/PTFE/1s-3.txt" -> charge ratio 0.75, gel "Gel B", substrate PTFE
+ *   "after conference/stainless steel/0.75/1s.txt" -> the substrate folder may also sit
+ *       above the gel folder (substrate first, then charge ratio); both orders are read
  *
  * Every value records where it came from, so the interface can show which
  * values are defaults or guesses and let the user correct them.
@@ -119,13 +121,17 @@ export function inferMetadata(path: string): ExperimentMeta {
     if (numbered && numbered[1]) fileRepeat = Number(numbered[2]);
   }
 
-  // If no keyword matched, assume the folder that directly contains the file
-  // is the substrate when it sits below a recognized charge-ratio folder.
-  if (substrate.value === null && parts.length >= 2) {
+  // If no keyword matched, assume the substrate from folder position, in either layout:
+  //   gel first:       .../0.25 2.5M/<substrate>/file  -> the folder that contains the file
+  //   substrate first: .../<substrate>/0.75/file       -> the folder above the gel folder
+  // The top folder (the one picked for import, e.g. "after conference") is never taken.
+  if (substrate.value === null && parts.length >= 2 && used.size > 0) {
     const parentIdx = parts.length - 1;
-    if (!used.has(parentIdx) && used.size > 0) {
-      substrate = field(parts[parentIdx], 'path');
-      notes.push(`Substrate "${parts[parentIdx]}" was assumed from folder position; please check.`);
+    const aboveIdx = Math.min(...used) - 1;
+    const idx = !used.has(parentIdx) ? parentIdx : aboveIdx >= 1 && !used.has(aboveIdx) ? aboveIdx : -1;
+    if (idx >= 0) {
+      substrate = field(parts[idx], 'path');
+      notes.push(`Substrate "${parts[idx]}" was assumed from folder position; please check.`);
     }
   }
 

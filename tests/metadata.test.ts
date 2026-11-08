@@ -62,6 +62,20 @@ describe('folder and file name metadata', () => {
     expect(m.substrate.value).toBe('Mica');
     expect(m.notes.join(' ')).toMatch(/assumed from folder position/);
   });
+
+  it('reads both folder orders: gel then substrate, and substrate then gel', () => {
+    const gelFirst = inferMetadata('probe tack October/0.25 2.5M/glass/1s.txt');
+    expect([gelFirst.chargeRatio.value, gelFirst.concentrationM.value, gelFirst.substrate.value]).toEqual([0.25, 2.5, 'glass']);
+    const subFirst = inferMetadata('after conference/stainless steel/0.75/30s-2.txt');
+    expect([subFirst.chargeRatio.value, subFirst.concentrationM.value, subFirst.substrate.value, subFirst.nominalHoldS.value, subFirst.repeat.value]).toEqual([0.75, 2.1, 'stainless steel', 30, 2]);
+    expect(subFirst.concentrationM.source).toBe('default'); // no concentration in the old folder names
+    expect(inferMetadata('after conference/SS/1.05 2.5M/1s.txt').substrate.value).toBe('SS');
+    // A substrate name that is not a known word, in either order:
+    expect(inferMetadata('after conference/Nitrile/0.75/1s.txt').substrate.value).toBe('Nitrile');
+    expect(inferMetadata('probe tack October/0.25 2.5M/Nitrile/1s.txt').substrate.value).toBe('Nitrile');
+    // The folder picked for import is not taken as a substrate.
+    expect(inferMetadata('probe tack October/0.75/1s.txt').substrate.value).toBeNull();
+  });
 });
 
 describe('lap-shear and peel folder layouts', () => {

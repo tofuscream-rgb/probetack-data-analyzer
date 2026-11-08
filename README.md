@@ -47,6 +47,7 @@ The small ticks next to each file show its runs, coloured by flag. A hollow tick
 | `0.25/Glass/60s-2.txt` | charge ratio 0.25, substrate Glass, hold 60 s, Repeat 2 |
 | `0.25 (2.5M)/Glass/30s.txt` or `2.5 M/0.25/Glass/30s.txt` | concentration 2.5 M |
 | `CR 0.75/Gel B/PTFE/1s-3.txt` | charge ratio 0.75, substrate PTFE, Repeat 3 |
+| `probe tack October/0.25 2.5M/glass/1s.txt` (gel, then substrate) or `after conference/stainless steel/0.75/1s.txt` (substrate, then gel) | both orders are read: charge ratio, concentration (2.1 M default if none), substrate. A substrate folder whose name is not a known material word is taken from its position next to the charge-ratio folder and marked “please check”; the top folder you picked for import is never used as the substrate. |
 | `60s.txt` | Repeat 1. `60s-2.txt`, `60s-3.txt` are separate repeats (Repeat 2, Repeat 3), never merged. |
 | `peel 2026 Oct/0.25 2.98M 90/glass.txt` | charge ratio 0.25, concentration 2.98 M, substrate glass (named in the file; a trailing number such as a peel angle in the folder name is ignored) |
 | `0.5/PET-2.txt` | charge ratio 0.5, substrate PET, Repeat 2 |

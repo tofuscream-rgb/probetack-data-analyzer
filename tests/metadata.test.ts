@@ -73,6 +73,11 @@ describe('folder and file name metadata', () => {
     // A substrate name that is not a known word, in either order:
     expect(inferMetadata('after conference/Nitrile/0.75/1s.txt').substrate.value).toBe('Nitrile');
     expect(inferMetadata('probe tack October/0.25 2.5M/Nitrile/1s.txt').substrate.value).toBe('Nitrile');
+    // A letter before the charge ratio ("f1.05"), as in some older folders.
+    const f = inferMetadata('After conference/ss/f1.05/1s_new.txt');
+    expect([f.chargeRatio.value, f.substrate.value, f.nominalHoldS.value]).toEqual([1.05, 'ss', 1]);
+    expect(inferMetadata('After conference/glass/F0.25 2.5M/30s.txt').chargeRatio.value).toBe(0.25);
+    expect(inferMetadata('data/v2/glass/1s.txt').chargeRatio.value).toBeNull(); // a version number is not a charge ratio
     // The folder picked for import is not taken as a substrate.
     expect(inferMetadata('probe tack October/0.75/1s.txt').substrate.value).toBeNull();
   });

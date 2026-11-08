@@ -32,7 +32,7 @@ export function findConcentration(text: string): number | null {
   return v > 0 && v < 20 ? v : null;
 }
 
-/** Charge ratio: a bare number folder ("0.25", "1.05") or "CR 0.25", "ratio 0.5", "R=0.75". */
+/** Charge ratio: a bare number folder ("0.25", "1.05"), "CR 0.25", "ratio 0.5", "R=0.75", or one letter before a decimal number ("f1.05"). */
 export function findChargeRatio(segment: string): number | null {
   const withoutConc = segment
     .replace(/(?<![\d.])(\d+(?:\.\d+)?)\s*(?:M(?![a-zA-Z])|mol\s*\/\s*L\b|mol\s*L-1\b|molar\b)/g, ' ')
@@ -45,6 +45,12 @@ export function findChargeRatio(segment: string): number | null {
   }
   if (/^\d*\.?\d+$/.test(withoutConc)) {
     const v = Number(withoutConc);
+    if (v > 0 && v <= 10) return v;
+  }
+  // "f1.05", "F0.25", "f 0.5": a single letter before a decimal number (whole numbers such as "v2" are not taken).
+  const prefixed = withoutConc.match(/^[a-z][\s_-]?(\d*\.\d+)$/i);
+  if (prefixed) {
+    const v = Number(prefixed[1]);
     if (v > 0 && v <= 10) return v;
   }
   // "0.25 2.98M 90": a leading number next to a concentration is the charge ratio

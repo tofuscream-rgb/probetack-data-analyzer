@@ -48,6 +48,7 @@ The small ticks next to each file show its runs, coloured by flag. A hollow tick
 | `0.25 (2.5M)/Glass/30s.txt` or `2.5 M/0.25/Glass/30s.txt` | concentration 2.5 M |
 | `CR 0.75/Gel B/PTFE/1s-3.txt` | charge ratio 0.75, substrate PTFE, Repeat 3 |
 | `After conference/ss/f1.05/1s_new.txt` | charge ratio 1.05 (one letter before a decimal number is allowed), substrate ss, hold 1 s |
+| `f=0.5`, `f= 0.5`, `f: 0.5`, `F 0.50`, `f_0.5`, `CR=0.5`, `cr0.5`, `ratio_0.5`, `charge ratio 0.5`, `gel 1.05`, `0,5` (decimal comma) | charge ratio 0.5 (or 1.05), in a folder name, or in the file name when no folder gives one (`f= 0.5 glass.txt` → charge ratio 0.5, substrate glass). Unlabelled numbers in file names (`1s`, `60s-2`, `trial 70n`) are never read as a charge ratio. |
 | `probe tack October/0.25 2.5M/glass/1s.txt` (gel, then substrate) or `after conference/stainless steel/0.75/1s.txt` (substrate, then gel) | both orders are read: charge ratio, concentration (2.1 M default if none), substrate. A substrate folder whose name is not a known material word is taken from its position next to the charge-ratio folder and marked “please check”; the top folder you picked for import is never used as the substrate. |
 | `60s.txt` | Repeat 1. `60s-2.txt`, `60s-3.txt` are separate repeats (Repeat 2, Repeat 3), never merged. |
 | `peel 2026 Oct/0.25 2.98M 90/glass.txt` | charge ratio 0.25, concentration 2.98 M, substrate glass (named in the file; a trailing number such as a peel angle in the folder name is ignored) |

@@ -84,6 +84,17 @@ describe('folder and file name metadata', () => {
       expect(cr(g)).toEqual([v, v]);
     }
     for (const g of ['0.5mm', '1.5s', '0.5 N', 'v2']) expect(cr(g)).toEqual([null, null]); // units and versions are not charge ratios
+    // "f=" and other labelled forms, decimal commas, in folders or in the file name.
+    for (const g of ['f= 0.5', 'f=0.5', 'f = 0.5', 'F=0.5', 'f: 0.5', 'f=.5', 'f=0,5', 'f0,5', '0,5', 'f=0.5 (2.5M)', 'f=0.5, 2.5M', 'gel f=0.5', 'CR=0.5', 'cr0.5', 'charge ratio=0.5', 'ratio_0.5', 'f=0.5_glass']) {
+      expect(cr(g)).toEqual([0.5, 0.5]);
+    }
+    expect(cr('f = 1')).toEqual([1, 1]);
+    expect(inferMetadata('x/f=0.5 2,5M/glass/1s.txt').concentrationM.value).toBe(2.5);
+    const file = inferMetadata('peel Oct/f= 0.5 glass.txt');
+    expect([file.chargeRatio.value, file.chargeRatio.source, file.substrate.value]).toEqual([0.5, 'filename', 'glass']);
+    expect(inferMetadata('peel Oct/glass f=0.5-2.txt').repeat.value).toBe(2);
+    for (const f of ['1s', '60s-2', 'trial 70n', 'PET-2', 'glass']) expect(inferMetadata(`peel Oct/glass/${f}.txt`).chargeRatio.value).toBeNull(); // file names without a label
+    expect(inferMetadata('x/Gel 2/glass/1s.txt').chargeRatio.value).toBeNull(); // gel number, not a charge ratio
     // The folder picked for import is not taken as a substrate.
     expect(inferMetadata('probe tack October/0.75/1s.txt').substrate.value).toBeNull();
   });

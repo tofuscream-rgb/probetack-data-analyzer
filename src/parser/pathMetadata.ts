@@ -7,6 +7,7 @@
  *   "0.25 (2.5M)/Glass/30s.txt" or "2.5 M/0.25/Glass/30s.txt"
  *       -> concentration 2.5 M taken from the folder name
  *   "CR 0.75/Gel B/PTFE/1s-3.txt" -> charge ratio 0.75, gel "Gel B", substrate PTFE
+ *   "glass/f=0.5/1s.txt", "f= 0.5 glass.txt", "CR 0.5", "f1.05", "0,5" -> charge ratio (see findChargeRatio)
  *   "after conference/stainless steel/0.75/1s.txt" -> the substrate folder may also sit
  *       above the gel folder (substrate first, then charge ratio); both orders are read
  *
@@ -24,51 +25,65 @@ const SUBSTRATE_WORDS = [
 
 const field = <T>(value: T | null, source: MetaSource): MetaField<T> => ({ value, source });
 
-/** Concentration like "2.5M", "2.5 M", "2.5 mol/L", "2.5mol L-1". Uppercase M only, to avoid mm/min. */
+/** "0,5" → "0.5" (decimal comma between digits). */
+const decimalPoint = (t: string) => t.replace(/(\d),(\d)/g, '$1.$2');
+
+/** Concentration like "2.5M", "2,5 M", "2.5 mol/L", "2.5mol L-1". Uppercase M only, to avoid mm/min. */
 export function findConcentration(text: string): number | null {
-  const m = text.match(/(?<![\d.])(\d+(?:\.\d+)?)\s*(?:M(?![a-zA-Z])|mol\s*\/\s*L\b|mol\s*L-1\b|molar\b)/);
+  const m = decimalPoint(text).match(/(?<![\d.])(\d+(?:\.\d+)?)\s*(?:M(?![a-zA-Z])|mol\s*\/\s*L\b|mol\s*L-1\b|molar\b)/);
   if (!m) return null;
   const v = Number(m[1]);
   return v > 0 && v < 20 ? v : null;
 }
 
-/** Charge ratio: a bare number folder ("0.25", "1.05"), "CR 0.25", "ratio 0.5", "R=0.75", or one letter before a decimal number ("f1.05"). */
-export function findChargeRatio(segment: string): number | null {
-  const withoutConc = segment
-    .replace(/(?<![\d.])(\d+(?:\.\d+)?)\s*(?:M(?![a-zA-Z])|mol\s*\/\s*L\b|mol\s*L-1\b|molar\b)/g, ' ')
-    .replace(/[()[\]{}]/g, ' ')
-    .trim();
-  const labelled = withoutConc.match(/(?:charge[\s_-]*ratio|ratio|\bcr|\br|\bgel)\s*[=:_ -]?\s*(\d*\.?\d+)/i);
-  if (labelled) {
-    const v = Number(labelled[1]);
-    if (v > 0 && v <= 10) return v;
-  }
-  if (/^\d*\.?\d+$/.test(withoutConc)) {
-    const v = Number(withoutConc);
-    if (v > 0 && v <= 10) return v;
-  }
-  // "f1.05", "F0.25", "f 0.5", "f1.05 new", "f1.05_2ndGel": one letter before a decimal number,
-  // optionally followed by other words; with "f" also a whole number ("f1"). "v2" is not taken.
-  const prefixed = withoutConc.match(/^([a-z])[\s_-]?(\d*\.\d+|\d+)(?=$|[\s_-])/i);
-  if (prefixed && (prefixed[2].includes('.') || prefixed[1].toLowerCase() === 'f')) {
-    const v = Number(prefixed[2]);
-    if (v > 0 && v <= 10) return v;
-  }
-  // "1.05f", "0.25 gel", "0.75_new": a decimal number at the start followed by letters or words.
-  const suffixed = withoutConc.match(/^(\d*\.\d+)(?=[a-z]|[\s_-]+[a-z])/i);
-  const unit = /^(\d*\.\d+)\s*(mm|cm|um|µm|m|s|sec|ms|min|h|n|kn|g|gf|kg|pa|kpa|mpa|hz|deg)(?![a-z])/i.test(withoutConc);
-  if (suffixed && !unit) {
-    const v = Number(suffixed[1]);
-    if (v > 0 && v <= 10) return v;
-  }
-  // "0.25 2.98M 90": a leading number next to a concentration is the charge ratio
-  // (later numbers, such as a peel angle, are ignored).
-  const lead = withoutConc.match(/^(\d*\.?\d+)\s/);
-  if (lead && withoutConc !== segment.trim()) {
-    const v = Number(lead[1]);
-    if (v > 0 && v <= 10) return v;
+const inRange = (v: number) => (v > 0 && v <= 10 ? v : null);
+/** A number directly followed by a unit (mm, s, N, …) is a length, time or force, not a charge ratio. */
+const UNIT_AFTER = String.raw`(?!\d|\.\d|\s*(?:mm|cm|um|µm|m|s|sec|ms|min|h|n|kn|g|gf|kg|pa|kpa|mpa|hz|deg|%)(?![a-z]))`;
+/**
+ * A labelled charge ratio anywhere in the text: "f=0.5", "f= 0.5", "f: 0.5", "F 0.50", "f_0.5", "f0.5",
+ * "CR=0.5", "cr0.5", "R=0.75", "ratio_0.5", "charge ratio 0.5", "gel 1.05". The label must not be part of
+ * a longer word ("half", "acrylic"). Whole numbers are taken after f, cr, r, ratio ("f=1"), not after gel ("Gel 2").
+ */
+function labelledChargeRatio(text: string): number | null {
+  const re = new RegExp(String.raw`(?<![a-z0-9])(charge[\s_-]*ratio|ratio|cr|r|f|gel)\s*[=:_-]?\s*(\d*\.\d+|\d+)` + UNIT_AFTER, 'gi');
+  for (const m of text.matchAll(re)) {
+    if (m[1].toLowerCase() === 'gel' && !m[2].includes('.')) continue;
+    const v = inRange(Number(m[2]));
+    if (v !== null) return v;
   }
   return null;
+}
+
+/**
+ * Charge ratio of a folder name: a labelled value (see above), a bare number ("0.25", "1.05", "0,5"),
+ * one letter before a decimal number ("x1.05"), or a decimal number before words ("1.05f", "0.25 gel",
+ * "0.25 2.98M 90": a leading number next to a concentration).
+ */
+export function findChargeRatio(segment: string): number | null {
+  const seg = decimalPoint(segment);
+  const withoutConc = seg
+    .replace(/(?<![\d.])(\d+(?:\.\d+)?)\s*(?:M(?![a-zA-Z])|mol\s*\/\s*L\b|mol\s*L-1\b|molar\b)/g, ' ')
+    .replace(/[()[\]{},;]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const labelled = labelledChargeRatio(withoutConc);
+  if (labelled !== null) return labelled;
+  if (/^\d*\.?\d+$/.test(withoutConc)) return inRange(Number(withoutConc));
+  // One letter before a decimal number, optionally followed by other words ("x1.05 new"). "v2" is not taken.
+  const prefixed = withoutConc.match(new RegExp(String.raw`^[a-z][\s_-]?(\d*\.\d+)` + UNIT_AFTER + String.raw`(?=$|[\s_-])`, 'i'));
+  if (prefixed) return inRange(Number(prefixed[1]));
+  // A decimal number at the start followed by letters or words ("1.05f", "0.25 gel", "0.75_new").
+  const suffixed = withoutConc.match(new RegExp(String.raw`^(\d*\.\d+)` + UNIT_AFTER + String.raw`(?=[a-z]|[\s_-]+[a-z])`, 'i'));
+  if (suffixed) return inRange(Number(suffixed[1]));
+  // "0.25 2.98M 90": a leading number next to a concentration (later numbers, such as a peel angle, are ignored).
+  const lead = withoutConc.match(/^(\d*\.?\d+)\s/);
+  if (lead && withoutConc !== seg.trim()) return inRange(Number(lead[1]));
+  return null;
+}
+
+/** Charge ratio written in a file name: only labelled values ("f=0.5 glass.txt", "CR 0.5 1s.txt"), never bare numbers. */
+export function findChargeRatioInFileName(stem: string): number | null {
+  return labelledChargeRatio(decimalPoint(stem).replace(/[()[\]{},;]/g, ' '));
 }
 
 /** Holding time from a file base name such as "60s", "1s", "2min", "500ms". */
@@ -131,7 +146,13 @@ export function inferMetadata(path: string): ExperimentMeta {
   const fileBase = numbered && numbered[1] ? numbered[1] : stem;
   let fileRepeat: number | null = null;
   if (substrate.value === null && findHoldTime(fileBase) === null && SUBSTRATE_WORDS.some((w) => new RegExp(`(^|[^a-z])${w}([^a-z]|$)`).test(fileBase.toLowerCase()))) {
-    substrate = field(fileBase, 'filename');
+    // "f= 0.5 glass" → "glass": the charge ratio and concentration are not part of the substrate name.
+    const name = decimalPoint(fileBase)
+      .replace(new RegExp(String.raw`(?<![a-z0-9])(charge[\s_-]*ratio|ratio|cr|r|f|gel)\s*[=:_-]?\s*(\d*\.\d+|\d+)`, 'gi'), ' ')
+      .replace(/(?<![\d.])(\d+(?:\.\d+)?)\s*(?:M(?![a-zA-Z])|mol\s*\/\s*L\b)/g, ' ')
+      .replace(/^[\s_,;-]+|[\s_,;-]+$/g, '')
+      .replace(/\s+/g, ' ');
+    substrate = field(name || fileBase, 'filename');
     if (numbered && numbered[1]) fileRepeat = Number(numbered[2]);
   }
 
@@ -147,6 +168,12 @@ export function inferMetadata(path: string): ExperimentMeta {
       substrate = field(parts[idx], 'path');
       notes.push(`Substrate "${parts[idx]}" was assumed from folder position; please check.`);
     }
+  }
+
+  // Charge ratio written in the file name ("f=0.5 glass.txt") when no folder gives one.
+  if (chargeRatio.value === null) {
+    const fileCr = findChargeRatioInFileName(stem);
+    if (fileCr !== null) chargeRatio = field(fileCr, 'filename');
   }
 
   const fileConc = findConcentration(stem);

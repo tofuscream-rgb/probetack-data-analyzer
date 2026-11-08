@@ -88,6 +88,7 @@ export function defaultPeel(): PeelState {
     tab: 'graph',
     compare: { substrates: null, chargeRatios: null, concentrations: null, holdTimes: null, hiddenSets: [], order: 'desc', metric: 'toughness' },
     disabledFiles: [],
+    pick: { chargeRatio: null, concentration: null, substrate: null },
   };
 }
 

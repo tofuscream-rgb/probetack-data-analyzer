@@ -15,12 +15,14 @@ export interface PickableRun {
  * Step 2 of Lap Shear and 90° Peel: tick any number of files (all their runs) or
  * single runs to graph and analyse. Files can be filtered by name and expanded to their runs.
  */
-export function RunPicker({ files, runs, selectedIds, setSelected, hint }: {
+export function RunPicker({ files, runs, selectedIds, setSelected, hint, nameOf }: {
   files: LoadedFile[];
   runs: PickableRun[];
   selectedIds: string[];
   setSelected: (ids: string[]) => void;
   hint: string;
+  /** Name shown for a file (default: its full path). */
+  nameOf?: (l: LoadedFile) => string;
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -58,7 +60,7 @@ export function RunPicker({ files, runs, selectedIds, setSelected, hint }: {
                   aria-label={`Analyse ${l.parsed.name}`}
                 />
                 <button className="disclose" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [l.parsed.fileId]: !isOpen }))}>
-                  <span className="caret">{isOpen ? '▾' : '▸'}</span> <span className="fl-name">{l.parsed.path}</span>
+                  <span className="caret">{isOpen ? '▾' : '▸'}</span> <span className="fl-name">{nameOf ? nameOf(l) : l.parsed.path}</span>
                 </button>
                 <small>{n}/{ids.length} run{ids.length === 1 ? '' : 's'}</small>
               </div>

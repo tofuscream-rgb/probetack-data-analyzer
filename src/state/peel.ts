@@ -7,7 +7,8 @@ import { useApp } from './AppContext';
 import { uniqueFileNames } from './experiment';
 import { runCondition, runLabels, type RunCondition } from '../analysis/runCompare';
 import { analyzePeelCycle, type PeelResult } from '../analysis/peel';
-import type { Cycle, ParsedFile, PeelRunMeta, PeelSettings, PeelState } from '../types';
+import { matchesPick, normalizePick, pickOptions } from '../analysis/experimentPick';
+import type { Cycle, ExperimentPick, ParsedFile, PeelRunMeta, PeelSettings, PeelState } from '../types';
 
 export interface PeelRun {
   id: string;
@@ -62,8 +63,17 @@ export function usePeel() {
   }, [files, meta, ps]);
 
   const valid = runs.filter((r) => r.result.ok);
-  const selectedIds = ps.selected === null ? valid.map((r) => r.id) : ps.selected.filter((id) => runs.some((r) => r.id === id));
-  const selected = runs.filter((r) => selectedIds.includes(r.id));
+  // "Choose your experiment": only runs of the chosen charge ratio, concentration and substrate are shown.
+  const conds = useMemo(() => runs.map((r) => r.cond), [runs]);
+  const pick = useMemo(() => normalizePick(conds, ps.pick), [conds, ps.pick]);
+  const options = useMemo(() => pickOptions(conds, pick), [conds, pick]);
+  const picked = useMemo(() => runs.filter((r) => matchesPick(r.cond, pick)), [runs, pick]);
+  /** Ticked runs of every experiment (used by Compare charge ratios). */
+  const selectedAllIds = ps.selected === null ? valid.map((r) => r.id) : ps.selected.filter((id) => runs.some((r) => r.id === id));
+  const selectedAll = runs.filter((r) => selectedAllIds.includes(r.id));
+  /** Ticked runs of the chosen experiment (graph, results, gel dimensions, export). */
+  const selected = picked.filter((r) => selectedAllIds.includes(r.id));
+  const selectedIds = selected.map((r) => r.id);
 
   const set = useCallback((patch: Partial<PeelState>) => update((p) => ({ ...p, peel: { ...p.peel, ...patch } })), [update]);
   const setSettings = useCallback(
@@ -80,6 +90,15 @@ export function usePeel() {
     [update],
   );
   const setSelected = useCallback((ids: string[]) => set({ selected: ids }), [set]);
+  /** Tick runs of the chosen experiment; ticks of other experiments are kept. */
+  const setPickedSelected = useCallback(
+    (ids: string[]) => {
+      const inPick = new Set(picked.map((r) => r.id));
+      set({ selected: [...selectedAllIds.filter((id) => !inPick.has(id)), ...ids] });
+    },
+    [picked, selectedAllIds, set],
+  );
+  const setPick = useCallback((patch: Partial<ExperimentPick>) => set({ pick: normalizePick(conds, { ...pick, ...patch }) }), [conds, pick, set]);
 
-  return { ps, runs, valid, selected, selectedIds, set, setSettings, setMeta, setSelected };
+  return { ps, runs, valid, picked, pick, options, setPick, selected, selectedIds, selectedAll, set, setSettings, setMeta, setSelected, setPickedSelected };
 }

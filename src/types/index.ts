@@ -1,6 +1,6 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.11.0';
+export const APP_VERSION = '1.12.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.1.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
@@ -353,6 +353,15 @@ export interface PeelState {
   tab: RunTab;
   compare: RunCompareSelection;
   disabledFiles: string[];
+  /** "Choose your experiment": charge ratio, concentration and substrate shown (null = all). */
+  pick: ExperimentPick;
+}
+
+/** Dropdown choice of an experiment (values as in RunCondition; substrate in lower case; null = all). */
+export interface ExperimentPick {
+  chargeRatio: string | null;
+  concentration: string | null;
+  substrate: string | null;
 }
 
 export interface ProjectState {

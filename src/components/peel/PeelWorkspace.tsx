@@ -11,8 +11,9 @@ import { PEEL_PROPERTIES } from '../../analysis/peel';
 const METRICS = PEEL_PROPERTIES.map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: p.digits }));
 
 function PeelCompare() {
-  const { ps, selected, set } = usePeel();
-  const items = selected.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, values: Object.fromEntries(PEEL_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
+  const { ps, selectedAll, set } = usePeel();
+  // Compare uses the ticked runs of every experiment; it has its own substrate / charge ratio choices.
+  const items = selectedAll.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, values: Object.fromEntries(PEEL_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
   return (
     <RunCompare
       items={items}

@@ -172,3 +172,29 @@ describe('peel work in the steady-state window', () => {
     expect(win.toughnessJm2).toBeCloseTo(full.toughnessJm2, 9);
   });
 });
+
+describe('90° peel: choose your experiment', () => {
+  it('cascades charge ratio → concentration → substrate, with "all" for each', async () => {
+    const { pickOptions, matchesPick, normalizePick } = await import('../src/analysis/experimentPick');
+    const c = (chargeRatio: string, concentration: string, substrate: string, concentrationDefault = false) => ({ chargeRatio, concentration, concentrationDefault, substrate, hold: '—' });
+    const conds = [c('0.25', '2.5', 'glass'), c('0.25', '2.98', 'PET'), c('0.25', '2.98', 'Glass'), c('1.05', '2.1', 'ss', true), c('—', '2.1', 'ss', true)];
+    const all = { chargeRatio: null, concentration: null, substrate: null };
+    const o = pickOptions(conds, all);
+    expect(o.chargeRatios.map((x) => x.label)).toEqual(['0.25', '1.05', 'unknown']);
+    expect(o.substrates.map((x) => x.value)).toEqual(['glass', 'pet', 'ss']); // "glass" and "Glass" are one substrate
+    const cr = pickOptions(conds, { ...all, chargeRatio: '0.25' });
+    expect(cr.concentrations.map((x) => x.label)).toEqual(['2.5 M', '2.98 M']);
+    expect(pickOptions(conds, { ...all, chargeRatio: '1.05' }).concentrations.map((x) => x.label)).toEqual(['2.1 M (default)']);
+    expect(pickOptions(conds, { chargeRatio: '0.25', concentration: '2.5', substrate: null }).substrates.map((x) => x.label)).toEqual(['glass']);
+    const p = { chargeRatio: '0.25', concentration: '2.98', substrate: 'glass' };
+    expect(conds.map((x) => matchesPick(x, p))).toEqual([false, false, true, false, false]);
+    // Choosing another charge ratio drops a concentration and substrate not measured there.
+    expect(normalizePick(conds, { ...p, chargeRatio: '1.05' })).toEqual({ chargeRatio: '1.05', concentration: null, substrate: null });
+  });
+
+  it('older projects show every experiment', async () => {
+    const { migrateState } = await import('../src/storage/project');
+    expect(migrateState({}).peel.pick).toEqual({ chargeRatio: null, concentration: null, substrate: null });
+    expect(migrateState({ peel: { pick: { chargeRatio: '0.25', concentration: 3, substrate: 'glass' } } as never }).peel.pick).toEqual({ chargeRatio: '0.25', concentration: null, substrate: 'glass' });
+  });
+});

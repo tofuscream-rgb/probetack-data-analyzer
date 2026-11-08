@@ -151,6 +151,11 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
       defaults: { ...d.settings.defaults, ...(s.defaults ?? {}) },
     },
     runs,
+    pick: {
+      chargeRatio: typeof r.pick?.chargeRatio === 'string' ? r.pick.chargeRatio : null,
+      concentration: typeof r.pick?.concentration === 'string' ? r.pick.concentration : null,
+      substrate: typeof r.pick?.substrate === 'string' ? r.pick.substrate : null,
+    },
     selected: Array.isArray(r.selected) ? r.selected : null,
     fileId: typeof r.fileId === 'string' ? r.fileId : null,
     view: migrateView(d.view, r.view),

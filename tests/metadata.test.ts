@@ -78,6 +78,12 @@ describe('folder and file name metadata', () => {
     expect([f.chargeRatio.value, f.substrate.value, f.nominalHoldS.value]).toEqual([1.05, 'ss', 1]);
     expect(inferMetadata('After conference/glass/F0.25 2.5M/30s.txt').chargeRatio.value).toBe(0.25);
     expect(inferMetadata('data/v2/glass/1s.txt').chargeRatio.value).toBeNull(); // a version number is not a charge ratio
+    // Other ways the gel folder may be written, in either folder order:
+    const cr = (g: string) => [inferMetadata(`After conference/ss/${g}/1s.txt`).chargeRatio.value, inferMetadata(`Oct/${g}/ss/1s.txt`).chargeRatio.value];
+    for (const [g, v] of [['f0.25', 0.25], ['F0.5', 0.5], ['f 0.75', 0.75], ['f_1.05', 1.05], ['f1', 1], ['f1.05 new', 1.05], ['f1.05_2ndGel', 1.05], ['gel 1.05', 1.05], ['Gel0.25', 0.25], ['1.05f', 1.05], ['0.25 gel', 0.25], ['f0.25(2.5M)', 0.25]] as const) {
+      expect(cr(g)).toEqual([v, v]);
+    }
+    for (const g of ['0.5mm', '1.5s', '0.5 N', 'v2']) expect(cr(g)).toEqual([null, null]); // units and versions are not charge ratios
     // The folder picked for import is not taken as a substrate.
     expect(inferMetadata('probe tack October/0.75/1s.txt').substrate.value).toBeNull();
   });

@@ -38,7 +38,7 @@ export function findChargeRatio(segment: string): number | null {
     .replace(/(?<![\d.])(\d+(?:\.\d+)?)\s*(?:M(?![a-zA-Z])|mol\s*\/\s*L\b|mol\s*L-1\b|molar\b)/g, ' ')
     .replace(/[()[\]{}]/g, ' ')
     .trim();
-  const labelled = withoutConc.match(/(?:charge[\s_-]*ratio|ratio|\bcr|\br)\s*[=:_ -]?\s*(\d*\.?\d+)/i);
+  const labelled = withoutConc.match(/(?:charge[\s_-]*ratio|ratio|\bcr|\br|\bgel)\s*[=:_ -]?\s*(\d*\.?\d+)/i);
   if (labelled) {
     const v = Number(labelled[1]);
     if (v > 0 && v <= 10) return v;
@@ -47,10 +47,18 @@ export function findChargeRatio(segment: string): number | null {
     const v = Number(withoutConc);
     if (v > 0 && v <= 10) return v;
   }
-  // "f1.05", "F0.25", "f 0.5": a single letter before a decimal number (whole numbers such as "v2" are not taken).
-  const prefixed = withoutConc.match(/^[a-z][\s_-]?(\d*\.\d+)$/i);
-  if (prefixed) {
-    const v = Number(prefixed[1]);
+  // "f1.05", "F0.25", "f 0.5", "f1.05 new", "f1.05_2ndGel": one letter before a decimal number,
+  // optionally followed by other words; with "f" also a whole number ("f1"). "v2" is not taken.
+  const prefixed = withoutConc.match(/^([a-z])[\s_-]?(\d*\.\d+|\d+)(?=$|[\s_-])/i);
+  if (prefixed && (prefixed[2].includes('.') || prefixed[1].toLowerCase() === 'f')) {
+    const v = Number(prefixed[2]);
+    if (v > 0 && v <= 10) return v;
+  }
+  // "1.05f", "0.25 gel", "0.75_new": a decimal number at the start followed by letters or words.
+  const suffixed = withoutConc.match(/^(\d*\.\d+)(?=[a-z]|[\s_-]+[a-z])/i);
+  const unit = /^(\d*\.\d+)\s*(mm|cm|um|µm|m|s|sec|ms|min|h|n|kn|g|gf|kg|pa|kpa|mpa|hz|deg)(?![a-z])/i.test(withoutConc);
+  if (suffixed && !unit) {
+    const v = Number(suffixed[1]);
     if (v > 0 && v <= 10) return v;
   }
   // "0.25 2.98M 90": a leading number next to a concentration is the charge ratio

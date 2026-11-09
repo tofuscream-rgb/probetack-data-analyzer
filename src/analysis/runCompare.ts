@@ -4,6 +4,7 @@
  * summarised per holding time (from the file name, when present) as mean ± SD.
  * Substrates are compared case-insensitively; concentrations are never mixed.
  */
+import { bySubstrate } from './substrates';
 import type { ExperimentMeta, RunCompareSelection } from '../types';
 import { byNumber, type Choice } from './compare';
 import { describe } from './lapShear';
@@ -67,7 +68,7 @@ export function buildRunComparison(items: CompareItem[], sel: RunCompareSelectio
     m.set(it.cond.substrate, (m.get(it.cond.substrate) ?? 0) + 1);
     spell.set(sub(it.cond), m);
   }
-  const substrates = [...spell].map(([value, m]) => ({ value, label: [...m].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => a.label.localeCompare(b.label));
+  const substrates = [...spell].map(([value, m]) => ({ value, label: [...m].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => bySubstrate(a.label, b.label));
   const subValues = substrates.map((s) => s.value);
   const selSubs = keep(sel.substrates, subValues, subValues);
   const onSubs = items.filter((it) => selSubs.includes(sub(it.cond)));
@@ -100,7 +101,7 @@ export function buildRunComparison(items: CompareItem[], sel: RunCompareSelectio
   }
   const dir = sel.order === 'asc' ? 1 : -1;
   const ordered = [...sets.values()].sort(
-    (a, b) => selSubs.indexOf(a.substrate) - selSubs.indexOf(b.substrate) || dir * byNumber(a.chargeRatio, b.chargeRatio) || byNumber(a.concentration, b.concentration),
+    (a, b) => bySubstrate(a.substrateLabel, b.substrateLabel) || selSubs.indexOf(a.substrate) - selSubs.indexOf(b.substrate) || dir * byNumber(a.chargeRatio, b.chargeRatio) || byNumber(a.concentration, b.concentration),
   );
   return {
     substrates,

@@ -505,3 +505,17 @@ table.ls-summary td:first-child { white-space: nowrap; }
 .run-picker .in-group .fl-folder-head { background: transparent; font-weight: 500; padding-left: 22px; }
 .run-picker .in-group .fl-file { padding-left: 44px; }
 .run-picker .in-group + .in-group { border-top: none; margin-top: 0; padding-top: 0; }
+
+/* Probe Tack: Tack metrics tab */
+.main-body.tab-metrics { padding: 10px 12px; }
+table.grid tr.excluded-row td { color: var(--ink-3); text-decoration: line-through; }
+table.grid tr.excluded-row td input, table.grid tr.excluded-row td select { text-decoration: none; }
+input.reason { min-width: 220px; }
+.excluded-list { padding: 6px 8px; border: 1px solid var(--rule); border-radius: 6px; font-size: 12px; }
+.excluded-list ul { margin: 4px 0 0 18px; padding: 0; }
+.warn-text { color: #9a5400; }
+.methods .method-item { margin: 8px 0 12px; max-width: 110ch; }
+.methods h4 { margin: 10px 0 2px; font-size: 13px; }
+.tex.display, .tex-fallback.display { display: block; margin: 4px 0; overflow-x: auto; }
+.tex-fallback { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
+.citations { margin: 4px 0 8px 18px; padding: 0; font-size: 12px; }

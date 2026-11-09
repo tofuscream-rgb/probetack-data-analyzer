@@ -1,6 +1,6 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.12.0';
+export const APP_VERSION = '1.13.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.1.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
@@ -194,7 +194,22 @@ export interface GraphConfig {
 }
 
 export type ViewMode = 'raw' | 'flagged' | 'processed' | 'compare';
-export type MainTab = 'graph' | 'analysis' | 'compare' | 'settings' | 'files';
+export type MainTab = 'graph' | 'analysis' | 'metrics' | 'compare' | 'settings' | 'files';
+
+/** Exclusion of a whole Repeat (file) or test session, with the reason. */
+export interface DatasetExclusion {
+  reason: string;
+  at: string;
+}
+
+/** Tack metrics tab: gel thickness per Repeat and exclusions (whole Repeats or sessions only). */
+export interface TackMetricsState {
+  /** Gel thickness h₀ (mm) by fileId; missing = not entered (strain and apparent modulus skipped). */
+  h0: Record<string, number>;
+  excludedRepeats: Record<string, DatasetExclusion>;
+  /** Keyed by session (recording date of the file). */
+  excludedSessions: Record<string, DatasetExclusion>;
+}
 
 /** Step 2 of the sidebar: which experiment (charge ratio + concentration + substrate) and which TXT files are viewed. */
 /**
@@ -388,6 +403,7 @@ export interface ProjectState {
   compare: CompareSelection;
   selection: string[];
   groupBy: GroupKey[];
+  tackMetrics: TackMetricsState;
 }
 
 export interface SourceFileRecord {

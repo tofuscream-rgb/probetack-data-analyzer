@@ -4,6 +4,7 @@
  * holding time. Substrate names are compared case-insensitively ("ss" = "SS").
  * Concentration is always part of a data set, so concentrations are never mixed.
  */
+import { bySubstrate } from './substrates';
 import type { CompareSelection } from '../types';
 import { computeGroups, groupValue, type CycleResult, type GroupStats } from './engine';
 
@@ -57,7 +58,7 @@ export function buildComparison(runs: CycleResult[], sel: CompareSelection, pref
   }
   const substrates = [...spell]
     .map(([value, m]) => ({ value, label: [...m].sort((a, b) => b[1] - a[1])[0][0] }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    .sort((a, b) => bySubstrate(a.label, b.label));
   const subValues = substrates.map((s) => s.value);
   const pref = preferredSubstrate?.trim().toLowerCase() ?? null;
   const selSubs = keep(sel.substrates, subValues, pref && subValues.includes(pref) ? [pref] : subValues.slice(0, 1));
@@ -101,7 +102,7 @@ export function buildComparison(runs: CycleResult[], sel: CompareSelection, pref
   }
   const dir = sel.order === 'asc' ? 1 : -1;
   const ordered = [...sets.values()].sort(
-    (a, b) => selSubs.indexOf(a.substrate) - selSubs.indexOf(b.substrate) || dir * byNumber(a.chargeRatio, b.chargeRatio) || byNumber(a.concentration, b.concentration),
+    (a, b) => bySubstrate(a.substrateLabel, b.substrateLabel) || selSubs.indexOf(a.substrate) - selSubs.indexOf(b.substrate) || dir * byNumber(a.chargeRatio, b.chargeRatio) || byNumber(a.concentration, b.concentration),
   );
 
   return {

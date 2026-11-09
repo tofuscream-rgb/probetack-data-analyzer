@@ -74,6 +74,7 @@ describe('Mach-1 parser', () => {
   it('converts a force column recorded in N to gf for analysis', () => {
     const c = extractCycles(parse(miniFile([[0, -0.0980665, 0]], { forceHeader: 'Fz, N' })))[0];
     expect(c.force_gf[1]).toBeCloseTo(-10, 3);
+    expect(c.holdForce_gf![0]).toBeCloseTo(1 / 0.00980665, 6); // the Wait (dwell) force is converted too
   });
 
   it('parses durations and timestamps', () => {

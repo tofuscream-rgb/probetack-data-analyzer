@@ -8,7 +8,7 @@
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { RUN_TABS } from '../types';
-import type { RunGraphView, ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord } from '../types';
+import type { RunGraphView, ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord, TackMetricsState, DatasetExclusion } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
 import { defaultCompare, defaultExperiment, defaultLapShear, defaultPeel, defaultProject, defaultSettings } from '../state/defaults';
 
@@ -70,7 +70,7 @@ export function saveProjectZip(
 
 // The gel option was removed from the interface; older projects may still group or compare by it.
 const withoutGel = (keys: GroupKey[]) => keys.filter((k) => k !== 'gel');
-const MAIN_TABS: MainTab[] = ['graph', 'analysis', 'compare', 'settings', 'files'];
+const MAIN_TABS: MainTab[] = ['graph', 'analysis', 'metrics', 'compare', 'settings', 'files'];
 
 /** Graph options; projects from 1.5 stored `shade` as true/false (now Off by default to keep the graph readable). */
 function migrateView(d: RunGraphView, v: Partial<RunGraphView> | undefined): RunGraphView {
@@ -165,6 +165,18 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
   };
 }
 
+/** Tack metrics tab; projects from before 1.13 have none. */
+function migrateTackMetrics(raw: Partial<TackMetricsState> | undefined): TackMetricsState {
+  const h0: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw?.h0 ?? {})) if (typeof v === 'number' && Number.isFinite(v) && v > 0) h0[k] = v;
+  const excl = (rec: Record<string, DatasetExclusion> | undefined) => {
+    const out: Record<string, DatasetExclusion> = {};
+    for (const [k, v] of Object.entries(rec ?? {})) if (v && typeof v === 'object') out[k] = { reason: typeof v.reason === 'string' ? v.reason : '', at: typeof v.at === 'string' ? v.at : '' };
+    return out;
+  };
+  return { h0, excludedRepeats: excl(raw?.excludedRepeats), excludedSessions: excl(raw?.excludedSessions) };
+}
+
 /** Merge a possibly older/partial state with current defaults so new fields always exist. */
 export function migrateState(raw: Partial<ProjectState>): ProjectState {
   const d = defaultProject();
@@ -188,7 +200,8 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
       cycle: { ...ds.cycle, ...(s.cycle ?? {}), compareBy },
       runExclusion: { excludeClasses: Array.isArray(excludeClasses) ? excludeClasses : ds.runExclusion.excludeClasses },
       probe: {
-        diameterMm: Number.isFinite(s.probe?.diameterMm) && s.probe!.diameterMm > 0 ? s.probe!.diameterMm : 0,
+        // 0 meant "not entered" before 1.13; the probe diameter now defaults to 5.5 mm.
+        diameterMm: Number.isFinite(s.probe?.diameterMm) && s.probe!.diameterMm > 0 ? s.probe!.diameterMm : ds.probe.diameterMm,
         thicknessMm: Number.isFinite(s.probe?.thicknessMm) && s.probe!.thicknessMm > 0 ? s.probe!.thicknessMm : 0,
       },
       // Before schema 3 the signed z − z₀ was the default; it is replaced by the new default (distance from each run's start).
@@ -201,6 +214,7 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
     graphs: Array.isArray(raw.graphs) && raw.graphs.length ? raw.graphs.map((g) => ({ ...g, showExcluded: g.showExcluded ?? true })) : d.graphs,
     // 'summary' was the per-condition summary tab of 1.3; it became part of Data analysis.
     mode: raw.mode === 'lapShear' || raw.mode === 'peel' ? raw.mode : 'tack',
+    tackMetrics: migrateTackMetrics(raw.tackMetrics),
     lapShear: migrateLapShear(raw.lapShear),
     peel: migratePeel(raw.peel),
     mainTab: (raw.mainTab as string) === 'summary' ? 'analysis' : raw.mainTab && MAIN_TABS.includes(raw.mainTab) ? raw.mainTab : 'graph',
@@ -310,6 +324,11 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
       disabledFiles: state.peel.disabledFiles.map((id) => idMap.get(id) ?? id),
     },
     excludedPoints: remapKeys(state.excludedPoints, mapCycle),
+    tackMetrics: {
+      ...state.tackMetrics,
+      h0: remapKeys(state.tackMetrics.h0, (k) => idMap.get(k) ?? k),
+      excludedRepeats: remapKeys(state.tackMetrics.excludedRepeats, (k) => idMap.get(k) ?? k),
+    },
     selection: state.selection.map(mapCycle),
     experiment: {
       ...state.experiment,

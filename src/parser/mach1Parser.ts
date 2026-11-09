@@ -396,7 +396,12 @@ export function extractCycles(file: ParsedFile): Cycle[] {
       let iforce = findColumn(hold.data.columns, /^fz\b/i);
       if (iforce < 0) iforce = findColumn(hold.data.columns, /force/i);
       if (it >= 0) holdTime_s = hold.data.values[it];
-      if (iforce >= 0) holdForce_gf = hold.data.values[iforce];
+      if (iforce >= 0) {
+        // Same unit conversion as the movement force (files recorded in N, kgf or mN).
+        const unit = hold.data.columns[iforce].split(',')[1]?.trim().toLowerCase() ?? 'gf';
+        const v = hold.data.values[iforce];
+        holdForce_gf = unit === 'n' ? v.map((x) => x / GF_TO_N) : unit === 'kgf' ? v.map((x) => x * 1000) : unit === 'mn' ? v.map((x) => x / 1000 / GF_TO_N) : v;
+      }
     }
 
     const date = block.info['Date'] ?? file.header['Date'] ?? null;

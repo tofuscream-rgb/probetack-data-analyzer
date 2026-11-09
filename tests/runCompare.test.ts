@@ -16,7 +16,7 @@ describe('lap shear / peel: compare charge ratios', () => {
     ];
     const sel = { ...defaultLapShear().compare, substrates: ['ss'], chargeRatios: ['0.25'] };
     const c = buildRunComparison(items, sel);
-    expect(c.substrates.map((s) => s.value)).toEqual(['glass', 'ss']);
+    expect(c.substrates.map((s) => s.value)).toEqual(['ss', 'glass']); // PET, stainless steel, glass order
     expect(c.sets.map((s) => s.concentration)).toEqual(['2.1', '2.5', '2.98']);
     expect(c.holdTimes).toEqual(['—']); // no holding time in these file names
     const s0 = c.stat(c.sets[0], '—', 'tau');
@@ -181,7 +181,7 @@ describe('90° peel: choose your experiment', () => {
     const all = { chargeRatio: null, concentration: null, substrate: null };
     const o = pickOptions(conds, all);
     expect(o.chargeRatios.map((x) => x.label)).toEqual(['0.25', '1.05', 'unknown']);
-    expect(o.substrates.map((x) => x.value)).toEqual(['glass', 'pet', 'ss']); // "glass" and "Glass" are one substrate
+    expect(o.substrates.map((x) => x.value)).toEqual(['pet', 'ss', 'glass']); // PET, stainless steel, glass order // "glass" and "Glass" are one substrate
     const cr = pickOptions(conds, { ...all, chargeRatio: '0.25' });
     expect(cr.concentrations.map((x) => x.label)).toEqual(['2.5 M', '2.98 M']);
     expect(pickOptions(conds, { ...all, chargeRatio: '1.05' }).concentrations.map((x) => x.label)).toEqual(['2.1 M (default)']);

@@ -91,12 +91,13 @@ describe('peak extraction and units', () => {
     expect(GF_TO_N).toBe(0.00980665);
   });
 
-  it('gives the nominal stress–strain curve only when probe diameter and gel thickness are entered', async () => {
+  it('gives the nominal stress–strain curve; strain only when the gel thickness is entered', async () => {
     const l = await load([curve(40)]);
     const p = defaultProject();
     const r = derive([l], p).ordered[0];
-    expect(axisValues(r, 'stress_kPa', p.settings)).toBeNull(); // nothing guessed
-    expect(axisValues(r, 'strain', p.settings)).toBeNull();
+    expect(p.settings.probe.diameterMm).toBe(5.5); // default probe diameter
+    expect(axisValues(r, 'stress_kPa', p.settings)![50]).toBeCloseTo((-r.cycle.force_gf[50] * GF_TO_N / (Math.PI * 5.5 * 5.5 / 4)) * 1000, 10);
+    expect(axisValues(r, 'strain', p.settings)).toBeNull(); // gel thickness not guessed
     p.settings.probe = { diameterMm: 4, thicknessMm: 2 };
     const area = Math.PI * 2 * 2; // π (d/2)², mm²
     const s = axisValues(r, 'stress_kPa', p.settings)!;

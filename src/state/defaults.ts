@@ -25,7 +25,7 @@ export function defaultSettings(): AnalysisSettings {
     },
     runExclusion: { excludeClasses: ['red', 'orange'] },
     exclusionRule: 'keepAll', // advanced: point-level exclusion inside a run
-    probe: { diameterMm: 0, thicknessMm: 0 }, // entered by the user for the stress–strain curve; never guessed
+    probe: { diameterMm: 5.5, thicknessMm: 0 }, // probe diameter 5.5 mm by default; gel thickness entered by the user
   };
 }
 
@@ -113,5 +113,6 @@ export function defaultProject(): ProjectState {
     compare: defaultCompare(),
     selection: [],
     groupBy: ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'],
+    tackMetrics: { h0: {}, excludedRepeats: {}, excludedSessions: {} },
   };
 }

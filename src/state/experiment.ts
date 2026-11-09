@@ -6,6 +6,7 @@
 import { useCallback, useMemo } from 'react';
 import { useApp } from './AppContext';
 import { groupValue, type CycleResult } from '../analysis/engine';
+import { bySubstrate } from '../analysis/substrates';
 import type { ExperimentSelection, ParsedFile } from '../types';
 
 export interface ExperimentFile {
@@ -61,7 +62,7 @@ export function useExperiment() {
     const concOptions = options(inCr, conc, (v, l) => `${v} M${l.every((e) => first(e).meta.concentrationM.source === 'default') ? ' (default)' : ''}`);
     const concentrationM = pick(sel.concentrationM, concOptions);
     const inConc = inCr.filter((e) => conc(e) === concentrationM);
-    const substrateOptions = options(inConc, sub, (v) => (v === '—' ? 'unknown' : v));
+    const substrateOptions = options(inConc, sub, (v) => (v === '—' ? 'unknown' : v)).sort((a, b) => bySubstrate(a.label, b.label)); // PET, stainless steel, glass first
     const substrate = pick(sel.substrate, substrateOptions);
     const files = inConc
       .filter((e) => sub(e) === substrate)

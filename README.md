@@ -117,6 +117,28 @@ Statistics are grouped by the variables you choose; concentration is always incl
 
 ---
 
+## Tack metrics (Probe Tack)
+
+The **Tack metrics** tab analyses the tensile part of each pull for every file (Repeat) of the chosen charge ratio and concentration, across all substrates and dwell times.
+
+**Inputs.** Probe diameter *d* (default 5.5 mm; A = π d²/4). Gel thickness h₀ per Repeat (blank = strain and apparent modulus are skipped; *Apply to all* sets one value for every Repeat). Substrate per Repeat (PET, stainless steel, glass, or the name read from the folder). Dwell time is read from the Wait section.
+
+**Per run** (tensile force F = −Fz in N; files recorded in gf or N, including multi-axis load cells, give the same result; δ = distance travelled measured from where F first becomes tensile):
+
+| Metric | Definition |
+|---|---|
+| F_max, σ_max | largest F; σ_max = F_max / A (kPa) |
+| δ_peak, δ_max | δ at F_max; first δ after the peak where F ≤ 2% F_max (end of data if never, flagged “detachment incomplete – W underestimated”) |
+| W | (1/A) ∫ F dδ from the tensile onset to δ_max, trapezoidal rule, J/m² |
+| ε_max | δ_max / h₀ |
+| k, C, E_app | least-squares slope of F vs δ on the loading branch between 10% and 60% of F_max; C = 1/k; E_app = k h₀ / A |
+| Plateau | after the peak, the longest stretch where F stays within ±20% of one level; longer than 0.3 mm → plateau stress (mean F / A), plateau length, “possible fibrillation”, else “sharp detachment” |
+| Dwell | Fz at the start and end of the Wait section and the relaxation (F_start − F_end) / F_start |
+
+**Statistics and exclusions.** Every run is listed, then mean ± SD per Repeat (over its runs) and per condition, substrate × dwell (over the Repeat means of the included Repeats). Only a whole Repeat (file) or a whole test session (recording date) can be excluded, each with a reason; excluded data sets are always listed. Single runs and points are never excluded in this tab. Substrates are ordered PET, stainless steel, glass here and in the other tables and charts.
+
+**Display and export.** F vs δ for the runs of one Repeat with ▲ F_max, × δ_max and the fitted slope line; per-run and summary tables export as CSV. The Methods panel gives each equation (KaTeX, loaded from cdnjs with Subresource Integrity; shown as text when offline), every variable, the thresholds, and the sources: Creton & Ciccotti, Rep. Prog. Phys. 79, 046601 (2016); Bartlett et al., Prog. Mater. Sci. 137, 101086 (2023); Bartlett et al., Adv. Mater. 24, 1078 (2012).
+
 ## Lap Shear analysis
 
 Choose **Experiment type → Lap Shear** at the top and open your lap-shear files there (they are separate from the Probe Tack and 90° Peel files). Probe Tack's settings and results are not changed.

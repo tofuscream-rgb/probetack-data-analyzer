@@ -6,6 +6,7 @@
  */
 import type { ExperimentPick } from '../types';
 import type { RunCondition } from './runCompare';
+import { bySubstrate } from './substrates';
 
 export interface PickOption {
   value: string;
@@ -42,7 +43,7 @@ export function pickOptions(conds: RunCondition[], p: ExperimentPick): { chargeR
   }));
   const subs = new Map<string, string>();
   for (const c of inConc) if (!subs.has(substrateKey(c.substrate))) subs.set(substrateKey(c.substrate), c.substrate.trim());
-  const substrates = [...subs.entries()].sort((a, b) => numericFirst(a[0], b[0])).map(([value, label]) => ({ value, label: value === '—' ? 'unknown' : label }));
+  const substrates = [...subs.entries()].sort((a, b) => bySubstrate(a[1], b[1])).map(([value, label]) => ({ value, label: value === '—' ? 'unknown' : label }));
   return { chargeRatios, concentrations, substrates };
 }
 

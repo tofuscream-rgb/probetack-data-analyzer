@@ -27,9 +27,9 @@ describe('compare data sets', () => {
     expect(means).toEqual([-11, -21, -31]);
     expect(c.stats(c.sets[0], '30')!.raw.sd).toBeCloseTo(Math.SQRT2, 10);
 
-    // Two substrates, every charge ratio: panels in tick order, charge ratio high → low inside each.
+    // Two substrates, every charge ratio: panels in the order PET, stainless steel, glass; charge ratio high → low inside each.
     const both = buildComparison(d.ordered, { ...defaultCompare(), substrates: ['ss', 'glass'] });
-    expect(both.substrates.map((s) => s.value)).toEqual(['glass', 'ss']);
+    expect(both.substrates.map((s) => s.value)).toEqual(['ss', 'glass']);
     expect(both.sets.map((s) => `${s.substrate} ${s.chargeRatio} ${s.concentration}`)).toEqual([
       'ss 0.25 2.1', 'ss 0.25 2.5', 'glass 0.5 2.1', 'glass 0.25 2.1', 'glass 0.25 2.5', 'glass 0.25 2.98',
     ]);

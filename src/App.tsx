@@ -9,6 +9,7 @@ import { DataAnalysis } from './components/DataAnalysis';
 import { CompareChargeRatios } from './components/CompareChargeRatios';
 import { SettingsPanel } from './components/SettingsPanel';
 import { ImportStatus } from './components/FilesTab';
+import { TackMetricsTab } from './components/tack/TackMetricsTab';
 import type { MainTab } from './types';
 import { LapShearSidebar } from './components/lapShear/LapShearSidebar';
 import { LapShearWorkspace } from './components/lapShear/LapShearWorkspace';
@@ -18,6 +19,7 @@ import { PeelWorkspace } from './components/peel/PeelWorkspace';
 const TABS: { id: MainTab; label: string; minor?: boolean }[] = [
   { id: 'graph', label: 'Graph' },
   { id: 'analysis', label: 'Data analysis' },
+  { id: 'metrics', label: 'Tack metrics' },
   { id: 'compare', label: 'Compare charge ratios' },
   { id: 'settings', label: 'Settings' },
   { id: 'files', label: 'Files', minor: true },
@@ -46,6 +48,7 @@ function MainArea() {
       <div className={`main-body tab-${tab}`} role="tabpanel">
         {tab === 'graph' && <GraphPanel />}
         {tab === 'analysis' && <DataAnalysis />}
+        {tab === 'metrics' && <TackMetricsTab />}
         {tab === 'compare' && <CompareChargeRatios />}
         {tab === 'settings' && <SettingsPanel />}
         {tab === 'files' && <ImportStatus />}
@@ -83,7 +86,7 @@ function Shell() {
   const { busy, notices, dismiss, restorable, restoreSession, discardSession, importFiles, project } = useApp();
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
-    // Load all code up front: afterwards the page needs no network at all.
+    // Load all code up front: afterwards the page needs no network (except KaTeX for the Tack metrics equations).
     warmUpWorker();
     loadPlotly().catch(() => undefined);
   }, []);

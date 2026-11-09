@@ -95,6 +95,14 @@ describe('folder and file name metadata', () => {
     expect(inferMetadata('peel Oct/glass f=0.5-2.txt').repeat.value).toBe(2);
     for (const f of ['1s', '60s-2', 'trial 70n', 'PET-2', 'glass']) expect(inferMetadata(`peel Oct/glass/${f}.txt`).chargeRatio.value).toBeNull(); // file names without a label
     expect(inferMetadata('x/Gel 2/glass/1s.txt').chargeRatio.value).toBeNull(); // gel number, not a charge ratio
+    // Versions of a file ("PETv2", "PET v3", "PET_v4") are repeats of the same substrate, not other substrates.
+    for (const [f, rep] of [['PET', 1], ['PETv2', 2], ['PET v3', 3], ['PET_v4', 4], ['PET-V5', 5], ['PET-2', 2], ['PET (3)', 3]] as const) {
+      const m = inferMetadata(`peel/0.25 2.5M/${f}.txt`);
+      expect([m.substrate.value, m.repeat.value]).toEqual(['PET', rep]);
+    }
+    expect(inferMetadata('peel/0.25/f=0.5 glassv2.txt').substrate.value).toBe('glass');
+    const hold = inferMetadata('tack/0.25/glass/60s v2.txt');
+    expect([hold.nominalHoldS.value, hold.repeat.value]).toEqual([60, 2]);
     // The folder picked for import is not taken as a substrate.
     expect(inferMetadata('probe tack October/0.75/1s.txt').substrate.value).toBeNull();
   });

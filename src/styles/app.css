@@ -498,3 +498,10 @@ table.ls-summary td:first-child { white-space: nowrap; }
 .rename-list { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; width: 420px; max-height: 340px; overflow: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: 0 6px 20px rgba(24, 38, 58, 0.14); padding: 8px 10px; }
 .rename-list label { display: grid; grid-template-columns: minmax(0, 1fr) 160px; align-items: center; gap: 8px; margin: 3px 0; font-size: 12px; }
 .rename-list label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+
+/* 90° Peel: files grouped by name (PET, PETv2, PET v3 → PET) */
+.fl-group + .fl-group { border-top: 1px solid var(--rule-2); margin-top: 2px; padding-top: 2px; }
+.run-picker .group-head { background: var(--surface-2); font-weight: 700; }
+.run-picker .in-group .fl-folder-head { background: transparent; font-weight: 500; padding-left: 22px; }
+.run-picker .in-group .fl-file { padding-left: 44px; }
+.run-picker .in-group + .in-group { border-top: none; margin-top: 0; padding-top: 0; }

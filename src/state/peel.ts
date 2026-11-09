@@ -57,6 +57,9 @@ export function usePeel() {
         out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: '', condition, cond: runCondition(m), meta: rm, result: cachedResult(c, rm, ps.settings) });
       }
     }
+    // Group by conditions, then version order (PET, PETv2, PET v3), so legend and tables list a group together.
+    const repeatOf = (r: PeelRun) => meta.get(r.file.fileId)?.repeat.value ?? 1;
+    out.sort((a, b) => a.condition.toLowerCase().localeCompare(b.condition.toLowerCase(), undefined, { numeric: true }) || repeatOf(a) - repeatOf(b) || a.file.name.localeCompare(b.file.name, undefined, { numeric: true }) || a.cycle.cycleNumber - b.cycle.cycleNumber);
     const labels = runLabels(out.map((r) => ({ fileId: r.file.fileId, fileName: r.file.name, uniqueName: names.get(r.file.fileId) ?? r.file.name, cycleNumber: r.cycle.cycleNumber, runsInFile: r.file.blocks.length ? out.filter((x) => x.file.fileId === r.file.fileId).length : 1, cond: r.cond })));
     out.forEach((r, i) => (r.label = labels[i]));
     return out;

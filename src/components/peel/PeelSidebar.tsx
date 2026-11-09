@@ -58,12 +58,32 @@ function PickSelect({ label, value, options, allLabel, onChange }: { label: stri
 }
 
 export function PeelSidebar() {
-  const { filesByMode } = useApp();
+  const { filesByMode, meta } = useApp();
   const { ps, runs, picked, pick, options, setPick, selectedIds, setPickedSelected } = usePeel();
   const off = new Set(ps.disabledFiles);
   const pickedFiles = new Set(picked.map((r) => r.file.fileId));
-  const files = filesByMode.peel.filter((l) => !off.has(l.parsed.fileId) && pickedFiles.has(l.parsed.fileId));
+  // In version order within a substrate: PET, PETv2 (or PET-2), PET v3, …
+  const repeatOf = (id: string) => meta.get(id)?.repeat.value ?? 1;
+  const files = filesByMode.peel
+    .filter((l) => !off.has(l.parsed.fileId) && pickedFiles.has(l.parsed.fileId))
+    .sort((a, b) => repeatOf(a.parsed.fileId) - repeatOf(b.parsed.fileId) || a.parsed.name.localeCompare(b.parsed.name, undefined, { numeric: true }));
   const names = uniqueFileNames(files.map((l) => l.parsed));
+  // Group files by their conditions; only what differs between the shown files is named
+  // (PET.txt, PETv2.txt, PET v3.txt → "PET"; with All charge ratios → "CR 0.25 · PET").
+  const condOf = new Map(picked.map((r) => [r.file.fileId, r.cond]));
+  const parts = (fileId: string) => {
+    const c = condOf.get(fileId);
+    if (!c) return ['', '', 'unknown'];
+    return [c.chargeRatio === '—' ? 'CR unknown' : `CR ${c.chargeRatio}`, c.concentration === '—' ? '' : `${c.concentration} M`, c.substrate === '—' ? 'substrate unknown' : c.substrate.trim()];
+  };
+  const allParts = files.map((l) => parts(l.parsed.fileId));
+  const varies = [0, 1].filter((k) => new Set(allParts.map((p) => p[k])).size > 1);
+  const subName = new Map<string, string>();
+  for (const p of allParts) if (!subName.has(p[2].toLowerCase())) subName.set(p[2].toLowerCase(), p[2]);
+  const groupOf = (l: { parsed: { fileId: string } }) => {
+    const p = parts(l.parsed.fileId);
+    return [...varies.map((k) => p[k]), subName.get(p[2].toLowerCase()) ?? p[2]].filter(Boolean).join(' · ');
+  };
   const choose = (patch: Partial<ExperimentPick>) => setPick(patch);
   const defaultConc = pick.concentration !== null && options.concentrations.find((o) => o.value === pick.concentration)?.label.includes('default');
   return (
@@ -97,7 +117,8 @@ export function PeelSidebar() {
             selectedIds={selectedIds}
             setSelected={setPickedSelected}
             nameOf={(l) => names.get(l.parsed.fileId) ?? l.parsed.name}
-            hint="Every file of the chosen experiment is listed. Untick a file, or open it (▸) to untick single runs, to leave it out of the graph and results. Compare charge ratios uses the ticked runs of every experiment."
+            groupOf={groupOf}
+            hint="Files of the same substrate are grouped (PET, PETv2, PET v3 → PET). Tick a group to use all its files, or open it (▾) to tick files one by one, and open a file to tick single runs. Results summarise each group. Compare charge ratios uses the ticked runs of every experiment."
           />
         </section>
       )}

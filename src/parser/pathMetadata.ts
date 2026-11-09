@@ -97,8 +97,16 @@ export function findHoldTime(base: string): number | null {
   return v;
 }
 
-/** "60s-2" -> { base: "60s", repeat: 2 }; "60s" -> { base: "60s", repeat: 1 }. */
+/** Version marker at the end of a name: "PETv2", "PET v3", "PET_v4", "PET-V5" → { base: "PET", version: 2…5 }. */
+export function splitVersion(name: string): { base: string; version: number | null } {
+  const m = name.match(/^(.*?[a-z0-9)\]])[\s_-]*v(\d{1,3})$/i);
+  return m ? { base: m[1].trim(), version: Number(m[2]) } : { base: name, version: null };
+}
+
+/** "60s-2" -> { base: "60s", repeat: 2 }; "60s v2" -> repeat 2; "60s" -> { base: "60s", repeat: 1 }. */
 export function splitRepeat(stem: string): { base: string; repeat: number; explicit: boolean } {
+  const ver = splitVersion(stem);
+  if (ver.version !== null && findHoldTime(ver.base) !== null) return { base: ver.base, repeat: ver.version, explicit: true };
   const m = stem.match(/^(.*?)[\s_-]+(\d{1,3})$/);
   if (m && m[1].length > 0 && findHoldTime(m[1]) !== null) {
     return { base: m[1], repeat: Number(m[2]), explicit: true };
@@ -142,8 +150,10 @@ export function inferMetadata(path: string): ExperimentMeta {
   });
 
   // Substrate named in the file itself ("glass.txt", "PET-2.txt" = PET, repeat 2).
+  // "PETv2", "PET v3", "PET_v4" are versions (repeats) of PET, not other substrates.
   const numbered = stem.match(/^(.*?)[\s_-]+(\d{1,3})$/) ?? stem.match(/^(.*?)\s*\((\d{1,3})\)$/);
-  const fileBase = numbered && numbered[1] ? numbered[1] : stem;
+  const ver = splitVersion(numbered && numbered[1] ? numbered[1] : stem);
+  const fileBase = ver.base;
   let fileRepeat: number | null = null;
   if (substrate.value === null && findHoldTime(fileBase) === null && SUBSTRATE_WORDS.some((w) => new RegExp(`(^|[^a-z])${w}([^a-z]|$)`).test(fileBase.toLowerCase()))) {
     // "f= 0.5 glass" → "glass": the charge ratio and concentration are not part of the substrate name.
@@ -154,6 +164,7 @@ export function inferMetadata(path: string): ExperimentMeta {
       .replace(/\s+/g, ' ');
     substrate = field(name || fileBase, 'filename');
     if (numbered && numbered[1]) fileRepeat = Number(numbered[2]);
+    else if (ver.version !== null) fileRepeat = ver.version;
   }
 
   // If no keyword matched, assume the substrate from folder position, in either layout:

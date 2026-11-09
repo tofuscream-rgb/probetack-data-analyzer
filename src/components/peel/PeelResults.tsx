@@ -77,6 +77,9 @@ export function PeelResults() {
   const ok = selected.filter((r) => r.result.ok);
   const s = ps.settings;
   const conditions = [...new Set(ok.map((r) => r.condition))];
+  const counts = (list: typeof ok) => `${new Set(list.map((r) => r.file.fileId)).size} file(s), ${list.length} run(s)`;
+  // Rows grouped by condition (files of one group together), keeping each run's graph colour.
+  const rows = [...selected].sort((a, b) => conditions.indexOf(a.condition) - conditions.indexOf(b.condition));
   if (!selected.length) return <p className="note pad">Tick runs in step 2 on the left to see their results.</p>;
   return (
     <div className="ls-results">
@@ -101,7 +104,7 @@ export function PeelResults() {
             </tr>
           </thead>
           <tbody>
-            {selected.map((r) =>
+            {rows.map((r) =>
               r.result.ok ? (
                 <Row key={r.id} r={r} color={CURVE_COLORS[ok.indexOf(r) % CURVE_COLORS.length]} />
               ) : (
@@ -118,8 +121,8 @@ export function PeelResults() {
           <thead>
             <tr>
               <th>Property</th>
-              <th className="num">All selected runs</th>
-              {conditions.length > 1 && conditions.map((c) => <th key={c} className="num">{c}</th>)}
+              <th className="num">All selected runs<br /><small>{counts(ok)}</small></th>
+              {conditions.length > 1 && conditions.map((c) => <th key={c} className="num">{c}<br /><small>{counts(ok.filter((r) => r.condition === c))}</small></th>)}
             </tr>
           </thead>
           <tbody>

@@ -113,6 +113,6 @@ export function defaultProject(): ProjectState {
     compare: defaultCompare(),
     selection: [],
     groupBy: ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'],
-    tackMetrics: { h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {} },
+    tackMetrics: { h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {}, observations: {} },
   };
 }

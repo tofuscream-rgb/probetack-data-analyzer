@@ -11,7 +11,7 @@
  *   δ_max                      first δ after the peak where T ≤ 2% F_max (interpolated);
  *                              end of data if never (then "detachment incomplete")
  *   W = (1/A) ∫ T dδ           trapezoidal rule from the tensile onset to δ_max, in J/m²
- *   ε_max = δ_max / h₀
+ *   ε_max = δ_max / h₀ (strain at break), ε_peak = δ_peak / h₀ (strain at peak stress)
  *   k                          least-squares slope of T vs δ on the loading branch between
  *                              10% and 60% of F_max; C = 1/k; E_app = k h₀ / A
  *   plateau                    after the peak, the longest stretch where T stays within ±20%
@@ -61,6 +61,8 @@ export interface TackMetrics {
   deltaMaxMm: number;
   wJm2: number;
   epsMax: number | null;
+  /** Strain at peak stress, δ_peak / h₀. */
+  epsPeak: number | null;
   kNmm: number | null;
   complianceMmN: number | null;
   eAppKPa: number | null;
@@ -108,7 +110,7 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
   const dwell = dwellOf(run.holdForce_gf);
   const base: TackMetrics = {
     ok: false, error: null, areaMm2: area, fmaxN: nan, sigmaMaxKPa: nan, deltaPeakMm: nan, deltaMaxMm: nan, wJm2: nan,
-    epsMax: null, kNmm: null, complianceMmN: null, eAppKPa: null, fit: null, plateau: null,
+    epsMax: null, epsPeak: null, kNmm: null, complianceMmN: null, eAppKPa: null, fit: null, plateau: null,
     dwell, incomplete: false, resolutionN: null, peakSteps: null, zeroedN: run.zeroedGf !== null && run.zeroedGf !== undefined ? run.zeroedGf * GF_TO_N : null,
     notes, curve: { deltaMm: new Float64Array(), tN: new Float64Array() },
   };
@@ -225,6 +227,7 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
     deltaMaxMm: deltaMax,
     wJm2,
     epsMax: h0 !== null ? deltaMax / h0 : null,
+    epsPeak: h0 !== null ? delta[ip] / h0 : null,
     kNmm: fit ? fit.k : null,
     complianceMmN: fit ? 1 / fit.k : null,
     eAppKPa: fit && h0 !== null ? ((fit.k * h0) / area) * 1000 : null,

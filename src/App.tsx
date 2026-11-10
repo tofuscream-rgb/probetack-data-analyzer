@@ -86,7 +86,7 @@ function Shell() {
   const { busy, notices, dismiss, restorable, restoreSession, discardSession, importFiles, project } = useApp();
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
-    // Load all code up front: afterwards the page needs no network (except KaTeX for the Tack metrics equations).
+    // Load all code up front: afterwards the page needs no network at all.
     warmUpWorker();
     loadPlotly().catch(() => undefined);
   }, []);

@@ -1,6 +1,6 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.13.0';
+export const APP_VERSION = '1.14.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.1.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
@@ -213,6 +213,20 @@ export interface TackMetricsState {
   excludedSessions: Record<string, DatasetExclusion>;
   /** Single runs left out by the user (by cycleId); optional, none by default. */
   excludedRuns: Record<string, DatasetExclusion>;
+  /** Failure mode and observations entered by the user for each run (by cycleId); never inferred from the curve. */
+  observations: Record<string, TackObservation>;
+}
+
+export type TackFailureMode = '' | 'interfacial' | 'cohesive' | 'cavitation' | 'fibrillation' | 'cavitation+fibrillation' | 'mixed' | 'other';
+
+export interface TackObservation {
+  mode: TackFailureMode;
+  /** Free text: what was seen. */
+  note: string;
+  /** Optional: displacement (mm) at which fibrils were first seen. */
+  fibrilOnsetMm: number | null;
+  /** Optional: largest fibril extension seen (mm). */
+  fibrilMaxMm: number | null;
 }
 
 /** Step 2 of the sidebar: which experiment (charge ratio + concentration + substrate) and which TXT files are viewed. */

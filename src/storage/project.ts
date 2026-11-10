@@ -8,7 +8,7 @@
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { RUN_TABS } from '../types';
-import type { RunGraphView, ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord, TackMetricsState, DatasetExclusion } from '../types';
+import type { RunGraphView, ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord, TackMetricsState, DatasetExclusion, TackFailureMode, TackObservation } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
 import { defaultCompare, defaultExperiment, defaultLapShear, defaultPeel, defaultProject, defaultSettings } from '../state/defaults';
 
@@ -174,7 +174,14 @@ function migrateTackMetrics(raw: Partial<TackMetricsState> | undefined): TackMet
     for (const [k, v] of Object.entries(rec ?? {})) if (v && typeof v === 'object') out[k] = { reason: typeof v.reason === 'string' ? v.reason : '', at: typeof v.at === 'string' ? v.at : '' };
     return out;
   };
-  return { h0, excludedRepeats: excl(raw?.excludedRepeats), excludedSessions: excl(raw?.excludedSessions), excludedRuns: excl(raw?.excludedRuns) };
+  const MODES: TackFailureMode[] = ['', 'interfacial', 'cohesive', 'cavitation', 'fibrillation', 'cavitation+fibrillation', 'mixed', 'other'];
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+  const observations: Record<string, TackObservation> = {};
+  for (const [k, v] of Object.entries(raw?.observations ?? {})) {
+    if (!v || typeof v !== 'object') continue;
+    observations[k] = { mode: MODES.includes(v.mode) ? v.mode : '', note: typeof v.note === 'string' ? v.note : '', fibrilOnsetMm: num(v.fibrilOnsetMm), fibrilMaxMm: num(v.fibrilMaxMm) };
+  }
+  return { h0, excludedRepeats: excl(raw?.excludedRepeats), excludedSessions: excl(raw?.excludedSessions), excludedRuns: excl(raw?.excludedRuns), observations };
 }
 
 /** Merge a possibly older/partial state with current defaults so new fields always exist. */
@@ -329,6 +336,7 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
       h0: remapKeys(state.tackMetrics.h0, (k) => idMap.get(k) ?? k),
       excludedRepeats: remapKeys(state.tackMetrics.excludedRepeats, (k) => idMap.get(k) ?? k),
       excludedRuns: remapKeys(state.tackMetrics.excludedRuns, mapCycle),
+      observations: remapKeys(state.tackMetrics.observations, mapCycle),
     },
     selection: state.selection.map(mapCycle),
     experiment: {

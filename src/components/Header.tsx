@@ -98,11 +98,6 @@ function PrivacyDialog({ onClose }: { onClose: () => void }) {
           A Content-Security-Policy tells the browser to block any connection to other servers.
         </p>
         <p>
-          <strong>One exception:</strong> the Methods panel of the Tack metrics tab loads the KaTeX equation renderer (a fixed release, checked with
-          Subresource Integrity) and its fonts from cdnjs.cloudflare.com. No data are sent; cdnjs only sees that the files were requested (your IP
-          address). Without a connection the equations are shown as text.
-        </p>
-        <p>
           <strong>Kept in this browser:</strong> your current session (settings and copies of imported files) is autosaved in this browser’s IndexedDB
           storage, so you can resume after closing the tab. It is not a backup. Clearing site data, private windows or low disk space can remove it.
           Anyone who uses this computer account and browser can see it. Use Save project for anything you want to keep.

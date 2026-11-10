@@ -119,25 +119,28 @@ Statistics are grouped by the variables you choose; concentration is always incl
 
 ## Tack metrics (Probe Tack)
 
-The **Tack metrics** tab analyses the tensile part of each pull for every file (Repeat) of the chosen charge ratio and concentration, across all substrates and dwell times.
+The **Tack metrics** tab analyses the tensile part of each pull for every file (Repeat) of the chosen charge ratio and concentration, across all substrates and dwell times. It is laid out in this order:
 
-**Inputs.** Probe diameter *d* (default 5.5 mm; A = π d²/4). Gel thickness h₀ per Repeat (blank = strain and apparent modulus are skipped; *Apply to all* sets one value for every Repeat). Substrate per Repeat (PET, stainless steel, glass, or the name read from the folder). Dwell time is read from the Wait section.
+1. **Test settings**: probe diameter *d* (default 5.5 mm; A = π d²/4); gel thickness h₀ per Repeat (blank = strains are skipped; *Apply to all* sets one value); substrate per Repeat (PET, stainless steel, glass, or the name read from the folder); dwell time read from the Wait section; exclusion of a Repeat or test session, and the list of excluded data sets with reasons.
+2. **Plot**: F vs δ, or σ vs ε once h₀ is entered, for the runs of one Repeat, with ▲ peak, × break and the plateau; the initial-slope fit can be shown as a diagnostic.
+3. **Per-run results**: F_max (N), σ_max (kPa), W_adh (J/m²), δ_peak and ε_peak (displacement and strain at peak stress), δ_break and ε_break = δ_break/h₀, plateau stress (kPa) and length (mm), failure mode and flags. A single run can be excluded (optional; none by default).
+4. **Mean ± SD per Repeat** and 5. **per condition** (substrate × dwell; over the Repeat means of the included Repeats), with the failure-mode counts.
+6. **Failure-mode observations**, entered by you for each run: Interfacial / adhesive, Cohesive, Cavitation, Fibrillation, Cavitation + fibrillation, Mixed or Other, a free-text observation, and optionally the fibril onset displacement and the largest fibril extension (shown as strain when h₀ is known). Fibrillation is never inferred from the curve.
+7. **Advanced / Diagnostics** (collapsed): initial stiffness k (fit 10–60% F_max), compliance C = 1/k, apparent modulus E_app = k h₀/A, dwell force at the start and end of the Wait and the relaxation.
+8. **Methods, equations, definitions and references**: every equation typeset with KaTeX (bundled with the site, so it renders offline), each symbol defined, with thresholds and sources: Creton & Ciccotti, Rep. Prog. Phys. 79, 046601 (2016); Bartlett et al., Prog. Mater. Sci. 137, 101086 (2023); Bartlett et al., Adv. Mater. 24, 1078 (2012).
+9. **Export CSV**: per-run results (with failure modes, observations, flags and their details, and the diagnostic quantities) and the Repeat and condition summaries.
 
-**Per run** (tensile force F = −Fz in N; files recorded in gf or N, including multi-axis load cells, give the same result; δ = distance travelled measured from where F first becomes tensile):
-
-| Metric | Definition |
+| Quantity | Definition |
 |---|---|
-| F_max, σ_max | largest F; σ_max = F_max / A (kPa) |
-| δ_peak, δ_max | δ at F_max; first δ after the peak where F ≤ 2% F_max (end of data if never, flagged “detachment incomplete – W underestimated”) |
-| W | (1/A) ∫ F dδ from the tensile onset to δ_max, trapezoidal rule, J/m² |
-| ε_max | δ_max / h₀ |
-| k, C, E_app | least-squares slope of F vs δ on the loading branch between 10% and 60% of F_max; C = 1/k; E_app = k h₀ / A |
-| Plateau | after the peak, the longest stretch where F stays within ±20% of one level; longer than 0.3 mm → plateau stress (mean F / A) and plateau length (blank otherwise; the curve is not classified) |
-| Dwell | Fz at the start and end of the Wait section and the relaxation (F_start − F_end) / F_start |
+| F, δ | F = −F_z in N (gf or N files, single- or multi-axis); δ = distance travelled from where F first becomes tensile |
+| W_adh | (1/A) ∫ F dδ from the tensile onset to δ_break, trapezoidal rule, J/m² |
+| δ_break | first δ after the peak where F ≤ 2% F_max (end of data if never) |
+| Plateau | after the peak, the longest stretch where F stays within ±20% of one level; reported when longer than 0.3 mm (the curve is not classified) |
 
-**Statistics and exclusions.** Every run is listed, then mean ± SD per Repeat (over its runs) and per condition, substrate × dwell (over the Repeat means of the included Repeats). Nothing is excluded by default. You may exclude a whole Repeat (file), a whole test session (recording date) or, optionally, a single run, each with a reason; excluded data sets are always listed. Points are never removed in this tab. Substrates are ordered PET, stainless steel, glass here and in the other tables and charts.
-
-**Display and export.** F vs δ for the runs of one Repeat with ▲ F_max, × δ_max and the fitted slope line; per-run and summary tables export as CSV. The Methods panel gives each equation (KaTeX, loaded from cdnjs with Subresource Integrity; shown as text when offline), every variable, the thresholds, and the sources: Creton & Ciccotti, Rep. Prog. Phys. 79, 046601 (2016); Bartlett et al., Prog. Mater. Sci. 137, 101086 (2023); Bartlett et al., Adv. Mater. 24, 1078 (2012).
+**Flags** are warnings only and never exclude a run; the table shows a short label, and hovering or clicking shows the details:
+- *Low force resolution*: F_max is fewer than 10 steps of the smallest recorded force step.
+- *Incomplete detachment*: F never fell to ≤ 2% F_max before the file ended; W_adh is underestimated.
+- *Load tared after dwell*: a Zero Load step between the Wait and the pull reset the load cell; the pull force is referenced to the new zero.
 
 ## Lap Shear analysis
 

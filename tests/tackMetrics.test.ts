@@ -38,6 +38,7 @@ describe('probe-tack metrics', () => {
     // ∫ T dδ from 0 to 1.49 = triangle 1.5 × 2 / 2 − small tail (0.01 × 0.04 / 2) = 1.4998 N·mm
     expect(m.wJm2).toBeCloseTo((1.4998 / A) * 1000, 2);
     expect(m.epsMax).toBeCloseTo(1.49 / 2, 4);
+    expect(m.epsPeak).toBeCloseTo(1 / 2, 6);
     expect(m.kNmm).toBeCloseTo(2, 6);
     expect(m.complianceMmN).toBeCloseTo(0.5, 6);
     expect(m.eAppKPa).toBeCloseTo(((2 * 2) / A) * 1000, 3);
@@ -101,10 +102,39 @@ describe('tack metrics project state', () => {
   it('nothing is excluded by default, and older projects load with empty exclusions', async () => {
     const { migrateState } = await import('../src/storage/project');
     const { defaultProject } = await import('../src/state/defaults');
-    expect(defaultProject().tackMetrics).toEqual({ h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {} });
-    expect(migrateState({}).tackMetrics).toEqual({ h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {} });
+    expect(defaultProject().tackMetrics).toEqual({ h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {}, observations: {} });
+    expect(migrateState({}).tackMetrics).toEqual({ h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {}, observations: {} });
     const s = migrateState({ tackMetrics: { h0: { f1: 2, f2: -1 }, excludedRuns: { 'f1#c1': { reason: 'bubble', at: 'x' } } } as never });
     expect(s.tackMetrics.h0).toEqual({ f1: 2 });
     expect(s.tackMetrics.excludedRuns['f1#c1'].reason).toBe('bubble');
+  });
+});
+
+describe('tack flags and failure modes', () => {
+  it('short flags with details; flags never exclude a run', async () => {
+    const { tackFlags } = await import('../src/state/tackMetrics');
+    const pts = triangle().filter(([x]) => x < 1.7); // ends before detachment
+    const coarse = run(pts);
+    coarse.force_gf = coarse.force_gf.map((v) => Math.round(v / 50) * 50); // ~0.49 N steps: F_max ≈ 4 steps
+    const m = analyzeTack({ ...coarse, zeroedGf: 1.25 }, { diameterMm: D, h0Mm: null });
+    const f = tackFlags(m);
+    expect(f.map((x) => x.label)).toEqual(['Low force resolution', 'Incomplete detachment', 'Load tared after dwell']);
+    expect(f[0].detail).toMatch(/^F_max = [\d.]+ force steps of [\d.]+ N; stiffness, plateau and relaxation may be approximate\.$/);
+    expect(f[1].detail).toMatch(/W_adh is underestimated/);
+    expect(f[2].detail).toMatch(/pull force is referenced to the new zero/);
+    expect(tackFlags(analyzeTack(run(triangle()), { diameterMm: D, h0Mm: 2 }))).toEqual([]);
+  });
+
+  it('counts failure modes entered by the user', async () => {
+    const { failureModeCounts, EMPTY_OBSERVATION } = await import('../src/state/tackMetrics');
+    const r = (mode: string) => ({ obs: { ...EMPTY_OBSERVATION, mode } }) as never;
+    expect(failureModeCounts([r('cohesive'), r(''), r('cohesive'), r('cavitation+fibrillation')])).toBe('Cohesive 2 · Cavitation + fibrillation 1 · not set 1');
+  });
+
+  it('keeps observations in saved projects', async () => {
+    const { migrateState } = await import('../src/storage/project');
+    const s = migrateState({ tackMetrics: { observations: { 'f#c1': { mode: 'fibrillation', note: 'long fibrils', fibrilOnsetMm: 0.4, fibrilMaxMm: -1 }, 'f#c2': { mode: 'bogus' } } } as never });
+    expect(s.tackMetrics.observations['f#c1']).toEqual({ mode: 'fibrillation', note: 'long fibrils', fibrilOnsetMm: 0.4, fibrilMaxMm: null });
+    expect(s.tackMetrics.observations['f#c2'].mode).toBe('');
   });
 });

@@ -1,25 +1,20 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { useApp, download } from '../../state/AppContext';
-import { TACK_METRICS, usedRuns, useTackMetrics, type GroupStat, type TackRepeat } from '../../state/tackMetrics';
-import { LOW_RESOLUTION_STEPS, TACK_DEFAULTS, type TackMetrics } from '../../analysis/tackMetrics';
+import {
+  DIAG_METRICS, FAILURE_MODES, MAIN_METRICS, failureModeCounts, failureModeLabel, tackFlags, usedRuns, useTackMetrics,
+  type Metric, type TackRepeat,
+} from '../../state/tackMetrics';
+import { TACK_DEFAULTS } from '../../analysis/tackMetrics';
 import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
 import { EXPORT_SIZE, LINE, figAxis, figLayout } from '../../plotting/figureStyle';
 import { CURVE_COLORS } from '../../plotting/colors';
 import { NumberField } from '../lapShear/NumberField';
 import { fmt } from '../common';
 import { TackMethods } from './TackMethods';
+import type { TackFailureMode } from '../../types';
 
 const SUBSTRATES = ['PET', 'stainless steel', 'glass'];
-
-function flagsOf(m: TackMetrics): string[] {
-  if (!m.ok) return [m.error ?? 'not analysed'];
-  const f: string[] = [];
-  if (m.incomplete) f.push('detachment incomplete – W underestimated');
-  if (m.peakSteps !== null && m.peakSteps < LOW_RESOLUTION_STEPS) f.push(`coarse: F_max = ${m.peakSteps.toFixed(1)} force steps of ${m.resolutionN!.toFixed(4)} N`);
-  if (m.zeroedN !== null) f.push(`load zeroed after dwell (${m.zeroedN.toFixed(4)} N)`);
-  return f;
-}
 
 const csvCell = (v: unknown) => {
   const s = v === null || v === undefined || (typeof v === 'number' && !Number.isFinite(v)) ? '' : String(v);
@@ -27,44 +22,88 @@ const csvCell = (v: unknown) => {
 };
 const toCsv = (rows: unknown[][]) => rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 const saveCsv = (rows: unknown[][], name: string) => download(new Blob(['﻿' + toCsv(rows)], { type: 'text/csv;charset=utf-8' }), name);
-const ms = (s: { mean: number; sd: number; n: number }, d: number) => (s.n ? `${fmt(s.mean, d)} ± ${s.n > 1 ? fmt(s.sd, d) : '—'}` : '—');
+const ms = (s: { mean: number; sd: number; n: number } | undefined, d: number) => (s && s.n ? `${fmt(s.mean, d)} ± ${s.n > 1 ? fmt(s.sd, d) : '—'}` : '—');
 
-/** F vs δ of the runs of one Repeat, with F_max, δ_max and the fitted initial slope. */
-function TackPlot({ repeat }: { repeat: TackRepeat }) {
+/** Table header of a metric: name with subscripts, unit below. */
+function MetricTh({ k }: { k: Metric }) {
+  return (
+    <th className="num">
+      <span dangerouslySetInnerHTML={{ __html: k.html }} /> <small>({k.unit})</small>
+    </th>
+  );
+}
+
+function Section({ n, title, children, extra }: { n: number; title: string; children: ReactNode; extra?: ReactNode }) {
+  return (
+    <section className="tack-section">
+      <div className="tack-section-head">
+        <h3 className="ls-h">{n}. {title}</h3>
+        {extra}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Short flag; the details show on hover and when clicked. */
+function Flags({ m }: { m: Parameters<typeof tackFlags>[0] }) {
+  const flags = tackFlags(m);
+  if (!flags.length) return null;
+  return (
+    <span className="flags">
+      {flags.map((f) => (
+        <details key={f.key} className={`flag flag-${f.key}`}>
+          <summary title={f.detail}>{f.label}</summary>
+          <span className="flag-detail">{f.detail}</span>
+        </details>
+      ))}
+    </span>
+  );
+}
+
+type PlotMode = 'force' | 'stress';
+
+/** F vs δ (or σ vs ε) of the runs of one Repeat, with F_max, δ_break and plateau. */
+function TackPlot({ repeat, mode, showFit }: { repeat: TackRepeat; mode: PlotMode; showFit: boolean }) {
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
+  const stress = mode === 'stress' && repeat.h0 !== null;
   const { data, layout } = useMemo(() => {
     const traces: Data[] = [];
     repeat.runs.forEach((r, k) => {
       const m = r.m;
       if (!m.ok) return;
+      const fy = stress ? 1000 / m.areaMm2 : 1; // N → kPa
+      const fx = stress ? 1 / repeat.h0! : 1; // mm → strain
       const color = CURVE_COLORS[k % CURVE_COLORS.length];
-      const name = `Run ${r.cycle.cycleNumber}`;
+      const name = `Run ${r.cycle.cycleNumber}${r.excluded ? ' (excluded)' : ''}`;
       const step = Math.max(1, Math.floor(m.curve.deltaMm.length / 3000));
       const xs: number[] = [];
       const ys: number[] = [];
-      for (let i = 0; i < m.curve.deltaMm.length; i += step) { xs.push(m.curve.deltaMm[i]); ys.push(m.curve.tN[i]); }
-      traces.push({ type: 'scatter', mode: 'lines', x: xs, y: ys, name, legendgroup: name, line: { color, width: LINE.normal }, hovertemplate: `${name}<br>δ = %{x:.3f} mm<br>F = %{y:.4f} N<extra></extra>` } as Data);
-      traces.push({ type: 'scatter', mode: 'markers', x: [m.deltaPeakMm], y: [m.fmaxN], legendgroup: name, showlegend: false, marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, hovertemplate: `${name}<br>F_max = %{y:.4f} N at δ_peak = %{x:.3f} mm<extra></extra>` } as Data);
-      traces.push({ type: 'scatter', mode: 'markers', x: [m.deltaMaxMm], y: [TACK_DEFAULTS.endFraction * m.fmaxN], legendgroup: name, showlegend: false, marker: { symbol: m.incomplete ? 'x-open' : 'x', size: 12, color, line: { color, width: 2 } }, hovertemplate: `${name}<br>δ_max = %{x:.3f} mm${m.incomplete ? ' (end of data: detachment incomplete)' : ''}<extra></extra>` } as Data);
-      if (m.fit) {
-        const x0 = -m.fit.b / m.fit.k; // T = 0
+      for (let i = 0; i < m.curve.deltaMm.length; i += step) { xs.push(m.curve.deltaMm[i] * fx); ys.push(m.curve.tN[i] * fy); }
+      const xl = stress ? 'ε' : 'δ';
+      const yl = stress ? 'σ' : 'F';
+      const yu = stress ? 'kPa' : 'N';
+      const xu = stress ? '' : ' mm';
+      traces.push({ type: 'scatter', mode: 'lines', x: xs, y: ys, name, legendgroup: name, line: { color, width: LINE.normal, dash: r.excluded ? 'dash' : 'solid' }, hovertemplate: `${name}<br>${xl} = %{x:.3f}${xu}<br>${yl} = %{y:.4f} ${yu}<extra></extra>` } as Data);
+      traces.push({ type: 'scatter', mode: 'markers', x: [m.deltaPeakMm * fx], y: [m.fmaxN * fy], legendgroup: name, showlegend: false, marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, hovertemplate: `${name}<br>peak: ${yl} = %{y:.4f} ${yu} at ${xl} = %{x:.3f}${xu}<extra></extra>` } as Data);
+      traces.push({ type: 'scatter', mode: 'markers', x: [m.deltaMaxMm * fx], y: [TACK_DEFAULTS.endFraction * m.fmaxN * fy], legendgroup: name, showlegend: false, marker: { symbol: m.incomplete ? 'x-open' : 'x', size: 12, color, line: { color, width: 2 } }, hovertemplate: `${name}<br>break: ${xl} = %{x:.3f}${xu}${m.incomplete ? ' (end of data: incomplete detachment)' : ''}<extra></extra>` } as Data);
+      if (m.plateau) traces.push({ type: 'scatter', mode: 'lines', x: [m.plateau.fromMm * fx, m.plateau.toMm * fx], y: [m.plateau.levelN * fy, m.plateau.levelN * fy], legendgroup: name, showlegend: false, line: { color, width: 1.4, dash: 'dot' }, hovertemplate: `${name}<br>plateau ${m.plateau.stressKPa.toFixed(2)} kPa over ${m.plateau.lengthMm.toFixed(2)} mm<extra></extra>` } as Data);
+      if (showFit && m.fit) {
+        const x0 = -m.fit.b / m.fit.k;
         const x1 = (0.8 * m.fmaxN - m.fit.b) / m.fit.k;
-        traces.push({ type: 'scatter', mode: 'lines', x: [x0, x1], y: [0, 0.8 * m.fmaxN], legendgroup: name, showlegend: false, line: { color, width: 1.6, dash: 'dash' }, hovertemplate: `${name}<br>k = ${m.fit.k.toFixed(4)} N/mm (fit ${TACK_DEFAULTS.slopeFrom * 100}–${TACK_DEFAULTS.slopeTo * 100}% F_max)<extra></extra>` } as Data);
-      }
-      if (m.plateau) {
-        traces.push({ type: 'scatter', mode: 'lines', x: [m.plateau.fromMm, m.plateau.toMm], y: [m.plateau.levelN, m.plateau.levelN], legendgroup: name, showlegend: false, line: { color, width: 1.4, dash: 'dot' }, hovertemplate: `${name}<br>Plateau ${m.plateau.stressKPa.toFixed(2)} kPa over ${m.plateau.lengthMm.toFixed(2)} mm<extra></extra>` } as Data);
+        traces.push({ type: 'scatter', mode: 'lines', x: [x0 * fx, x1 * fx], y: [0, 0.8 * m.fmaxN * fy], legendgroup: name, showlegend: false, line: { color, width: 1.6, dash: 'dash' }, hovertemplate: `${name}<br>initial slope k = ${m.fit.k.toFixed(4)} N/mm<extra></extra>` } as Data);
       }
     });
     const lay: Partial<Layout> = {
       ...figLayout(),
-      xaxis: figAxis('δ from tensile onset (mm)'),
-      yaxis: figAxis('Tensile force F (N)'),
+      xaxis: figAxis(stress ? 'Nominal strain ε = δ / h₀' : 'Displacement δ from tensile onset (mm)'),
+      yaxis: figAxis(stress ? 'Nominal stress σ = F / A (kPa)' : 'Tensile force F (N)'),
       legend: { x: 1.01, y: 1, font: { size: 14 } },
       hovermode: 'closest',
-      uirevision: repeat.fileId,
+      uirevision: `${repeat.fileId}|${stress}`,
     };
     return { data: traces, layout: lay };
-  }, [repeat]);
+  }, [repeat, stress, showFit]);
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
     const Plotly = await loadPlotly();
@@ -73,7 +112,7 @@ function TackPlot({ repeat }: { repeat: TackRepeat }) {
   return (
     <>
       <div className="table-actions">
-        <span className="note">▲ F_max at δ_peak · × δ_max (F ≤ {TACK_DEFAULTS.endFraction * 100}% F_max; open × = end of data) · dashed = fitted initial slope k · dotted = plateau</span>
+        <span className="note">▲ peak · × break (F ≤ {TACK_DEFAULTS.endFraction * 100}% F<sub>max</sub>; open × = end of data) · dotted = plateau{showFit ? ' · dashed = initial slope' : ''}</span>
         <div className="export-group"><span>Save graph</span><button className="small" onClick={() => save('png')}>PNG</button><button className="small" onClick={() => save('svg')}>SVG</button></div>
       </div>
       <PlotlyChart data={data} layout={layout} className="plot summary" onReady={(el) => (plotEl.current = el)} />
@@ -85,6 +124,8 @@ export function TackMetricsTab() {
   const { project, update } = useApp();
   const t = useTackMetrics();
   const [plotId, setPlotId] = useState<string | null>(null);
+  const [plotMode, setPlotMode] = useState<PlotMode>('force');
+  const [showFit, setShowFit] = useState(false);
   const [allH0, setAllH0] = useState<number | null>(null);
   const d = t.diameter;
   const area = d > 0 ? (Math.PI * d * d) / 4 : NaN;
@@ -95,173 +136,241 @@ export function TackMetricsTab() {
   const excludedRepeats = t.repeats.filter((r) => r.excluded);
   const excludedSessions = sessions.filter((s) => t.tm.excludedSessions[s]);
   const excludedRuns = t.repeats.flatMap((rp) => rp.runs.filter((r) => r.excluded).map((r) => ({ rp, r })));
+  const allRuns = t.repeats.flatMap((rp) => rp.runs.map((r) => ({ rp, r })));
+  const base = `${project.name || 'tack'}_CR${t.ex.chargeRatio}_${t.ex.concentrationM}M`.replace(/[^\w.-]+/g, '_');
 
-  const runRows = () => [
-    ['Repeat (file)', 'Path', 'Session', 'Substrate', 'Dwell (s)', 'h0 (mm)', 'Repeat excluded', 'Run', 'Run excluded', 'Run exclusion reason', ...TACK_METRICS.map((k) => `${k.label} (${k.unit})`), 'Flags'],
-    ...t.repeats.flatMap((rp) =>
-      rp.runs.map((r) => [rp.name, rp.file.path, rp.session, rp.substrateLabel, rp.dwellS, rp.h0, rp.included ? '' : 'yes', r.cycle.cycleNumber, r.excluded ? 'yes' : '', r.excluded?.reason ?? '', ...TACK_METRICS.map((k) => (r.m.ok ? k.get(r.m) : null)), flagsOf(r.m).join('; ')]),
-    ),
+  const runCsv = () => [
+    ['Repeat (file)', 'Path', 'Session', 'Substrate', 'Dwell (s)', 'h0 (mm)', 'Probe d (mm)', 'Repeat excluded', 'Run', 'Run excluded', 'Exclusion reason',
+      ...MAIN_METRICS.map((k) => `${k.label} (${k.unit})`), 'Failure mode', 'Observation', 'Fibril onset δ (mm)', 'Max fibril extension (mm)', 'Flags', 'Flag details',
+      ...DIAG_METRICS.map((k) => `${k.label} (${k.unit})`)],
+    ...allRuns.map(({ rp, r }) => {
+      const flags = tackFlags(r.m);
+      return [rp.name, rp.file.path, rp.session, rp.substrateLabel, rp.dwellS, rp.h0, d, rp.included ? '' : 'yes', r.cycle.cycleNumber, r.excluded ? 'yes' : '', r.excluded?.reason ?? '',
+        ...MAIN_METRICS.map((k) => (r.m.ok ? k.get(r.m) : null)), r.obs.mode ? failureModeLabel(r.obs.mode) : '', r.obs.note, r.obs.fibrilOnsetMm, r.obs.fibrilMaxMm,
+        flags.map((f) => f.label).join('; '), flags.map((f) => f.detail).join(' | '), ...DIAG_METRICS.map((k) => (r.m.ok ? k.get(r.m) : null))];
+    }),
   ];
-  const summaryRows = () => [
-    ['Per Repeat (mean ± SD over runs)'],
-    ['Repeat (file)', 'Substrate', 'Dwell (s)', 'Excluded', 'Runs', ...TACK_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`])],
-    ...t.repeats.map((rp) => [rp.name, rp.substrateLabel, rp.dwellS, rp.included ? '' : 'yes', usedRuns(rp).length, ...TACK_METRICS.flatMap((k) => { const s = t.repeatStats.get(rp.fileId)![k.key]; return [s.mean, s.sd]; })]),
+  const summaryCsv = () => [
+    ['Mean ± SD per Repeat (over its runs, excluded runs left out)'],
+    ['Repeat (file)', 'Substrate', 'Dwell (s)', 'Repeat excluded', 'Runs', ...MAIN_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`]), 'Failure modes'],
+    ...t.repeats.map((rp) => [rp.name, rp.substrateLabel, rp.dwellS, rp.included ? '' : 'yes', usedRuns(rp).length, ...MAIN_METRICS.flatMap((k) => { const s = t.repeatStats.get(rp.fileId)![k.key]; return [s.mean, s.sd]; }), failureModeCounts(usedRuns(rp))]),
     [],
-    ['Per condition (substrate × dwell): mean ± SD over the Repeat means of included Repeats'],
-    ['Substrate', 'Dwell (s)', 'Repeats', 'Runs', ...TACK_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`])],
-    ...t.conditions.map((c) => [c.substrate, c.dwellS, c.nRepeats, c.nRuns, ...TACK_METRICS.flatMap((k) => [c.stats[k.key].mean, c.stats[k.key].sd])]),
+    ['Mean ± SD per condition (substrate × dwell; over the Repeat means of included Repeats)'],
+    ['Substrate', 'Dwell (s)', 'Repeats', 'Runs', ...MAIN_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`]), 'Failure modes'],
+    ...t.conditions.map((c) => [c.substrate, c.dwellS, c.nRepeats, c.nRuns, ...MAIN_METRICS.flatMap((k) => [c.stats[k.key].mean, c.stats[k.key].sd]), c.modes]),
     [],
     ['Probe diameter (mm)', d, 'A (mm²)', area],
     ['Excluded Repeats'], ...excludedRepeats.map((r) => [r.name, r.excluded!.reason]),
-    ['Excluded runs'], ...excludedRuns.map(({ rp, r }) => [`${rp.name} run ${r.cycle.cycleNumber}`, r.excluded!.reason]),
     ['Excluded sessions'], ...excludedSessions.map((s) => [s, t.tm.excludedSessions[s].reason]),
+    ['Excluded runs'], ...excludedRuns.map(({ rp, r }) => [`${rp.name} run ${r.cycle.cycleNumber}`, r.excluded!.reason]),
   ];
-  const base = `${project.name || 'tack'}_CR${t.ex.chargeRatio}_${t.ex.concentrationM}M`.replace(/[^\w.-]+/g, '_');
 
   return (
     <div className="ls-results tack-metrics">
       <p className="note">
-        Charge ratio <strong>{t.ex.chargeRatio}</strong>, <strong>{t.ex.concentrationM} M</strong> (chosen on the left): every substrate and dwell time. Metrics use the tensile part of
-        each pull. Nothing is excluded unless you choose to: a whole Repeat (file), a test session, or a single run (optional), each with a reason. Points are never removed.
+        Charge ratio <strong>{t.ex.chargeRatio}</strong>, <strong>{t.ex.concentrationM} M</strong> (chosen on the left): every substrate and dwell time, tensile part of each pull.
+        Flags are warnings only; nothing is excluded unless you choose to.
       </p>
 
-      <h3 className="ls-h">Inputs</h3>
-      <div className="table-actions">
-        <NumberField label="Probe diameter d (mm)" value={d > 0 ? d : null} positive onCommit={(v) => v !== null && setDiameter(v)} title="A = π d² / 4" />
-        <span className="note">A = π d²/4 = {fmt(area, 3)} mm²</span>
-        <NumberField label="Set h₀ for all Repeats (mm)" value={allH0} positive allowEmpty placeholder="mm" onCommit={setAllH0} />
-        <button className="small" disabled={allH0 === null} onClick={() => t.setH0(t.repeats.map((r) => r.fileId), allH0)}>Apply to all</button>
-      </div>
-      <div className="table-scroll">
-        <table className="grid">
-          <thead>
-            <tr><th>Exclude</th><th>Repeat (file)</th><th>Session</th><th>Substrate</th><th className="num">Dwell (s)</th><th>h₀ (mm)</th><th className="num">Runs</th><th>Reason (if excluded)</th></tr>
-          </thead>
-          <tbody>
-            {t.repeats.map((rp) => (
-              <tr key={rp.fileId} className={rp.included ? '' : 'excluded-row'}>
-                <td><input type="checkbox" checked={!!rp.excluded} onChange={(e) => t.excludeRepeat(rp.fileId, e.target.checked, rp.excluded?.reason ?? '')} aria-label={`Exclude ${rp.name}`} /></td>
-                <td title={rp.file.path}>{rp.name}</td>
-                <td>{rp.session}{rp.sessionExcluded ? ' (session excluded)' : ''}</td>
-                <td>
-                  <select value={SUBSTRATES.includes(rp.substrateLabel) ? rp.substrateLabel : '__read__'} onChange={(e) => t.setSubstrate(rp.fileId, e.target.value === '__read__' ? null : e.target.value)} aria-label={`Substrate of ${rp.name}`}>
-                    {SUBSTRATES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    {!SUBSTRATES.includes(rp.substrateLabel) && <option value="__read__">{rp.substrate === '—' ? 'unknown' : rp.substrate}</option>}
-                  </select>
-                </td>
-                <td className="num" title="Read from the Wait section">{rp.dwellS ?? '—'}</td>
-                <td><NumberField compact value={rp.h0} positive allowEmpty placeholder="skip" label={`h₀ of ${rp.name} (mm)`} onCommit={(v) => t.setH0([rp.fileId], v)} /></td>
-                <td className="num">{rp.runs.length}</td>
-                <td>{rp.excluded && <input className="reason" value={rp.excluded.reason} placeholder="reason (required)" onChange={(e) => t.excludeRepeat(rp.fileId, true, e.target.value)} />}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {sessions.length > 0 && (
+      <Section n={1} title="Test settings">
         <div className="table-actions">
-          <span>Exclude a whole test session:</span>
+          <NumberField label="Probe diameter d (mm)" value={d > 0 ? d : null} positive onCommit={(v) => v !== null && setDiameter(v)} title="A = π d² / 4" />
+          <span className="note">A = {fmt(area, 3)} mm²</span>
+          <NumberField label="Set h₀ for all Repeats (mm)" value={allH0} positive allowEmpty placeholder="mm" onCommit={setAllH0} />
+          <button className="small" disabled={allH0 === null} onClick={() => t.setH0(t.repeats.map((r) => r.fileId), allH0)}>Apply to all</button>
+        </div>
+        <div className="table-scroll">
+          <table className="grid">
+            <thead><tr><th>Exclude</th><th>Repeat (file)</th><th>Session</th><th>Substrate</th><th className="num">Dwell (s)</th><th>h₀ (mm)</th><th className="num">Runs</th><th>Reason (if excluded)</th></tr></thead>
+            <tbody>
+              {t.repeats.map((rp) => (
+                <tr key={rp.fileId} className={rp.included ? '' : 'excluded-row'}>
+                  <td><input type="checkbox" checked={!!rp.excluded} onChange={(e) => t.excludeRepeat(rp.fileId, e.target.checked, rp.excluded?.reason ?? '')} aria-label={`Exclude ${rp.name}`} /></td>
+                  <td title={rp.file.path}>{rp.name}</td>
+                  <td>{rp.session}{rp.sessionExcluded ? ' (session excluded)' : ''}</td>
+                  <td>
+                    <select value={SUBSTRATES.includes(rp.substrateLabel) ? rp.substrateLabel : '__read__'} onChange={(e) => t.setSubstrate(rp.fileId, e.target.value === '__read__' ? null : e.target.value)} aria-label={`Substrate of ${rp.name}`}>
+                      {SUBSTRATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      {!SUBSTRATES.includes(rp.substrateLabel) && <option value="__read__">{rp.substrate === '—' ? 'unknown' : rp.substrate}</option>}
+                    </select>
+                  </td>
+                  <td className="num" title="Read from the Wait section">{rp.dwellS ?? '—'}</td>
+                  <td><NumberField compact value={rp.h0} positive allowEmpty placeholder="skip" label={`h₀ of ${rp.name} (mm)`} onCommit={(v) => t.setH0([rp.fileId], v)} /></td>
+                  <td className="num">{rp.runs.length}</td>
+                  <td>{rp.excluded && <input className="reason" value={rp.excluded.reason} placeholder="reason" onChange={(e) => t.excludeRepeat(rp.fileId, true, e.target.value)} />}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="table-actions">
+          <span className="note">Exclude a whole test session:</span>
           {sessions.map((s) => (
-            <label key={s} className="check">
-              <input type="checkbox" checked={!!t.tm.excludedSessions[s]} onChange={(e) => t.excludeSession(s, e.target.checked, t.tm.excludedSessions[s]?.reason ?? '')} /> {s}
-            </label>
+            <label key={s} className="check"><input type="checkbox" checked={!!t.tm.excludedSessions[s]} onChange={(e) => t.excludeSession(s, e.target.checked, t.tm.excludedSessions[s]?.reason ?? '')} /> {s}</label>
           ))}
         </div>
-      )}
+        <div className="excluded-list">
+          <strong>Excluded data sets</strong>
+          {!excludedRepeats.length && !excludedSessions.length && !excludedRuns.length ? (
+            <span className="note"> none</span>
+          ) : (
+            <ul>
+              {excludedSessions.map((s) => <li key={s}>Session {s}: <input className="reason" value={t.tm.excludedSessions[s].reason} placeholder="reason" onChange={(e) => t.excludeSession(s, true, e.target.value)} /></li>)}
+              {excludedRepeats.map((r) => <li key={r.fileId}>Repeat {r.name}: <input className="reason" value={r.excluded!.reason} placeholder="reason" onChange={(e) => t.excludeRepeat(r.fileId, true, e.target.value)} /></li>)}
+              {excludedRuns.map(({ rp, r }) => (
+                <li key={r.id}>Run {r.cycle.cycleNumber} of {rp.name}: <input className="reason" value={r.excluded!.reason} placeholder="reason" onChange={(e) => t.excludeRun(r.id, true, e.target.value)} /> <button className="link small" onClick={() => t.excludeRun(r.id, false)}>Include again</button></li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Section>
 
-      <div className="excluded-list">
-        <strong>Excluded data sets</strong>
-        {!excludedRepeats.length && !excludedSessions.length && !excludedRuns.length ? (
-          <span className="note"> none</span>
-        ) : (
-          <ul>
-            {excludedSessions.map((s) => (
-              <li key={s}>Session {s}: <input className="reason" value={t.tm.excludedSessions[s].reason} placeholder="reason (required)" onChange={(e) => t.excludeSession(s, true, e.target.value)} /></li>
-            ))}
-            {excludedRepeats.map((r) => (
-              <li key={r.fileId}>Repeat {r.name}: <input className="reason" value={r.excluded!.reason} placeholder="reason (required)" onChange={(e) => t.excludeRepeat(r.fileId, true, e.target.value)} /></li>
-            ))}
-            {excludedRuns.map(({ rp, r }) => (
-              <li key={r.id}>Run {r.cycle.cycleNumber} of {rp.name}: <input className="reason" value={r.excluded!.reason} placeholder="reason (required)" onChange={(e) => t.excludeRun(r.id, true, e.target.value)} /> <button className="link small" onClick={() => t.excludeRun(r.id, false)}>Include again</button></li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <Section n={2} title="Force–displacement / stress–strain">
+        <div className="table-actions">
+          <label className="field inline">
+            <span>Repeat</span>
+            <select value={plotRepeat.fileId} onChange={(e) => setPlotId(e.target.value)}>
+              {t.repeats.map((r) => <option key={r.fileId} value={r.fileId}>{r.substrateLabel} · {r.dwellS ?? '—'} s · {r.name}</option>)}
+            </select>
+          </label>
+          <div className="segmented small" role="group" aria-label="Plot">
+            <button className={plotMode === 'force' ? 'on' : ''} onClick={() => setPlotMode('force')}>F vs δ</button>
+            <button className={plotMode === 'stress' ? 'on' : ''} disabled={plotRepeat.h0 === null} title={plotRepeat.h0 === null ? 'Enter h₀ for this Repeat' : ''} onClick={() => setPlotMode('stress')}>σ vs ε</button>
+          </div>
+          <label className="check"><input type="checkbox" checked={showFit} onChange={(e) => setShowFit(e.target.checked)} /> Initial slope (diagnostic)</label>
+        </div>
+        <TackPlot repeat={plotRepeat} mode={plotMode} showFit={showFit} />
+      </Section>
 
-      <h3 className="ls-h">F vs δ</h3>
-      <label className="field inline">
-        <span>Repeat</span>
-        <select value={plotRepeat.fileId} onChange={(e) => setPlotId(e.target.value)}>
-          {t.repeats.map((r) => <option key={r.fileId} value={r.fileId}>{r.substrateLabel} · {r.dwellS ?? '—'} s · {r.name}</option>)}
-        </select>
-      </label>
-      <TackPlot repeat={plotRepeat} />
-
-      <div className="table-actions">
-        <h3 className="ls-h">Per run</h3>
-        <button className="small" onClick={() => saveCsv(runRows(), `${base}_tack_runs.csv`)}>Export CSV</button>
-      </div>
-      <div className="table-scroll">
-        <table className="grid">
-          <thead>
-            <tr>
-              <th title="Optional: leave this run out of the statistics (none by default)">Exclude run</th><th>Repeat</th><th>Run</th><th>Substrate</th><th className="num">Dwell (s)</th>
-              {TACK_METRICS.map((k) => <th key={k.key} className="num">{k.label} ({k.unit})</th>)}
-              <th>Flags</th>
-            </tr>
-          </thead>
-          <tbody>
-            {t.repeats.flatMap((rp) =>
-              rp.runs.map((r) => (
+      <Section n={3} title="Per-run results">
+        <div className="table-scroll">
+          <table className="grid tack-runs">
+            <thead>
+              <tr>
+                <th title="Optional: leave this run out of the statistics (none by default)">Excl.</th><th>Repeat</th><th>Run</th><th>Substrate</th><th className="num">Dwell (s)</th>
+                {MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}
+                <th>Failure mode</th><th>Flags</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allRuns.map(({ rp, r }) => (
                 <tr key={r.id} className={rp.included && !r.excluded ? '' : 'excluded-row'}>
                   <td><input type="checkbox" checked={!!r.excluded} disabled={!r.m.ok} onChange={(e) => t.excludeRun(r.id, e.target.checked, r.excluded?.reason ?? '')} aria-label={`Exclude run ${r.cycle.cycleNumber} of ${rp.name}`} /></td>
-                  <td title={rp.file.path}>{rp.name}{rp.included ? '' : ' (excluded)'}</td>
+                  <td title={rp.file.path}>{rp.name}</td>
                   <td>{r.cycle.cycleNumber}</td>
                   <td>{rp.substrateLabel}</td>
                   <td className="num">{rp.dwellS ?? '—'}</td>
-                  {TACK_METRICS.map((k) => <td key={k.key} className="num">{r.m.ok ? fmt(k.get(r.m), k.digits) : '—'}</td>)}
-                  <td className={r.m.incomplete || !r.m.ok ? 'warn-text' : ''}>{[...(r.excluded ? [`excluded${r.excluded.reason ? `: ${r.excluded.reason}` : ''}`] : []), ...flagsOf(r.m)].join('; ')}</td>
+                  {MAIN_METRICS.map((k) => <td key={k.key} className="num">{r.m.ok ? fmt(k.get(r.m), k.digits) : '—'}</td>)}
+                  <td title={r.obs.note}>{r.obs.mode ? failureModeLabel(r.obs.mode) : '—'}</td>
+                  <td><Flags m={r.m} /></td>
                 </tr>
-              )),
-            )}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="note">ε needs h₀ for the Repeat. Hover or click a flag for details. Failure modes are entered in section 6.</p>
+      </Section>
 
-      <div className="table-actions">
-        <h3 className="ls-h">Mean ± SD per Repeat (over its runs)</h3>
-        <button className="small" onClick={() => saveCsv(summaryRows(), `${base}_tack_summary.csv`)}>Export CSV</button>
-      </div>
-      <div className="table-scroll">
-        <table className="grid">
-          <thead><tr><th>Repeat</th><th>Substrate</th><th className="num">Dwell (s)</th><th className="num">Runs</th>{TACK_METRICS.map((k) => <th key={k.key} className="num">{k.label} ({k.unit})</th>)}</tr></thead>
-          <tbody>
-            {t.repeats.map((rp) => (
-              <tr key={rp.fileId} className={rp.included ? '' : 'excluded-row'}>
-                <td>{rp.name}{rp.included ? '' : ' (excluded)'}</td><td>{rp.substrateLabel}</td><td className="num">{rp.dwellS ?? '—'}</td><td className="num">{usedRuns(rp).length}</td>
-                {TACK_METRICS.map((k) => <td key={k.key} className="num">{ms(t.repeatStats.get(rp.fileId)![k.key], k.digits)}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Section n={4} title="Mean ± SD per Repeat">
+        <div className="table-scroll">
+          <table className="grid">
+            <thead><tr><th>Repeat</th><th>Substrate</th><th className="num">Dwell (s)</th><th className="num">Runs</th>{MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure modes</th></tr></thead>
+            <tbody>
+              {t.repeats.map((rp) => (
+                <tr key={rp.fileId} className={rp.included ? '' : 'excluded-row'}>
+                  <td>{rp.name}</td><td>{rp.substrateLabel}</td><td className="num">{rp.dwellS ?? '—'}</td><td className="num">{usedRuns(rp).length}</td>
+                  {MAIN_METRICS.map((k) => <td key={k.key} className="num">{ms(t.repeatStats.get(rp.fileId)![k.key], k.digits)}</td>)}
+                  <td>{failureModeCounts(usedRuns(rp))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
 
-      <h3 className="ls-h">Mean ± SD per condition (substrate × dwell; over the means of the included Repeats)</h3>
-      <div className="table-scroll">
-        <table className="grid">
-          <thead><tr><th>Condition</th><th className="num">Repeats</th><th className="num">Runs</th>{TACK_METRICS.map((k) => <th key={k.key} className="num">{k.label} ({k.unit})</th>)}</tr></thead>
-          <tbody>
-            {t.conditions.map((c: GroupStat) => (
-              <tr key={c.key}>
-                <td className="strong">{c.label}</td><td className="num">{c.nRepeats}</td><td className="num">{c.nRuns}</td>
-                {TACK_METRICS.map((k) => <td key={k.key} className="num">{ms(c.stats[k.key], k.digits)}</td>)}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Section n={5} title="Mean ± SD per condition (substrate × dwell)">
+        <div className="table-scroll">
+          <table className="grid">
+            <thead><tr><th>Condition</th><th className="num">Repeats</th><th className="num">Runs</th>{MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure modes</th></tr></thead>
+            <tbody>
+              {t.conditions.map((c) => (
+                <tr key={c.key}>
+                  <td className="strong">{c.label}</td><td className="num">{c.nRepeats}</td><td className="num">{c.nRuns}</td>
+                  {MAIN_METRICS.map((k) => <td key={k.key} className="num">{ms(c.stats[k.key], k.digits)}</td>)}
+                  <td>{c.modes}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="note">Over the Repeat means of the included Repeats, so each Repeat counts once.</p>
+      </Section>
 
-      <TackMethods />
+      <Section n={6} title="Failure-mode observations">
+        <p className="note">Entered by you from what you saw (video, inspection); never inferred from the force curve. Fibril fields are optional.</p>
+        <div className="table-scroll">
+          <table className="grid tack-obs">
+            <thead><tr><th>Repeat</th><th>Run</th><th>Failure mode</th><th>Observation</th><th>Fibril onset δ (mm)</th><th>Max fibril extension (mm)</th></tr></thead>
+            <tbody>
+              {allRuns.map(({ rp, r }) => (
+                <tr key={r.id} className={rp.included && !r.excluded ? '' : 'excluded-row'}>
+                  <td>{rp.name}</td><td>{r.cycle.cycleNumber}</td>
+                  <td>
+                    <select value={r.obs.mode} onChange={(e) => t.setObservation(r.id, { mode: e.target.value as TackFailureMode })} aria-label={`Failure mode of run ${r.cycle.cycleNumber} of ${rp.name}`}>
+                      {FAILURE_MODES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                    </select>
+                  </td>
+                  <td><input className="obs-note" value={r.obs.note} placeholder="what you observed" onChange={(e) => t.setObservation(r.id, { note: e.target.value })} aria-label={`Observation for run ${r.cycle.cycleNumber} of ${rp.name}`} /></td>
+                  <td>
+                    <NumberField compact value={r.obs.fibrilOnsetMm} min={0} allowEmpty placeholder="—" label={`Fibril onset of run ${r.cycle.cycleNumber} (mm)`} onCommit={(v) => t.setObservation(r.id, { fibrilOnsetMm: v })} />
+                    {r.obs.fibrilOnsetMm !== null && rp.h0 !== null && <small> ε = {fmt(r.obs.fibrilOnsetMm / rp.h0, 3)}</small>}
+                  </td>
+                  <td>
+                    <NumberField compact value={r.obs.fibrilMaxMm} min={0} allowEmpty placeholder="—" label={`Max fibril extension of run ${r.cycle.cycleNumber} (mm)`} onCommit={(v) => t.setObservation(r.id, { fibrilMaxMm: v })} />
+                    {r.obs.fibrilMaxMm !== null && rp.h0 !== null && <small> ε = {fmt(r.obs.fibrilMaxMm / rp.h0, 3)}</small>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      <details className="section tack-advanced">
+        <summary>7. Advanced / Diagnostics: initial stiffness, apparent modulus, dwell relaxation</summary>
+        <div className="section-body">
+          <p className="note">Secondary quantities. With few force steps (Low force resolution) they are approximate.</p>
+          <div className="table-scroll">
+            <table className="grid">
+              <thead><tr><th>Repeat</th><th>Run</th>{DIAG_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}</tr></thead>
+              <tbody>
+                {allRuns.map(({ rp, r }) => (
+                  <tr key={r.id} className={rp.included && !r.excluded ? '' : 'excluded-row'}>
+                    <td>{rp.name}</td><td>{r.cycle.cycleNumber}</td>
+                    {DIAG_METRICS.map((k) => <td key={k.key} className="num">{r.m.ok ? fmt(k.get(r.m), k.digits) : '—'}</td>)}
+                  </tr>
+                ))}
+                {t.repeats.map((rp) => (
+                  <tr key={`m-${rp.fileId}`} className="mean-row">
+                    <td colSpan={2}>{rp.name} mean ± SD</td>
+                    {DIAG_METRICS.map((k) => <td key={k.key} className="num">{ms(t.repeatStats.get(rp.fileId)![k.key], k.digits)}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <TackMethods n={8} />
+
+      <Section n={9} title="Export CSV">
+        <div className="table-actions">
+          <button className="small" onClick={() => saveCsv(runCsv(), `${base}_tack_runs.csv`)}>Per-run results</button>
+          <button className="small" onClick={() => saveCsv(summaryCsv(), `${base}_tack_summary.csv`)}>Repeat and condition summaries</button>
+          <span className="note">Per-run CSV includes failure modes, observations, flags with details and the diagnostic quantities; the summary lists excluded data sets with reasons.</span>
+        </div>
+      </Section>
     </div>
   );
 }

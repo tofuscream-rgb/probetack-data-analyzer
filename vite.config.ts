@@ -9,11 +9,10 @@ import react from '@vitejs/plugin-react';
  */
 const CSP = [
   "default-src 'self'",
-  // KaTeX for the equations in the Tack metrics Methods panel (pinned release, Subresource Integrity).
-  "script-src 'self' https://cdnjs.cloudflare.com",
-  "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
-  "font-src 'self' data: https://cdnjs.cloudflare.com",
+  "font-src 'self' data:",
   "connect-src 'self'",
   "worker-src 'self' blob:",
   "object-src 'none'",

@@ -519,3 +519,16 @@ input.reason { min-width: 220px; }
 .tex.display, .tex-fallback.display { display: block; margin: 4px 0; overflow-x: auto; }
 .tex-fallback { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre-wrap; }
 .citations { margin: 4px 0 8px 18px; padding: 0; font-size: 12px; }
+.tack-section { margin-top: 10px; }
+.tack-section-head { display: flex; align-items: baseline; gap: 10px; }
+.tack-metrics .ls-h { margin: 6px 0 4px; }
+.flags { display: inline-flex; flex-wrap: nowrap; gap: 4px; }
+details.flag { display: inline-block; position: relative; }
+details.flag summary { list-style: none; cursor: pointer; font-size: 11px; padding: 1px 6px; border-radius: 9px; background: #fff3e0; color: #8a4b00; border: 1px solid #f0c48a; white-space: nowrap; }
+details.flag summary::-webkit-details-marker { display: none; }
+details.flag.flag-error summary { background: #fdecec; color: #9b1c1c; border-color: #f2b8b8; }
+details.flag .flag-detail { display: none; }
+details.flag[open] .flag-detail { display: block; position: absolute; z-index: 5; right: 0; top: calc(100% + 3px); width: 300px; white-space: normal; font-size: 11px; color: var(--ink-1, #18263A); background: #fff; border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+table.grid.tack-runs td { white-space: nowrap; }
+table.grid tr.mean-row td { font-weight: 600; background: var(--surface-2); }
+input.obs-note { min-width: 260px; }

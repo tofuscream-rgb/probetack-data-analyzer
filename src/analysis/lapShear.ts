@@ -33,6 +33,7 @@ export const FAILURE_MODE_LABEL = {
   adhesive: 'Adhesive',
   cohesive: 'Cohesive',
   mixed: 'Mixed',
+  other: 'Other',
 } as const;
 
 /** Columns a lap-shear run needs, as they appear in Mach-1 files. */
@@ -86,6 +87,7 @@ export interface LapShearResult {
     signedMJ: number;
     /** From the start to the failure displacement, when a failure point is known (mJ). */
     toFailureMJ: number | null;
+    toFailurePerAreaJm2: number | null;
     selectedPerAreaJm2: number;
     fullPerAreaJm2: number;
   };
@@ -112,7 +114,6 @@ export function dimensionError(d: LapShearDims): string | null {
   const bad = (v: number) => !(typeof v === 'number' && Number.isFinite(v) && v > 0);
   if (bad(d.lengthMm)) return 'Overlap length must be a positive number of millimetres.';
   if (bad(d.widthMm)) return 'Overlap width must be a positive number of millimetres.';
-  if (bad(d.thicknessMm)) return 'Gel thickness must be a positive number of millimetres.';
   return null;
 }
 
@@ -137,7 +138,7 @@ function emptyResult(dims: LapShearDims, error: string, missing: string[] = [], 
     peak: null,
     strengthKPa: NaN,
     strengthMPa: NaN,
-    work: { fullMJ: NaN, toPeakMJ: NaN, postPeakMJ: NaN, selectedMJ: NaN, selectedFromMm: NaN, selectedToMm: NaN, signedMJ: NaN, toFailureMJ: null, selectedPerAreaJm2: NaN, fullPerAreaJm2: NaN },
+    work: { fullMJ: NaN, toPeakMJ: NaN, postPeakMJ: NaN, selectedMJ: NaN, selectedFromMm: NaN, selectedToMm: NaN, signedMJ: NaN, toFailureMJ: null, toFailurePerAreaJm2: null, selectedPerAreaJm2: NaN, fullPerAreaJm2: NaN },
     failure: { dispMm: null, index: null, source: 'none', note: '' },
     quality: { invalid: 0, reversals: 0, duplicates: 0, gaps: 0 },
     series: { dispMm: EMPTY, forceGf: EMPTY, loadGf: EMPTY, cumWorkMJ: EMPTY },
@@ -364,6 +365,7 @@ export function analyzeLapShear(run: RunInput, meta: LapShearRunMeta, s: LapShea
       selectedToMm: selTo,
       signedMJ: signed,
       toFailureMJ: toFailure,
+      toFailurePerAreaJm2: toFailure !== null && Number.isFinite(area) ? workPerAreaJm2(toFailure, area) : null,
       selectedPerAreaJm2: workPerAreaJm2(selected, area),
       fullPerAreaJm2: workPerAreaJm2(total, area),
     },
@@ -395,18 +397,9 @@ export function describe(values: number[]): { mean: number; sd: number; n: numbe
 
 /** The per-run properties that are summarised (each computed per run with its own area before averaging). */
 export const SUMMARY_PROPERTIES: { key: string; label: string; unit: string; get: (r: LapShearResult) => number }[] = [
-  { key: 'peakGf', label: 'Peak force', unit: 'gf', get: (r) => r.peak?.forceGf ?? NaN },
   { key: 'peakN', label: 'Peak force', unit: 'N', get: (r) => r.peak?.forceN ?? NaN },
   { key: 'tauKPa', label: 'Apparent nominal lap-shear strength', unit: 'kPa', get: (r) => r.strengthKPa },
-  { key: 'tauMPa', label: 'Apparent nominal lap-shear strength', unit: 'MPa', get: (r) => r.strengthMPa },
   { key: 'dispPeak', label: 'Displacement at peak', unit: 'mm', get: (r) => r.peak?.dispMm ?? NaN },
-  { key: 'tPeak', label: 'Time at peak', unit: 's', get: (r) => r.peak?.timeS ?? NaN },
-  { key: 'wFull', label: 'Full-curve work', unit: 'mJ', get: (r) => r.work.fullMJ },
-  { key: 'wPre', label: 'Work to peak', unit: 'mJ', get: (r) => r.work.toPeakMJ },
-  { key: 'wPost', label: 'Post-peak work', unit: 'mJ', get: (r) => r.work.postPeakMJ },
-  { key: 'wSel', label: 'Selected integration work', unit: 'mJ', get: (r) => r.work.selectedMJ },
-  { key: 'wSelA', label: 'Selected work per bonded area', unit: 'J/m²', get: (r) => r.work.selectedPerAreaJm2 },
-  { key: 'wFullA', label: 'Full-curve work per bonded area', unit: 'J/m²', get: (r) => r.work.fullPerAreaJm2 },
   { key: 'dispFail', label: 'Failure displacement', unit: 'mm', get: (r) => r.failure.dispMm ?? NaN },
-  { key: 'wFail', label: 'Work to failure', unit: 'mJ', get: (r) => r.work.toFailureMJ ?? NaN },
+  { key: 'wFailA', label: 'Apparent work to failure per bonded area', unit: 'J/m²', get: (r) => r.work.toFailurePerAreaJm2 ?? NaN },
 ];

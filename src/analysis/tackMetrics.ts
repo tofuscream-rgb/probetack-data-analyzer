@@ -53,10 +53,14 @@ export interface TackMetrics {
   fmaxN: number;
   sigmaMaxKPa: number;
   deltaPeakMm: number;
+  /** Integration endpoint: true detachment when complete, otherwise the last recorded displacement. */
   deltaMaxMm: number;
+  /** True failure displacement; null when detachment was not recorded. */
+  failureDispMm: number | null;
   wJm2: number;
+  /** True failure strain; null without h₀ or when detachment was not recorded. */
   epsMax: number | null;
-  /** Strain at peak stress, δ_peak / h₀. */
+  /** Strain at peak stress, retained as a diagnostic. */
   epsPeak: number | null;
   plateau: { stressKPa: number; lengthMm: number; fromMm: number; toMm: number; levelN: number } | null;
   dwell: { startN: number; endN: number; relaxPct: number } | null;
@@ -97,7 +101,7 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
   }
   const dwell = dwellOf(run.holdForce_gf);
   const base: TackMetrics = {
-    ok: false, error: null, areaMm2: area, fmaxN: nan, sigmaMaxKPa: nan, deltaPeakMm: nan, deltaMaxMm: nan, wJm2: nan,
+    ok: false, error: null, areaMm2: area, fmaxN: nan, sigmaMaxKPa: nan, deltaPeakMm: nan, deltaMaxMm: nan, failureDispMm: null, wJm2: nan,
     epsMax: null, epsPeak: null, plateau: null,
     dwell, incomplete: false, resolutionN: null, peakSteps: null, zeroedN: run.zeroedGf !== null && run.zeroedGf !== undefined ? run.zeroedGf * GF_TO_N : null,
     notes, curve: { deltaMm: new Float64Array(), tN: new Float64Array() },
@@ -195,8 +199,9 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
     sigmaMaxKPa: (fmax / area) * 1000,
     deltaPeakMm: delta[ip],
     deltaMaxMm: deltaMax,
+    failureDispMm: incomplete ? null : deltaMax,
     wJm2,
-    epsMax: h0 !== null ? deltaMax / h0 : null,
+    epsMax: !incomplete && h0 !== null ? deltaMax / h0 : null,
     epsPeak: h0 !== null ? delta[ip] / h0 : null,
     plateau,
     incomplete,

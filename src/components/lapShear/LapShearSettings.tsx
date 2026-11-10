@@ -1,7 +1,6 @@
 import { useLapShear } from '../../state/lapShear';
-import { INTEGRATION_LABEL, LAP_INTEGRATION_MODES } from '../../analysis/lapShear';
 import { defaultLapShear } from '../../state/defaults';
-import type { IntegrationMode, LapShearSettings as Settings } from '../../types';
+import type { LapShearSettings as Settings } from '../../types';
 import { Section } from '../common';
 import { NumberField } from './NumberField';
 
@@ -12,29 +11,9 @@ export function LapShearSettings() {
   return (
     <div className="settings-panel">
       <div className="settings-grid">
-        <Section title="Mechanical work">
-          <label className="field">
-            <span>Integration interval</span>
-            <select value={s.integration.mode} onChange={(e) => sub('integration', { mode: e.target.value as IntegrationMode })}>
-              {LAP_INTEGRATION_MODES.map((k) => <option key={k} value={k}>{INTEGRATION_LABEL[k]}</option>)}
-            </select>
-          </label>
-          {s.integration.mode === 'custom' && (
-            <div className="pair">
-              <NumberField label="From (mm)" value={s.integration.fromMm} min={0} onCommit={(v) => v !== null && sub('integration', { fromMm: v })} />
-              <NumberField label="To (mm)" value={s.integration.toMm} min={0} onCommit={(v) => v !== null && sub('integration', { toMm: v })} />
-            </div>
-          )}
-          <p className="note">
-            Full-curve, start-to-peak and post-peak work are always reported; this choice sets the “selected” work and the shaded region. Custom limits are
-            interpolated exactly. W = ∫ F dδ by the trapezoidal rule in N·mm = mJ.
-          </p>
-          <NumberField
-            label="Treat a time step longer than … × the median step as a gap (not integrated across)"
-            value={s.gapFactor}
-            positive
-            onCommit={(v) => v !== null && setSettings({ gapFactor: v })}
-          />
+        <Section title="Work / integration">
+          <p className="note">The only reported lap-shear energy metric is apparent work to failure per bonded area. It is integrated automatically to the identified failure point. Other work intervals remain internal diagnostics.</p>
+          <NumberField label="Treat a time step longer than … × the median step as a gap" value={s.gapFactor} positive onCommit={(v) => v !== null && setSettings({ gapFactor: v })} />
         </Section>
 
         <Section title="Complete failure">

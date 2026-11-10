@@ -1,7 +1,6 @@
 import { usePeel } from '../../state/peel';
-import { INTEGRATION_LABEL } from '../../analysis/lapShear';
 import { defaultPeel } from '../../state/defaults';
-import type { IntegrationMode, PeelSettings as Settings } from '../../types';
+import type { PeelSettings as Settings } from '../../types';
 import { Section } from '../common';
 import { NumberField } from '../lapShear/NumberField';
 
@@ -45,20 +44,9 @@ export function PeelSettings() {
           </div>
           <p className="note">Sets the peeled length (for the automatic window and the work per peeled area). If no detachment is found, the end of the recording is used and the run says so.</p>
         </Section>
-        <Section title="Work">
-          <label className="field">
-            <span>Area under the graph, chosen range</span>
-            <select value={s.integration.mode} onChange={(e) => sub('integration', { mode: e.target.value as IntegrationMode })}>
-              {(Object.keys(INTEGRATION_LABEL) as IntegrationMode[]).map((k) => <option key={k} value={k}>{INTEGRATION_LABEL[k]}</option>)}
-            </select>
-          </label>
-          {s.integration.mode === 'custom' && (
-            <div className="pair">
-              <NumberField label="From (mm)" value={s.integration.fromMm} min={0} onCommit={(v) => v !== null && sub('integration', { fromMm: v })} />
-              <NumberField label="To (mm)" value={s.integration.toMm} min={0} onCommit={(v) => v !== null && sub('integration', { toMm: v })} />
-            </div>
-          )}
+        <Section title="Data gaps">
           <NumberField label="Treat a time step longer than … × the median as a gap" value={s.gapFactor} positive onCommit={(v) => v !== null && setSettings({ gapFactor: v })} />
+          <p className="note">Work-based peel outputs remain internal diagnostics rather than primary reported metrics.</p>
         </Section>
         <Section title="Force">
           <label className="check-row"><input type="checkbox" checked={s.baseline.enabled} onChange={(e) => sub('baseline', { enabled: e.target.checked })} /> Apply zero-force baseline correction</label>

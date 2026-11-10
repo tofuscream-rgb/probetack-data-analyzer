@@ -8,7 +8,7 @@
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { RUN_TABS } from '../types';
-import type { RunGraphView, ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord, TackMetricsState, DatasetExclusion, TackFailureMode, TackObservation } from '../types';
+import type { RunGraphView, ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord, TackMetricsState, DatasetExclusion, FailureLocus, TackMorphology, TackObservation } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
 import { defaultCompare, defaultExperiment, defaultLapShear, defaultPeel, defaultProject, defaultSettings } from '../state/defaults';
 
@@ -136,7 +136,11 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
       widthMm: pos(m.widthMm, d.settings.defaults.widthMm),
       thicknessMm: pos(m.thicknessMm, d.settings.defaults.thicknessMm),
       angleDeg: pos(m.angleDeg, d.settings.defaults.angleDeg),
-      failureMode: ['adhesive', 'cohesive', 'mixed'].includes(m.failureMode) ? m.failureMode : 'unspecified',
+      failureMode: ['adhesive', 'cohesive', 'mixed', 'other'].includes(m.failureMode) ? m.failureMode : 'unspecified',
+      peelMorphology: ['no-fibrils', 'transient-fibrils', 'persistent-fibrils', 'cavitation', 'cavitation+fibrillation', 'other'].includes(m.peelMorphology ?? '') ? m.peelMorphology : 'unspecified',
+      observation: typeof m.observation === 'string' ? m.observation : '',
+      fibrilZoneMm: typeof m.fibrilZoneMm === 'number' && Number.isFinite(m.fibrilZoneMm) && m.fibrilZoneMm >= 0 ? m.fibrilZoneMm : null,
+      maxFibrilMm: typeof m.maxFibrilMm === 'number' && Number.isFinite(m.maxFibrilMm) && m.maxFibrilMm >= 0 ? m.maxFibrilMm : null,
       manualDetachMm: typeof m.manualDetachMm === 'number' && Number.isFinite(m.manualDetachMm) ? m.manualDetachMm : null,
     };
   }
@@ -174,12 +178,21 @@ function migrateTackMetrics(raw: Partial<TackMetricsState> | undefined): TackMet
     for (const [k, v] of Object.entries(rec ?? {})) if (v && typeof v === 'object') out[k] = { reason: typeof v.reason === 'string' ? v.reason : '', at: typeof v.at === 'string' ? v.at : '' };
     return out;
   };
-  const MODES: TackFailureMode[] = ['', 'interfacial', 'cohesive', 'cavitation', 'fibrillation', 'cavitation+fibrillation', 'mixed', 'other'];
+  const LOCI: FailureLocus[] = ['unspecified', 'adhesive', 'cohesive', 'mixed', 'other'];
+  const MORPH: TackMorphology[] = ['unspecified', 'none', 'cavitation', 'fibrillation', 'cavitation+fibrillation', 'other'];
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
   const observations: Record<string, TackObservation> = {};
   for (const [k, v] of Object.entries(raw?.observations ?? {})) {
     if (!v || typeof v !== 'object') continue;
-    observations[k] = { mode: MODES.includes(v.mode) ? v.mode : '', note: typeof v.note === 'string' ? v.note : '', fibrilOnsetMm: num(v.fibrilOnsetMm), fibrilMaxMm: num(v.fibrilMaxMm) };
+    const legacy = typeof (v as any).mode === 'string' ? (v as any).mode : '';
+    const legacyLocus: FailureLocus = legacy === 'interfacial' ? 'adhesive' : legacy === 'cohesive' || legacy === 'mixed' ? legacy : legacy === 'other' ? 'other' : 'unspecified';
+    const legacyMorph: TackMorphology = legacy === 'cavitation' || legacy === 'fibrillation' || legacy === 'cavitation+fibrillation' ? legacy : 'unspecified';
+    observations[k] = {
+      locus: LOCI.includes((v as any).locus) ? (v as any).locus : legacyLocus,
+      morphology: MORPH.includes((v as any).morphology) ? (v as any).morphology : legacyMorph,
+      note: typeof v.note === 'string' ? v.note : '',
+      fibrilOnsetMm: num(v.fibrilOnsetMm), fibrilMaxMm: num(v.fibrilMaxMm),
+    };
   }
   return { h0, excludedRepeats: excl(raw?.excludedRepeats), excludedSessions: excl(raw?.excludedSessions), excludedRuns: excl(raw?.excludedRuns), observations };
 }

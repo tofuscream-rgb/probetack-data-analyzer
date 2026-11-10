@@ -22,9 +22,9 @@ const ITEMS: { title: string; tex: string; text: string }[] = [
     text: 'σ_max in kPa (N/mm² × 1000). δ_peak = displacement at F_max; ε_peak = the strain at peak stress. h₀ = gel thickness of the Repeat (mm); without h₀ the strains are not computed.',
   },
   {
-    title: 'Break point',
+    title: 'Failure point',
     tex: String.raw`F\!\left(\delta_{\text{break}}\right) = ${TACK_DEFAULTS.endFraction}\,F_{\max},\qquad \varepsilon_{\text{break}} = \frac{\delta_{\text{break}}}{h_0}`,
-    text: `δ_break = first displacement after the peak where F falls to ≤ ${pct(TACK_DEFAULTS.endFraction)} of F_max (linear interpolation): full detachment. If that never happens, δ_break is the end of the data and the run is flagged “Incomplete detachment”.`,
+    text: `δ_failure = first displacement after the peak where F falls to ≤ ${pct(TACK_DEFAULTS.endFraction)} of F_max (linear interpolation): full detachment. If that never happens, true failure displacement and strain are left blank; the end of the recording is used only as the lower-bound work-integration limit.`,
   },
   {
     title: 'Work of adhesion (debonding)',
@@ -37,9 +37,9 @@ const ITEMS: { title: string; tex: string; text: string }[] = [
     text: `Between the peak and δ_break, the longest stretch in which every force lies within ±${pct(TACK_DEFAULTS.plateauTol)} of one level F_p. If it is longer than ${TACK_DEFAULTS.plateauMinMm} mm, the plateau stress σ_p (mean F in the stretch / A) and plateau length Δδ_p are reported; otherwise they are blank. The curve is not classified: a plateau does not by itself mean fibrillation.`,
   },
   {
-    title: 'Failure mode',
-    tex: String.raw`\text{failure mode} \in \{\text{interfacial},\ \text{cohesive},\ \text{cavitation},\ \text{fibrillation},\ \ldots\}`,
-    text: 'Entered by you for each run from what you observed (with optional notes, fibril onset displacement and largest fibril extension, shown as strain δ/h₀ when h₀ is known). It is never inferred from the force curve.',
+    title: 'Failure locus and debonding morphology',
+    tex: String.raw`\text{failure locus} \perp \text{debonding morphology}`,
+    text: 'Failure locus (adhesive/interfacial, cohesive, mixed) and debonding morphology (none, cavitation, fibrillation, cavitation + fibrillation) are entered separately from observation/video. Neither is inferred from the force curve.',
   },
   {
     title: 'Data-quality flags (warnings only)',

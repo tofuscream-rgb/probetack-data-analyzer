@@ -117,21 +117,26 @@ describe('tack flags and failure modes', () => {
     const f = tackFlags(m);
     expect(f.map((x) => x.label)).toEqual(['Low force resolution', 'Incomplete detachment', 'Load tared after dwell']);
     expect(f[0].detail).toMatch(/^F_max = [\d.]+ force steps of [\d.]+ N; plateau and relaxation may be approximate\.$/);
-    expect(f[1].detail).toMatch(/W_adh is underestimated/);
+    expect(f[1].detail).toMatch(/W_adh is a lower bound and true failure displacement\/strain are left blank/);
     expect(f[2].detail).toMatch(/pull force is referenced to the new zero/);
     expect(tackFlags(analyzeTack(run(triangle()), { diameterMm: D, h0Mm: 2 }))).toEqual([]);
   });
 
-  it('counts failure modes entered by the user', async () => {
-    const { failureModeCounts, EMPTY_OBSERVATION } = await import('../src/state/tackMetrics');
-    const r = (mode: string) => ({ obs: { ...EMPTY_OBSERVATION, mode } }) as never;
-    expect(failureModeCounts([r('cohesive'), r(''), r('cohesive'), r('cavitation+fibrillation')])).toBe('Cohesive 2 · Cavitation + fibrillation 1 · not set 1');
+  it('counts failure loci and debonding morphologies separately', async () => {
+    const { failureModeCounts, morphologyCounts, EMPTY_OBSERVATION } = await import('../src/state/tackMetrics');
+    const r = (locus: string, morphology: string) => ({ obs: { ...EMPTY_OBSERVATION, locus, morphology } }) as never;
+    const runs = [r('cohesive', 'fibrillation'), r('unspecified', 'none'), r('cohesive', 'cavitation+fibrillation'), r('adhesive', 'unspecified')];
+    expect(failureModeCounts(runs)).toBe('Cohesive 2 · Adhesive / interfacial 1 · not set 1');
+    expect(morphologyCounts(runs)).toBe('Fibrillation 1 · None 1 · Cavitation + fibrillation 1 · not set 1');
   });
 
   it('keeps observations in saved projects', async () => {
     const { migrateState } = await import('../src/storage/project');
     const s = migrateState({ tackMetrics: { observations: { 'f#c1': { mode: 'fibrillation', note: 'long fibrils', fibrilOnsetMm: 0.4, fibrilMaxMm: -1 }, 'f#c2': { mode: 'bogus' } } } as never });
-    expect(s.tackMetrics.observations['f#c1']).toEqual({ mode: 'fibrillation', note: 'long fibrils', fibrilOnsetMm: 0.4, fibrilMaxMm: null });
-    expect(s.tackMetrics.observations['f#c2'].mode).toBe('');
+    // A single legacy failure mode is split into failure locus and debonding morphology.
+    expect(s.tackMetrics.observations['f#c1']).toEqual({ locus: 'unspecified', morphology: 'fibrillation', note: 'long fibrils', fibrilOnsetMm: 0.4, fibrilMaxMm: null });
+    expect(s.tackMetrics.observations['f#c2']).toMatchObject({ locus: 'unspecified', morphology: 'unspecified' });
+    const legacy = migrateState({ tackMetrics: { observations: { a: { mode: 'interfacial' }, b: { mode: 'cohesive' } } } as never }).tackMetrics.observations;
+    expect([legacy.a.locus, legacy.b.locus]).toEqual(['adhesive', 'cohesive']);
   });
 });

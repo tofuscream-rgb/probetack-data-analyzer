@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { useApp, download } from '../../state/AppContext';
 import {
-  DIAG_METRICS, FAILURE_MODES, MAIN_METRICS, failureModeCounts, failureModeLabel, tackFlags, usedRuns, useTackMetrics,
+  DIAG_METRICS, FAILURE_LOCI, MAIN_METRICS, TACK_MORPHOLOGIES, failureModeCounts, failureLocusLabel, morphologyCounts, morphologyLabel, tackFlags, usedRuns, useTackMetrics,
   type Metric, type TackRepeat,
 } from '../../state/tackMetrics';
 import { TACK_DEFAULTS } from '../../analysis/tackMetrics';
@@ -12,7 +12,7 @@ import { CURVE_COLORS } from '../../plotting/colors';
 import { NumberField } from '../lapShear/NumberField';
 import { fmt } from '../common';
 import { TackMethods } from './TackMethods';
-import type { TackFailureMode } from '../../types';
+import type { FailureLocus, TackMorphology } from '../../types';
 
 const SUBSTRATES = ['PET', 'stainless steel', 'glass'];
 
@@ -86,7 +86,7 @@ function TackPlot({ repeat, mode }: { repeat: TackRepeat; mode: PlotMode }) {
       const xu = stress ? '' : ' mm';
       traces.push({ type: 'scatter', mode: 'lines', x: xs, y: ys, name, legendgroup: name, line: { color, width: LINE.normal, dash: r.excluded ? 'dash' : 'solid' }, hovertemplate: `${name}<br>${xl} = %{x:.3f}${xu}<br>${yl} = %{y:.4f} ${yu}<extra></extra>` } as Data);
       traces.push({ type: 'scatter', mode: 'markers', x: [m.deltaPeakMm * fx], y: [m.fmaxN * fy], legendgroup: name, showlegend: false, marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, hovertemplate: `${name}<br>peak: ${yl} = %{y:.4f} ${yu} at ${xl} = %{x:.3f}${xu}<extra></extra>` } as Data);
-      traces.push({ type: 'scatter', mode: 'markers', x: [m.deltaMaxMm * fx], y: [TACK_DEFAULTS.endFraction * m.fmaxN * fy], legendgroup: name, showlegend: false, marker: { symbol: m.incomplete ? 'x-open' : 'x', size: 12, color, line: { color, width: 2 } }, hovertemplate: `${name}<br>break: ${xl} = %{x:.3f}${xu}${m.incomplete ? ' (end of data: incomplete detachment)' : ''}<extra></extra>` } as Data);
+      if (!m.incomplete && m.failureDispMm !== null) traces.push({ type: 'scatter', mode: 'markers', x: [m.failureDispMm * fx], y: [TACK_DEFAULTS.endFraction * m.fmaxN * fy], legendgroup: name, showlegend: false, marker: { symbol: 'x', size: 12, color, line: { color, width: 2 } }, hovertemplate: `${name}<br>failure: ${xl} = %{x:.3f}${xu}<extra></extra>` } as Data);
       if (m.plateau) traces.push({ type: 'scatter', mode: 'lines', x: [m.plateau.fromMm * fx, m.plateau.toMm * fx], y: [m.plateau.levelN * fy, m.plateau.levelN * fy], legendgroup: name, showlegend: false, line: { color, width: 1.4, dash: 'dot' }, hovertemplate: `${name}<br>plateau ${m.plateau.stressKPa.toFixed(2)} kPa over ${m.plateau.lengthMm.toFixed(2)} mm<extra></extra>` } as Data);
     });
     const lay: Partial<Layout> = {
@@ -107,7 +107,7 @@ function TackPlot({ repeat, mode }: { repeat: TackRepeat; mode: PlotMode }) {
   return (
     <>
       <div className="table-actions">
-        <span className="note">▲ peak · × break (F ≤ {TACK_DEFAULTS.endFraction * 100}% F<sub>max</sub>; open × = end of data) · dotted = plateau</span>
+        <span className="note">▲ peak · × true failure · dotted = automatically detected plateau. Incomplete runs have no true-failure marker.</span>
         <div className="export-group"><span>Save graph</span><button className="small" onClick={() => save('png')}>PNG</button><button className="small" onClick={() => save('svg')}>SVG</button></div>
       </div>
       <PlotlyChart data={data} layout={layout} className="plot summary" onReady={(el) => (plotEl.current = el)} />
@@ -135,12 +135,12 @@ export function TackMetricsTab() {
 
   const runCsv = () => [
     ['Repeat (file)', 'Path', 'Session', 'Substrate', 'Dwell (s)', 'h0 (mm)', 'Probe d (mm)', 'Repeat excluded', 'Run', 'Run excluded', 'Exclusion reason',
-      ...MAIN_METRICS.map((k) => `${k.label} (${k.unit})`), 'Failure mode', 'Observation', 'Fibril onset δ (mm)', 'Max fibril extension (mm)', 'Flags', 'Flag details',
+      ...MAIN_METRICS.map((k) => `${k.label} (${k.unit})`), 'Failure locus', 'Debonding morphology', 'Observation', 'Fibril onset δ (mm)', 'Max fibril extension (mm)', 'Flags', 'Flag details',
       ...DIAG_METRICS.map((k) => `${k.label} (${k.unit})`)],
     ...allRuns.map(({ rp, r }) => {
       const flags = tackFlags(r.m);
       return [rp.name, rp.file.path, rp.session, rp.substrateLabel, rp.dwellS, rp.h0, d, rp.included ? '' : 'yes', r.cycle.cycleNumber, r.excluded ? 'yes' : '', r.excluded?.reason ?? '',
-        ...MAIN_METRICS.map((k) => (r.m.ok ? k.get(r.m) : null)), r.obs.mode ? failureModeLabel(r.obs.mode) : '', r.obs.note, r.obs.fibrilOnsetMm, r.obs.fibrilMaxMm,
+        ...MAIN_METRICS.map((k) => (r.m.ok ? k.get(r.m) : null)), r.obs.locus === 'unspecified' ? '' : failureLocusLabel(r.obs.locus), r.obs.morphology === 'unspecified' ? '' : morphologyLabel(r.obs.morphology), r.obs.note, r.obs.fibrilOnsetMm, r.obs.fibrilMaxMm,
         flags.map((f) => f.label).join('; '), flags.map((f) => f.detail).join(' | '), ...DIAG_METRICS.map((k) => (r.m.ok ? k.get(r.m) : null))];
     }),
   ];
@@ -242,7 +242,7 @@ export function TackMetricsTab() {
               <tr>
                 <th title="Optional: leave this run out of the statistics (none by default)">Excl.</th><th>Repeat</th><th>Run</th><th>Substrate</th><th className="num">Dwell (s)</th>
                 {MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}
-                <th>Failure mode</th><th>Flags</th>
+                <th>Failure locus</th><th>Morphology</th><th>Flags</th>
               </tr>
             </thead>
             <tbody>
@@ -254,26 +254,27 @@ export function TackMetricsTab() {
                   <td>{rp.substrateLabel}</td>
                   <td className="num">{rp.dwellS ?? '—'}</td>
                   {MAIN_METRICS.map((k) => <td key={k.key} className="num">{r.m.ok ? fmt(k.get(r.m), k.digits) : '—'}</td>)}
-                  <td title={r.obs.note}>{r.obs.mode ? failureModeLabel(r.obs.mode) : '—'}</td>
+                  <td title={r.obs.note}>{r.obs.locus === 'unspecified' ? '—' : failureLocusLabel(r.obs.locus)}</td>
+                  <td title={r.obs.note}>{r.obs.morphology === 'unspecified' ? '—' : morphologyLabel(r.obs.morphology)}</td>
                   <td><Flags m={r.m} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="note">ε needs h₀ for the Repeat. Hover or click a flag for details. Failure modes are entered in section 6.</p>
+        <p className="note">ε needs h₀ for the Repeat. Hover or click a flag for details. Failure observations are entered in section 6. Incomplete runs have blank true failure strain.</p>
       </Section>
 
       <Section n={4} title="Mean ± SD per Repeat">
         <div className="table-scroll">
           <table className="grid">
-            <thead><tr><th>Repeat</th><th>Substrate</th><th className="num">Dwell (s)</th><th className="num">Runs</th>{MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure modes</th></tr></thead>
+            <thead><tr><th>Repeat</th><th>Substrate</th><th className="num">Dwell (s)</th><th className="num">Runs</th>{MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure loci</th><th>Morphologies</th></tr></thead>
             <tbody>
               {t.repeats.map((rp) => (
                 <tr key={rp.fileId} className={rp.included ? '' : 'excluded-row'}>
                   <td>{rp.name}</td><td>{rp.substrateLabel}</td><td className="num">{rp.dwellS ?? '—'}</td><td className="num">{usedRuns(rp).length}</td>
                   {MAIN_METRICS.map((k) => <td key={k.key} className="num">{ms(t.repeatStats.get(rp.fileId)![k.key], k.digits)}</td>)}
-                  <td>{failureModeCounts(usedRuns(rp))}</td>
+                  <td>{failureModeCounts(usedRuns(rp))}</td><td>{morphologyCounts(usedRuns(rp))}</td>
                 </tr>
               ))}
             </tbody>
@@ -284,13 +285,13 @@ export function TackMetricsTab() {
       <Section n={5} title="Mean ± SD per condition (substrate × dwell)">
         <div className="table-scroll">
           <table className="grid">
-            <thead><tr><th>Condition</th><th className="num">Repeats</th><th className="num">Runs</th>{MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure modes</th></tr></thead>
+            <thead><tr><th>Condition</th><th className="num">Repeats</th><th className="num">Runs</th>{MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure loci</th><th>Morphologies</th></tr></thead>
             <tbody>
               {t.conditions.map((c) => (
                 <tr key={c.key}>
                   <td className="strong">{c.label}</td><td className="num">{c.nRepeats}</td><td className="num">{c.nRuns}</td>
                   {MAIN_METRICS.map((k) => <td key={k.key} className="num">{ms(c.stats[k.key], k.digits)}</td>)}
-                  <td>{c.modes}</td>
+                  <td>{c.modes}</td><td>{morphologyCounts(t.repeats.filter((rp) => rp.included && rp.substrateLabel === c.substrate && rp.dwellS === c.dwellS).flatMap(usedRuns))}</td>
                 </tr>
               ))}
             </tbody>
@@ -299,29 +300,20 @@ export function TackMetricsTab() {
         <p className="note">Over the Repeat means of the included Repeats, so each Repeat counts once.</p>
       </Section>
 
-      <Section n={6} title="Failure-mode observations">
-        <p className="note">Entered by you from what you saw (video, inspection); never inferred from the force curve. Fibril fields are optional.</p>
+      <Section n={6} title="Failure observations">
+        <p className="note">Failure locus and debonding morphology are separate manual observations and are never inferred from the force curve.</p>
         <div className="table-scroll">
           <table className="grid tack-obs">
-            <thead><tr><th>Repeat</th><th>Run</th><th>Failure mode</th><th>Observation</th><th>Fibril onset δ (mm)</th><th>Max fibril extension (mm)</th></tr></thead>
+            <thead><tr><th>Repeat</th><th>Run</th><th>Failure locus</th><th>Debonding morphology</th><th>Observation</th><th>Fibril onset δ (mm)</th><th>Max fibril extension (mm)</th></tr></thead>
             <tbody>
               {allRuns.map(({ rp, r }) => (
                 <tr key={r.id} className={rp.included && !r.excluded ? '' : 'excluded-row'}>
                   <td>{rp.name}</td><td>{r.cycle.cycleNumber}</td>
-                  <td>
-                    <select value={r.obs.mode} onChange={(e) => t.setObservation(r.id, { mode: e.target.value as TackFailureMode })} aria-label={`Failure mode of run ${r.cycle.cycleNumber} of ${rp.name}`}>
-                      {FAILURE_MODES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-                    </select>
-                  </td>
-                  <td><input className="obs-note" value={r.obs.note} placeholder="what you observed" onChange={(e) => t.setObservation(r.id, { note: e.target.value })} aria-label={`Observation for run ${r.cycle.cycleNumber} of ${rp.name}`} /></td>
-                  <td>
-                    <NumberField compact value={r.obs.fibrilOnsetMm} min={0} allowEmpty placeholder="—" label={`Fibril onset of run ${r.cycle.cycleNumber} (mm)`} onCommit={(v) => t.setObservation(r.id, { fibrilOnsetMm: v })} />
-                    {r.obs.fibrilOnsetMm !== null && rp.h0 !== null && <small> ε = {fmt(r.obs.fibrilOnsetMm / rp.h0, 3)}</small>}
-                  </td>
-                  <td>
-                    <NumberField compact value={r.obs.fibrilMaxMm} min={0} allowEmpty placeholder="—" label={`Max fibril extension of run ${r.cycle.cycleNumber} (mm)`} onCommit={(v) => t.setObservation(r.id, { fibrilMaxMm: v })} />
-                    {r.obs.fibrilMaxMm !== null && rp.h0 !== null && <small> ε = {fmt(r.obs.fibrilMaxMm / rp.h0, 3)}</small>}
-                  </td>
+                  <td><select value={r.obs.locus} onChange={(e) => t.setObservation(r.id, { locus: e.target.value as FailureLocus })}>{FAILURE_LOCI.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}</select></td>
+                  <td><select value={r.obs.morphology} onChange={(e) => t.setObservation(r.id, { morphology: e.target.value as TackMorphology })}>{TACK_MORPHOLOGIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}</select></td>
+                  <td><input className="obs-note" value={r.obs.note} placeholder="what you observed" onChange={(e) => t.setObservation(r.id, { note: e.target.value })} /></td>
+                  <td><NumberField compact value={r.obs.fibrilOnsetMm} min={0} allowEmpty placeholder="—" label="Fibril onset (mm)" onCommit={(v) => t.setObservation(r.id, { fibrilOnsetMm: v })} />{r.obs.fibrilOnsetMm !== null && rp.h0 !== null && <small> ε = {fmt(r.obs.fibrilOnsetMm / rp.h0, 3)}</small>}</td>
+                  <td><NumberField compact value={r.obs.fibrilMaxMm} min={0} allowEmpty placeholder="—" label="Max fibril extension (mm)" onCommit={(v) => t.setObservation(r.id, { fibrilMaxMm: v })} />{r.obs.fibrilMaxMm !== null && rp.h0 !== null && <small> ε = {fmt(r.obs.fibrilMaxMm / rp.h0, 3)}</small>}</td>
                 </tr>
               ))}
             </tbody>

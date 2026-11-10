@@ -123,7 +123,7 @@ The **Tack metrics** tab analyses the tensile part of each pull for every file (
 
 1. **Test settings**: probe diameter *d* (default 5.5 mm; A = π d²/4); gel thickness h₀ per Repeat (blank = strains are skipped; *Apply to all* sets one value); substrate per Repeat (PET, stainless steel, glass, or the name read from the folder); dwell time read from the Wait section; exclusion of a Repeat or test session, and the list of excluded data sets with reasons.
 2. **Plot**: F vs δ, or σ vs ε once h₀ is entered, for the runs of one Repeat, with ▲ peak, × break and the plateau.
-3. **Per-run results**: F_max (N), σ_max (kPa), W_adh (J/m²), δ_peak and ε_peak (displacement and strain at peak stress), δ_break and ε_break = δ_break/h₀, plateau stress (kPa) and length (mm), failure mode and flags. A single run can be excluded (optional; none by default).
+3. **Per-run results**: σ_max (kPa), W_adh (J/m²), true failure strain ε_failure, automatically detected plateau stress, separate failure-locus and debonding-morphology observations, and flags. F_max, displacement, plateau length and dwell quantities remain diagnostics.
 4. **Mean ± SD per Repeat** and 5. **per condition** (substrate × dwell; over the Repeat means of the included Repeats), with the failure-mode counts.
 6. **Failure-mode observations**, entered by you for each run: Interfacial / adhesive, Cohesive, Cavitation, Fibrillation, Cavitation + fibrillation, Mixed or Other, a free-text observation, and optionally the fibril onset displacement and the largest fibril extension (shown as strain when h₀ is known). Fibrillation is never inferred from the curve.
 7. **Advanced / Diagnostics** (collapsed): dwell force at the start and end of the Wait and the relaxation.

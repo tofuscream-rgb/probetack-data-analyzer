@@ -1,10 +1,10 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.15.0';
+export const APP_VERSION = '1.16.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
-export const ALGORITHM_VERSION = '1.1.0';
+export const ALGORITHM_VERSION = '1.2.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
-export const PROJECT_SCHEMA_VERSION = 4; // 3: forceSign, distance displacement; 4: files kept per test, 90° peel
+export const PROJECT_SCHEMA_VERSION = 5; // 3: forceSign, distance displacement; 4: files kept per test, 90° peel
 export const GF_TO_N = 0.00980665;
 export const DEFAULT_CONCENTRATION_M = 2.1;
 
@@ -217,10 +217,12 @@ export interface TackMetricsState {
   observations: Record<string, TackObservation>;
 }
 
-export type TackFailureMode = '' | 'interfacial' | 'cohesive' | 'cavitation' | 'fibrillation' | 'cavitation+fibrillation' | 'mixed' | 'other';
+export type FailureLocus = 'unspecified' | 'adhesive' | 'cohesive' | 'mixed' | 'other';
+export type TackMorphology = 'unspecified' | 'none' | 'cavitation' | 'fibrillation' | 'cavitation+fibrillation' | 'other';
 
 export interface TackObservation {
-  mode: TackFailureMode;
+  locus: FailureLocus;
+  morphology: TackMorphology;
   /** Free text: what was seen. */
   note: string;
   /** Optional: displacement (mm) at which fibrils were first seen. */
@@ -273,7 +275,8 @@ export interface LapShearDims {
 }
 
 /** Observed by the user on the specimen; never inferred from the curve. */
-export type FailureMode = 'unspecified' | 'adhesive' | 'cohesive' | 'mixed';
+export type FailureMode = FailureLocus;
+export type PeelMorphology = 'unspecified' | 'no-fibrils' | 'transient-fibrils' | 'persistent-fibrils' | 'cavitation' | 'cavitation+fibrillation' | 'other';
 
 export interface LapShearRunMeta extends LapShearDims {
   failureMode: FailureMode;
@@ -361,6 +364,10 @@ export interface PeelRunMeta {
   /** Peel angle (°); Γ = F/w · (1 − cos θ), = F/w at 90°. */
   angleDeg: number;
   failureMode: FailureMode;
+  peelMorphology?: PeelMorphology;
+  observation?: string;
+  fibrilZoneMm?: number | null;
+  maxFibrilMm?: number | null;
   /** Detachment (end of peeling) picked by hand (mm); overrides the automatic criterion. */
   manualDetachMm: number | null;
 }

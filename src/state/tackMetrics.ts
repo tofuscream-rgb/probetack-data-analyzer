@@ -9,7 +9,7 @@ import { uniqueFileNames, useExperiment } from './experiment';
 import { groupValue, type CycleResult } from '../analysis/engine';
 import { LOW_RESOLUTION_STEPS, TACK_DEFAULTS, analyzeTack, meanSd, type TackMetrics } from '../analysis/tackMetrics';
 import { bySubstrate, canonicalSubstrate } from '../analysis/substrates';
-import type { Cycle, DatasetExclusion, ParsedFile, TackFailureMode, TackMetricsState, TackObservation } from '../types';
+import type { Cycle, DatasetExclusion, FailureLocus, ParsedFile, TackMetricsState, TackMorphology, TackObservation } from '../types';
 
 export interface TackRun {
   id: string;
@@ -54,19 +54,17 @@ export interface Metric {
 
 /** Main results: shown in the per-run, Repeat and Condition tables. */
 export const MAIN_METRICS: Metric[] = [
-  { key: 'fmax', label: 'F_max', html: 'F<sub>max</sub>', unit: 'N', digits: 4, get: (m) => m.fmaxN },
   { key: 'sigma', label: 'σ_max', html: 'σ<sub>max</sub>', unit: 'kPa', digits: 2, get: (m) => m.sigmaMaxKPa },
   { key: 'w', label: 'W_adh', html: 'W<sub>adh</sub>', unit: 'J/m²', digits: 2, get: (m) => m.wJm2 },
-  { key: 'dpeak', label: 'δ_peak', html: 'δ<sub>peak</sub>', unit: 'mm', digits: 3, get: (m) => m.deltaPeakMm },
-  { key: 'epsPeak', label: 'ε_peak', html: 'ε<sub>peak</sub>', unit: '–', digits: 3, get: (m) => m.epsPeak },
-  { key: 'dmax', label: 'δ_break', html: 'δ<sub>break</sub>', unit: 'mm', digits: 3, get: (m) => m.deltaMaxMm },
-  { key: 'eps', label: 'ε_break', html: 'ε<sub>break</sub>', unit: '–', digits: 3, get: (m) => m.epsMax },
+  { key: 'eps', label: 'ε_failure', html: 'ε<sub>failure</sub>', unit: '–', digits: 3, get: (m) => m.epsMax },
   { key: 'plateau', label: 'Plateau stress', html: 'Plateau stress', unit: 'kPa', digits: 2, get: (m) => m.plateau?.stressKPa ?? null },
-  { key: 'plen', label: 'Plateau length', html: 'Plateau length', unit: 'mm', digits: 3, get: (m) => m.plateau?.lengthMm ?? null },
 ];
 
-/** Secondary quantities: Advanced / Diagnostics section only. */
 export const DIAG_METRICS: Metric[] = [
+  { key: 'fmax', label: 'F_max', html: 'F<sub>max</sub>', unit: 'N', digits: 4, get: (m) => m.fmaxN },
+  { key: 'dpeak', label: 'δ_peak', html: 'δ<sub>peak</sub>', unit: 'mm', digits: 3, get: (m) => m.deltaPeakMm },
+  { key: 'dfail', label: 'δ_failure', html: 'δ<sub>failure</sub>', unit: 'mm', digits: 3, get: (m) => m.failureDispMm },
+  { key: 'plen', label: 'Plateau length', html: 'Plateau length', unit: 'mm', digits: 3, get: (m) => m.plateau?.lengthMm ?? null },
   { key: 'dwStart', label: 'Dwell F start', html: 'Dwell F<sub>start</sub>', unit: 'N', digits: 4, get: (m) => m.dwell?.startN ?? null },
   { key: 'dwEnd', label: 'Dwell F end', html: 'Dwell F<sub>end</sub>', unit: 'N', digits: 4, get: (m) => m.dwell?.endN ?? null },
   { key: 'relax', label: 'Relaxation', html: 'Relaxation', unit: '%', digits: 1, get: (m) => m.dwell?.relaxPct ?? null },
@@ -74,18 +72,17 @@ export const DIAG_METRICS: Metric[] = [
 
 export const TACK_METRICS: Metric[] = [...MAIN_METRICS, ...DIAG_METRICS];
 
-export const FAILURE_MODES: { value: TackFailureMode; label: string }[] = [
-  { value: '', label: '—' },
-  { value: 'interfacial', label: 'Interfacial / adhesive' },
-  { value: 'cohesive', label: 'Cohesive' },
-  { value: 'cavitation', label: 'Cavitation' },
-  { value: 'fibrillation', label: 'Fibrillation' },
-  { value: 'cavitation+fibrillation', label: 'Cavitation + fibrillation' },
-  { value: 'mixed', label: 'Mixed' },
-  { value: 'other', label: 'Other' },
+export const FAILURE_LOCI: { value: FailureLocus; label: string }[] = [
+  { value: 'unspecified', label: '—' }, { value: 'adhesive', label: 'Adhesive / interfacial' },
+  { value: 'cohesive', label: 'Cohesive' }, { value: 'mixed', label: 'Mixed' }, { value: 'other', label: 'Other' },
 ];
-export const failureModeLabel = (m: TackFailureMode) => FAILURE_MODES.find((x) => x.value === m)?.label ?? '—';
-export const EMPTY_OBSERVATION: TackObservation = { mode: '', note: '', fibrilOnsetMm: null, fibrilMaxMm: null };
+export const TACK_MORPHOLOGIES: { value: TackMorphology; label: string }[] = [
+  { value: 'unspecified', label: '—' }, { value: 'none', label: 'None' }, { value: 'cavitation', label: 'Cavitation' },
+  { value: 'fibrillation', label: 'Fibrillation' }, { value: 'cavitation+fibrillation', label: 'Cavitation + fibrillation' }, { value: 'other', label: 'Other' },
+];
+export const failureLocusLabel = (m: FailureLocus) => FAILURE_LOCI.find((x) => x.value === m)?.label ?? '—';
+export const morphologyLabel = (m: TackMorphology) => TACK_MORPHOLOGIES.find((x) => x.value === m)?.label ?? '—';
+export const EMPTY_OBSERVATION: TackObservation = { locus: 'unspecified', morphology: 'unspecified', note: '', fibrilOnsetMm: null, fibrilMaxMm: null };
 
 /** Data-quality flags: warnings only (never exclude anything). Short label, details for the tooltip. */
 export interface TackFlag {
@@ -98,19 +95,22 @@ export function tackFlags(m: TackMetrics): TackFlag[] {
   const f: TackFlag[] = [];
   if (m.peakSteps !== null && m.peakSteps < LOW_RESOLUTION_STEPS)
     f.push({ key: 'resolution', label: 'Low force resolution', detail: `F_max = ${m.peakSteps.toFixed(1)} force steps of ${m.resolutionN!.toFixed(4)} N; plateau and relaxation may be approximate.` });
-  if (m.incomplete) f.push({ key: 'incomplete', label: 'Incomplete detachment', detail: `Full detachment was not recorded (F never fell to ≤ ${TACK_DEFAULTS.endFraction * 100}% of F_max before the file ended); W_adh is underestimated and δ_break is the end of the data.` });
+  if (m.incomplete) f.push({ key: 'incomplete', label: 'Incomplete detachment', detail: `Full detachment was not recorded (F never fell to ≤ ${TACK_DEFAULTS.endFraction * 100}% of F_max before the file ended); W_adh is a lower bound and true failure displacement/strain are left blank.` });
   if (m.zeroedN !== null) f.push({ key: 'tared', label: 'Load tared after dwell', detail: `Load was reset after dwell (${m.zeroedN.toFixed(4)} N removed); pull force is referenced to the new zero. Preload and relaxation interpretation may be affected.` });
   return f;
 }
 
 /** "Cohesive 2 · Fibrillation 1 · not set 3" for a list of runs. */
-export function failureModeCounts(runs: TackRun[]): string {
+function countLabels(labels: string[]): string {
   const counts = new Map<string, number>();
-  for (const r of runs) {
-    const l = r.obs.mode ? failureModeLabel(r.obs.mode) : 'not set';
-    counts.set(l, (counts.get(l) ?? 0) + 1);
-  }
+  for (const label of labels) counts.set(label, (counts.get(label) ?? 0) + 1);
   return [...counts.entries()].sort((a, b) => (a[0] === 'not set' ? 1 : b[0] === 'not set' ? -1 : 0)).map(([l, n]) => `${l} ${n}`).join(' · ');
+}
+export function failureModeCounts(runs: TackRun[]): string {
+  return countLabels(runs.map((r) => r.obs.locus === 'unspecified' ? 'not set' : failureLocusLabel(r.obs.locus)));
+}
+export function morphologyCounts(runs: TackRun[]): string {
+  return countLabels(runs.map((r) => r.obs.morphology === 'unspecified' ? 'not set' : morphologyLabel(r.obs.morphology)));
 }
 
 const cache = new WeakMap<Cycle, { key: string; m: TackMetrics }>();

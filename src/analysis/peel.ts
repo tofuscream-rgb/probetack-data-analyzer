@@ -187,35 +187,18 @@ export function analyzePeelCycle(c: Cycle, meta: PeelRunMeta, s: PeelSettings): 
 /** Results of a run, with the names shown in the app, in Excel and in Compare (keys are stored in projects and never change). */
 export const PEEL_PROPERTIES: { key: string; label: string; unit: string; digits: number; get: (r: PeelResult) => number }[] = [
   { key: 'plateauN', label: 'Average peel force (steady state)', unit: 'N', digits: 4, get: (r) => r.plateau.meanN },
-  { key: 'plateauGf', label: 'Average peel force (steady state)', unit: 'gf', digits: 2, get: (r) => r.plateau.meanGf },
-  { key: 'strengthNm', label: 'Peel strength (avg. force / width)', unit: 'N/m', digits: 2, get: (r) => r.peelStrengthNm },
-  { key: 'strengthNmm', label: 'Peel strength (avg. force / width)', unit: 'N/mm', digits: 4, get: (r) => r.peelStrengthNmm },
-  { key: 'toughness', label: 'Peel energy G', unit: 'J/m²', digits: 2, get: (r) => r.toughnessJm2 },
+  { key: 'toughness', label: 'Peel energy G_peel', unit: 'J/m²', digits: 2, get: (r) => r.toughnessJm2 },
   { key: 'cv', label: 'Steady-state force variation (CV)', unit: '%', digits: 1, get: (r) => r.plateau.cv * 100 },
-  { key: 'peakN', label: 'Peak force (maximum)', unit: 'N', digits: 4, get: (r) => r.peak?.forceN ?? NaN },
-  { key: 'peakGf', label: 'Peak force (maximum)', unit: 'gf', digits: 2, get: (r) => r.peak?.forceGf ?? NaN },
-  { key: 'peakNm', label: 'Peak force per width', unit: 'N/m', digits: 2, get: (r) => r.peak?.perWidthNm ?? NaN },
-  { key: 'initN', label: 'Initiation peak force', unit: 'N', digits: 4, get: (r) => r.initiationPeak?.forceN ?? NaN },
-  { key: 'dispPeak', label: 'Displacement at peak', unit: 'mm', digits: 3, get: (r) => r.peak?.dispMm ?? NaN },
-  { key: 'peeled', label: 'Peeled length', unit: 'mm', digits: 2, get: (r) => r.peeledLengthMm },
-  { key: 'wFull', label: 'Area under the graph (work), full curve', unit: 'mJ', digits: 3, get: (r) => r.work.fullMJ },
-  { key: 'wDetach', label: 'Area under the graph (work) to detachment', unit: 'mJ', digits: 3, get: (r) => r.work.toDetachMJ ?? NaN },
-  { key: 'wSel', label: 'Area under the graph (work), chosen range', unit: 'mJ', digits: 3, get: (r) => r.work.selectedMJ },
-  { key: 'wArea', label: 'Work per peeled area', unit: 'J/m²', digits: 2, get: (r) => r.work.perPeeledAreaJm2 },
+  { key: 'preSS', label: 'Pre-steady-state maximum', unit: 'N', digits: 4, get: (r) => r.initiationPeak?.forceN ?? NaN },
   { key: 'rate', label: 'Peel rate', unit: 'mm/s', digits: 3, get: (r) => r.peelRateMmS },
 ];
 
 /** Definitions of the peel results, shown under the Results table and in the Excel settings sheet. */
 export const PEEL_DEFINITIONS: [term: string, definition: string][] = [
-  ['Steady-state window', 'The part of the curve where the peel front moves at a steady force. By default 20–80% of the peeled length (start of the run to detachment), so the initiation peak at the start and the final release before detachment are left out. You can change it, or type a displacement range in mm.'],
-  ['Average peel force F̄ (steady state)', 'Mean of all force points inside the steady-state window (N and gf). This is the main result of a peel test.'],
-  ['Steady-state force SD, CV and range', 'Spread of the force points inside the window. SD = sample standard deviation; CV (coefficient of variation) = SD / F̄ × 100%, the standard statistical definition; range = lowest to highest force. A higher CV means the force varied more within the window, for example from stick–slip, uneven bonding, or a window that still includes part of the initiation or the release. No standard sets a pass/fail value for it; compare it between your own runs.'],
-  ['Peel strength', 'F̄ / w, the average peel force per gel width w (N/m and N/mm).'],
-  ['Peel energy G', 'G = F̄ / w · (1 − cos θ), in J/m² (1 N/m = 1 J/m²). At 90°, 1 − cos θ = 1, so G = F̄ / w. It is the energy needed to peel one unit area of interface, assuming the gel strip does not stretch.'],
-  ['Peak force (maximum)', 'The highest force anywhere in the run (N and gf), with its displacement. In many gel strips this is the last rise just before detachment, not the start of peeling, so compare it with the initiation peak.'],
-  ['Initiation peak force', 'The highest force between the start of the run and the start of the steady-state window: the force needed to start the peel front.'],
-  ['Peeled length and detachment', 'Detachment = first point after the peak where the force stays below 5% of the peak for 20 points in a row (adjustable; a typed value overrides it). Peeled length = displacement at detachment, or the end of the recording if no detachment is found.'],
-  ['Area under the graph (work)', 'W = ∫ F dδ by the trapezoidal rule, in mJ: over the full curve, up to detachment, and over a chosen range (Settings › Work: full curve, start to peak, the steady-state window, or a custom mm range).'],
-  ['Work per peeled area', 'Work to detachment / (w × peeled length), in J/m². An energy-based check of the peel energy G; the two are close for a steady peel.'],
-  ['Peel rate', 'Slope of displacement against time inside the steady-state window (mm/s).'],
+  ['Steady-state window', 'Region used for the steady peel average. Default 20–80% of peeled length; a custom displacement window can be entered and is preferred when the steady region is known.'],
+  ['Average peel force F̄ (steady state)', 'Mean force inside the selected steady-state window, in N.'],
+  ['Peel energy G_peel', 'G_peel = F̄/w · (1 − cos θ), in J/m²; at 90°, G_peel = F̄/w. It is reported as measured peel energy, not automatically as intrinsic interfacial toughness.'],
+  ['Steady-state CV', 'Sample SD divided by mean steady-state force × 100%. It describes force variation but does not by itself prove stick–slip.'],
+  ['Pre-steady-state maximum', 'Highest force before the selected steady-state window. It is not automatically interpreted as the true crack-initiation force.'],
+  ['Peel rate', 'Least-squares slope of displacement versus time inside the steady-state window (mm/s).'],
 ];

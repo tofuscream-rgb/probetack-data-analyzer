@@ -34,7 +34,7 @@ function cachedResult(c: Cycle, meta: PeelRunMeta, s: PeelSettings): PeelResult 
 }
 
 export function peelMeta(ps: PeelState, id: string): PeelRunMeta {
-  return ps.runs[id] ?? { ...ps.settings.defaults, failureMode: 'unspecified', manualDetachMm: null };
+  return ps.runs[id] ?? { ...ps.settings.defaults, failureMode: 'unspecified', peelMorphology: 'unspecified', observation: '', fibrilZoneMm: null, maxFibrilMm: null, manualDetachMm: null };
 }
 
 export function usePeel() {

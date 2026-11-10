@@ -346,8 +346,24 @@ export function extractCycles(file: ParsedFile): Cycle[] {
     moveCount++;
     const issues: ParseIssue[] = [];
     const data = block.data;
-    const prev = block.index > 0 ? file.blocks[block.index - 1] : null;
+    // The Wait (hold) right before the movement; a <Zero Load> step in between (taring the load
+    // cell at the end of the hold) is skipped, and the force it zeroed is recorded.
+    let k = block.index - 1;
+    let zeroBlock: (typeof file.blocks)[number] | null = null;
+    while (k >= 0 && /^zero\s*load/i.test(file.blocks[k].type)) { zeroBlock ??= file.blocks[k]; k--; }
+    const prev = k >= 0 ? file.blocks[k] : null;
     const hold = prev && /^wait/i.test(prev.type) ? prev : null;
+    let zeroedGf: number | null = null;
+    if (zeroBlock?.data && zeroBlock.data.rowCount > 0) {
+      const iz = findColumn(zeroBlock.data.columns, /^fz\b/i);
+      if (iz >= 0) {
+        const unit = zeroBlock.data.columns[iz].split(',')[1]?.trim().toLowerCase() ?? 'gf';
+        const v = zeroBlock.data.values[iz];
+        const raw = v.reduce((s, x) => s + x, 0) / v.length;
+        zeroedGf = unit === 'n' ? raw / GF_TO_N : unit === 'kgf' ? raw * 1000 : unit === 'mn' ? raw / 1000 / GF_TO_N : raw;
+        issues.push({ severity: 'info', message: `The load cell was zeroed after the hold (Zero Load at ${zeroedGf.toFixed(3)} gf): forces of this movement are measured from the end of the hold.` });
+      }
+    }
     if (!hold && !isScriptBlock(block.type)) issues.push({ severity: 'info', message: 'No Wait (holding) block precedes this movement.' });
 
     const cycleId = `${file.fileId}#c${moveCount}`;
@@ -412,6 +428,7 @@ export function extractCycles(file: ParsedFile): Cycle[] {
       cycleNumber: moveCount,
       moveBlockIndex: block.index,
       holdBlockIndex: hold ? hold.index : null,
+      zeroedGf,
       operation: block.type,
       holdTimeS: hold ? parseDuration(hold.params['Wait'] ?? Object.values(hold.params)[0]) : null,
       amplitudeMm: parseNumberParam(block.params, /amplitude/i) ?? scriptCommand(block.params['Script'], 'PR'),

@@ -87,6 +87,8 @@ export interface Cycle {
   extra: Record<string, Float64Array>;
   holdTime_s: Float64Array | null;
   holdForce_gf: Float64Array | null;
+  /** Force reading (gf) removed by a <Zero Load> step between the hold and this movement; null if none. */
+  zeroedGf?: number | null;
   issues: ParseIssue[];
 }
 

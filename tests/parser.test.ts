@@ -77,6 +77,15 @@ describe('Mach-1 parser', () => {
     expect(c.holdForce_gf![0]).toBeCloseTo(1 / 0.00980665, 6); // the Wait (dwell) force is converted too
   });
 
+  it('finds the Wait before a movement across a Zero Load step and records the zeroed force', () => {
+    const t = miniFile([[0, -40, 0]]).replace('<Move Relative>', '<Zero Load>\r\nFunction without controls\r\n<DATA>\r\nTime, s\tPosition (z), mm\tPosition (x), mm\tPosition (y), mm\tFz, gf\r\n0.000000\t10.000000\t0.3\t-0.08\t1.245955\r\n<END DATA>\r\n<Move Relative>');
+    const c = extractCycles(parse(t))[0];
+    expect(c.holdTimeS).toBe(30);
+    expect(c.holdForce_gf!.length).toBe(5);
+    expect(c.zeroedGf).toBeCloseTo(1.245955, 6);
+    expect(extractCycles(parse(miniFile([[0, -40, 0]])))[0].zeroedGf).toBeNull();
+  });
+
   it('parses durations and timestamps', () => {
     expect(parseDuration('00:01:00')).toBe(60);
     expect(parseDuration('00:00:01')).toBe(1);

@@ -1,4 +1,4 @@
-import { TACK_DEFAULTS } from '../../analysis/tackMetrics';
+import { LOW_RESOLUTION_STEPS, TACK_DEFAULTS } from '../../analysis/tackMetrics';
 import { KATEX_SOURCE } from '../../plotting/katex';
 import { Tex } from '../Tex';
 
@@ -44,6 +44,11 @@ const ITEMS: { title: string; tex: string; text: string }[] = [
     title: 'Dwell relaxation',
     tex: String.raw`\text{relaxation} = \frac{F_{\text{start}} - F_{\text{end}}}{F_{\text{start}}}\times 100\%`,
     text: 'F_start and F_end = Fz at the first and last point of the Wait section before the pull (compression positive, as recorded, in N). Dwell time = Wait duration recorded in the file.',
+  },
+  {
+    title: 'Data-quality flags',
+    tex: String.raw`n_{\text{steps}} = \frac{F_{\max}}{\Delta F_{\text{res}}} < ${LOW_RESOLUTION_STEPS}\;\Rightarrow\;\text{“coarse”}`,
+    text: `ΔF_res = smallest step between distinct recorded force values in the run (the load cell’s resolution as recorded). If F_max is fewer than ${LOW_RESOLUTION_STEPS} steps, the run is flagged “coarse”: k, the plateau test (±${pct(TACK_DEFAULTS.plateauTol)} of a level only a few steps high) and the relaxation are approximate, and “≤ ${pct(TACK_DEFAULTS.endFraction)} of F_max” means a reading of zero. If the file has a Zero Load step between the Wait and the pull, the load cell was tared at the end of the dwell: the pull forces are measured from that state, and the run is flagged with the force that was removed.`,
   },
   {
     title: 'Statistics and exclusions',

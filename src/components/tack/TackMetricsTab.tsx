@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { useApp, download } from '../../state/AppContext';
 import { TACK_METRICS, useTackMetrics, type GroupStat, type TackRepeat } from '../../state/tackMetrics';
-import { TACK_DEFAULTS, type TackMetrics } from '../../analysis/tackMetrics';
+import { LOW_RESOLUTION_STEPS, TACK_DEFAULTS, type TackMetrics } from '../../analysis/tackMetrics';
 import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
 import { EXPORT_SIZE, LINE, figAxis, figLayout } from '../../plotting/figureStyle';
 import { CURVE_COLORS } from '../../plotting/colors';
@@ -16,6 +16,8 @@ function flagsOf(m: TackMetrics): string[] {
   if (!m.ok) return [m.error ?? 'not analysed'];
   const f: string[] = [m.detachment];
   if (m.incomplete) f.push('detachment incomplete – W underestimated');
+  if (m.peakSteps !== null && m.peakSteps < LOW_RESOLUTION_STEPS) f.push(`coarse: F_max = ${m.peakSteps.toFixed(1)} force steps of ${m.resolutionN!.toFixed(4)} N`);
+  if (m.zeroedN !== null) f.push(`load zeroed after dwell (${m.zeroedN.toFixed(4)} N)`);
   return f;
 }
 

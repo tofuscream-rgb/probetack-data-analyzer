@@ -29,6 +29,8 @@ export interface TackMetricInput {
   z_mm: ArrayLike<number>;
   force_gf: ArrayLike<number>;
   holdForce_gf: ArrayLike<number> | null;
+  /** Force reading removed by a Zero Load step after the dwell (gf), if any. */
+  zeroedGf?: number | null;
 }
 
 export interface TackMetricOptions {
@@ -47,6 +49,8 @@ export interface TackMetricOptions {
 }
 
 export const TACK_DEFAULTS = { endFraction: 0.02, slopeFrom: 0.1, slopeTo: 0.6, plateauTol: 0.2, plateauMinMm: 0.3 };
+/** Below this many force-resolution steps at F_max, the run is flagged as coarse. */
+export const LOW_RESOLUTION_STEPS = 10;
 
 export interface TackMetrics {
   ok: boolean;
@@ -68,6 +72,11 @@ export interface TackMetrics {
   dwell: { startN: number; endN: number; relaxPct: number } | null;
   /** The pull ended before T fell to ≤ 2% F_max: W and δ_max are underestimated. */
   incomplete: boolean;
+  /** Smallest force step in the run (N) and F_max in such steps; few steps = coarse metrics. */
+  resolutionN: number | null;
+  peakSteps: number | null;
+  /** Force zeroed after the dwell (N): forces are measured from the end of the dwell. */
+  zeroedN: number | null;
   notes: string[];
   /** Curve for plotting: δ from the tensile onset (mm) and T (N). */
   curve: { deltaMm: Float64Array; tN: Float64Array };
@@ -102,7 +111,8 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
   const base: TackMetrics = {
     ok: false, error: null, areaMm2: area, fmaxN: nan, sigmaMaxKPa: nan, deltaPeakMm: nan, deltaMaxMm: nan, wJm2: nan,
     epsMax: null, kNmm: null, complianceMmN: null, eAppKPa: null, fit: null, plateau: null, detachment: 'sharp detachment',
-    dwell, incomplete: false, notes, curve: { deltaMm: new Float64Array(), tN: new Float64Array() },
+    dwell, incomplete: false, resolutionN: null, peakSteps: null, zeroedN: run.zeroedGf !== null && run.zeroedGf !== undefined ? run.zeroedGf * GF_TO_N : null,
+    notes, curve: { deltaMm: new Float64Array(), tN: new Float64Array() },
   };
   if (!(area > 0)) return { ...base, error: 'Enter the probe diameter.' };
   if (d.length < 3) return { ...base, error: 'Fewer than 3 valid points with position and force.' };
@@ -197,9 +207,20 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
     plateau = { levelN: lvl, stressKPa: (lvl / area) * 1000, lengthMm: delta[best.b] - delta[best.a], fromMm: delta[best.a], toMm: delta[best.b] };
   }
 
+  // Force resolution: smallest step between distinct recorded force values.
+  const uniq = [...new Set(t.map((v) => Math.round(v * 1e9) / 1e9))].sort((x, y) => x - y);
+  let res = Infinity;
+  for (let i = 1; i < uniq.length; i++) if (uniq[i] - uniq[i - 1] > 1e-9) res = Math.min(res, uniq[i] - uniq[i - 1]);
+  const resolutionN = Number.isFinite(res) ? res : null;
+  const peakSteps = resolutionN ? fmax / resolutionN : null;
+  if (peakSteps !== null && peakSteps < LOW_RESOLUTION_STEPS) notes.push(`F_max is only ${peakSteps.toFixed(1)} force steps of ${resolutionN!.toFixed(4)} N: stiffness, plateau and relaxation are approximate.`);
+  if (base.zeroedN !== null) notes.push(`Load cell zeroed after the dwell (${base.zeroedN.toFixed(4)} N removed): forces are measured from the end of the dwell.`);
+
   return {
     ...base,
     ok: true,
+    resolutionN,
+    peakSteps,
     fmaxN: fmax,
     sigmaMaxKPa: (fmax / area) * 1000,
     deltaPeakMm: delta[ip],

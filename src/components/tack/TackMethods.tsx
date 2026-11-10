@@ -44,7 +44,7 @@ const ITEMS: { title: string; tex: string; text: string }[] = [
   {
     title: 'Data-quality flags (warnings only)',
     tex: String.raw`n_{\text{steps}} = \frac{F_{\max}}{\Delta F_{\text{res}}} < ${LOW_RESOLUTION_STEPS}\;\Rightarrow\;\text{Low force resolution}`,
-    text: `ΔF_res = smallest step between distinct recorded force values in the run. Low force resolution: fewer than ${LOW_RESOLUTION_STEPS} steps at F_max, so stiffness, plateau and relaxation may be approximate. Incomplete detachment: F never fell to ≤ ${pct(TACK_DEFAULTS.endFraction)} F_max before the file ended, so W_adh is underestimated. Load tared after dwell: a Zero Load step between the Wait and the pull reset the load cell, so the pull force is referenced to the new zero. Flagged runs are never excluded automatically.`,
+    text: `ΔF_res = smallest step between distinct recorded force values in the run. Low force resolution: fewer than ${LOW_RESOLUTION_STEPS} steps at F_max, so the plateau and relaxation may be approximate. Incomplete detachment: F never fell to ≤ ${pct(TACK_DEFAULTS.endFraction)} F_max before the file ended, so W_adh is underestimated. Load tared after dwell: a Zero Load step between the Wait and the pull reset the load cell, so the pull force is referenced to the new zero. Flagged runs are never excluded automatically.`,
   },
   {
     title: 'Statistics and exclusions',
@@ -52,26 +52,15 @@ const ITEMS: { title: string; tex: string; text: string }[] = [
     text: 'Per Repeat: mean ± sample SD over its runs. Per condition (substrate × dwell): mean ± SD over the Repeat means of the included Repeats, so each Repeat counts once. Nothing is excluded by default; you may exclude a whole Repeat, a test session (recording date) or a single run, each with a reason. Points are never removed.',
   },
   {
-    title: 'Advanced: initial stiffness, compliance, apparent modulus',
-    tex: String.raw`k = \left.\frac{\mathrm{d}F}{\mathrm{d}\delta}\right|_{${TACK_DEFAULTS.slopeFrom}F_{\max} \,\le\, F \,\le\, ${TACK_DEFAULTS.slopeTo}F_{\max}},\qquad C = \frac{1}{k},\qquad E_{\text{app}} = \frac{k\,h_0}{A}`,
-    text: `k = least-squares slope of F against δ on the loading branch (onset to peak) using the points between ${pct(TACK_DEFAULTS.slopeFrom)} and ${pct(TACK_DEFAULTS.slopeTo)} of F_max (at least 3). k in N/mm, C in mm/N, E_app in kPa. E_app treats the gel as a uniform layer; confinement and instrument compliance are not corrected.`,
-  },
-  {
     title: 'Advanced: dwell relaxation',
     tex: String.raw`\text{relaxation} = \frac{F_{\text{start}} - F_{\text{end}}}{F_{\text{start}}}\times 100\%`,
     text: 'F_start, F_end = F_z at the first and last point of the Wait section before the pull (compression positive, in N). Dwell time = Wait duration recorded in the file.',
-  },
-  {
-    title: 'Force capacity (interpretation only, not computed)',
-    tex: String.raw`F_c = \sqrt{\frac{G_c\,A}{C}}`,
-    text: 'For a given critical energy release rate G_c, a larger contact area A or a stiffer (lower-compliance C) loading system gives a higher detachment force (Bartlett et al. 2012).',
   },
 ];
 
 const CITATIONS: { ref: string; note: string }[] = [
   { ref: 'C. Creton, M. Ciccotti, “Fracture and adhesion of soft materials: a review,” Rep. Prog. Phys. 79, 046601 (2016).', note: 'Interpretation of probe-tack curves: peak stress, plateau, maximum extension and work of debonding.' },
   { ref: 'M.D. Bartlett et al., Prog. Mater. Sci. 137, 101086 (2023).', note: 'Energy release rate concepts.' },
-  { ref: 'M.D. Bartlett et al., Adv. Mater. 24, 1078 (2012).', note: 'F_c = √(G_c A / C) and the role of compliance.' },
 ];
 
 export function TackMethods({ n }: { n?: number }) {

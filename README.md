@@ -122,12 +122,12 @@ Statistics are grouped by the variables you choose; concentration is always incl
 The **Tack metrics** tab analyses the tensile part of each pull for every file (Repeat) of the chosen charge ratio and concentration, across all substrates and dwell times. It is laid out in this order:
 
 1. **Test settings**: probe diameter *d* (default 5.5 mm; A = π d²/4); gel thickness h₀ per Repeat (blank = strains are skipped; *Apply to all* sets one value); substrate per Repeat (PET, stainless steel, glass, or the name read from the folder); dwell time read from the Wait section; exclusion of a Repeat or test session, and the list of excluded data sets with reasons.
-2. **Plot**: F vs δ, or σ vs ε once h₀ is entered, for the runs of one Repeat, with ▲ peak, × break and the plateau; the initial-slope fit can be shown as a diagnostic.
+2. **Plot**: F vs δ, or σ vs ε once h₀ is entered, for the runs of one Repeat, with ▲ peak, × break and the plateau.
 3. **Per-run results**: F_max (N), σ_max (kPa), W_adh (J/m²), δ_peak and ε_peak (displacement and strain at peak stress), δ_break and ε_break = δ_break/h₀, plateau stress (kPa) and length (mm), failure mode and flags. A single run can be excluded (optional; none by default).
 4. **Mean ± SD per Repeat** and 5. **per condition** (substrate × dwell; over the Repeat means of the included Repeats), with the failure-mode counts.
 6. **Failure-mode observations**, entered by you for each run: Interfacial / adhesive, Cohesive, Cavitation, Fibrillation, Cavitation + fibrillation, Mixed or Other, a free-text observation, and optionally the fibril onset displacement and the largest fibril extension (shown as strain when h₀ is known). Fibrillation is never inferred from the curve.
-7. **Advanced / Diagnostics** (collapsed): initial stiffness k (fit 10–60% F_max), compliance C = 1/k, apparent modulus E_app = k h₀/A, dwell force at the start and end of the Wait and the relaxation.
-8. **Methods, equations, definitions and references**: every equation typeset with KaTeX (bundled with the site, so it renders offline), each symbol defined, with thresholds and sources: Creton & Ciccotti, Rep. Prog. Phys. 79, 046601 (2016); Bartlett et al., Prog. Mater. Sci. 137, 101086 (2023); Bartlett et al., Adv. Mater. 24, 1078 (2012).
+7. **Advanced / Diagnostics** (collapsed): dwell force at the start and end of the Wait and the relaxation.
+8. **Methods, equations, definitions and references**: every equation typeset with KaTeX (bundled with the site, so it renders offline), each symbol defined, with thresholds and sources: Creton & Ciccotti, Rep. Prog. Phys. 79, 046601 (2016); Bartlett et al., Prog. Mater. Sci. 137, 101086 (2023).
 9. **Export CSV**: per-run results (with failure modes, observations, flags and their details, and the diagnostic quantities) and the Repeat and condition summaries.
 
 | Quantity | Definition |
@@ -138,7 +138,7 @@ The **Tack metrics** tab analyses the tensile part of each pull for every file (
 | Plateau | after the peak, the longest stretch where F stays within ±20% of one level; reported when longer than 0.3 mm (the curve is not classified) |
 
 **Flags** are warnings only and never exclude a run; the table shows a short label, and hovering or clicking shows the details:
-- *Low force resolution*: F_max is fewer than 10 steps of the smallest recorded force step.
+- *Low force resolution*: F_max is fewer than 10 steps of the smallest recorded force step; the plateau and relaxation may be approximate.
 - *Incomplete detachment*: F never fell to ≤ 2% F_max before the file ended; W_adh is underestimated.
 - *Load tared after dwell*: a Zero Load step between the Wait and the pull reset the load cell; the pull force is referenced to the new zero.
 

@@ -12,8 +12,6 @@
  *                              end of data if never (then "detachment incomplete")
  *   W = (1/A) ∫ T dδ           trapezoidal rule from the tensile onset to δ_max, in J/m²
  *   ε_max = δ_max / h₀ (strain at break), ε_peak = δ_peak / h₀ (strain at peak stress)
- *   k                          least-squares slope of T vs δ on the loading branch between
- *                              10% and 60% of F_max; C = 1/k; E_app = k h₀ / A
  *   plateau                    after the peak, the longest stretch where T stays within ±20%
  *                              of one level (max/min ≤ 1.2/0.8); > 0.3 mm → plateau stress
  *                              (mean T / A) and length (no classification of the curve)
@@ -35,19 +33,16 @@ export interface TackMetricInput {
 export interface TackMetricOptions {
   /** Probe diameter d (mm). */
   diameterMm: number;
-  /** Gel thickness h₀ (mm); null = strain and apparent modulus are skipped. */
+  /** Gel thickness h₀ (mm); null = the strains are skipped. */
   h0Mm: number | null;
   /** End of detachment, fraction of F_max (default 0.02). */
   endFraction?: number;
-  /** Slope window, fractions of F_max (default 0.10–0.60). */
-  slopeFrom?: number;
-  slopeTo?: number;
   /** Plateau: ± tolerance around the level (default 0.20) and minimum length in mm (default 0.3). */
   plateauTol?: number;
   plateauMinMm?: number;
 }
 
-export const TACK_DEFAULTS = { endFraction: 0.02, slopeFrom: 0.1, slopeTo: 0.6, plateauTol: 0.2, plateauMinMm: 0.3 };
+export const TACK_DEFAULTS = { endFraction: 0.02, plateauTol: 0.2, plateauMinMm: 0.3 };
 /** Below this many force-resolution steps at F_max, the run is flagged as coarse. */
 export const LOW_RESOLUTION_STEPS = 10;
 
@@ -63,11 +58,6 @@ export interface TackMetrics {
   epsMax: number | null;
   /** Strain at peak stress, δ_peak / h₀. */
   epsPeak: number | null;
-  kNmm: number | null;
-  complianceMmN: number | null;
-  eAppKPa: number | null;
-  /** Fitted line T = k δ + b over the slope window (for the plot). */
-  fit: { k: number; b: number; fromMm: number; toMm: number; n: number } | null;
   plateau: { stressKPa: number; lengthMm: number; fromMm: number; toMm: number; levelN: number } | null;
   dwell: { startN: number; endN: number; relaxPct: number } | null;
   /** The pull ended before T fell to ≤ 2% F_max: W and δ_max are underestimated. */
@@ -86,8 +76,6 @@ const nan = NaN;
 
 export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMetrics {
   const endFraction = o.endFraction ?? TACK_DEFAULTS.endFraction;
-  const slopeFrom = o.slopeFrom ?? TACK_DEFAULTS.slopeFrom;
-  const slopeTo = o.slopeTo ?? TACK_DEFAULTS.slopeTo;
   const tol = o.plateauTol ?? TACK_DEFAULTS.plateauTol;
   const minLen = o.plateauMinMm ?? TACK_DEFAULTS.plateauMinMm;
   const area = o.diameterMm > 0 ? (Math.PI * o.diameterMm * o.diameterMm) / 4 : nan;
@@ -110,7 +98,7 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
   const dwell = dwellOf(run.holdForce_gf);
   const base: TackMetrics = {
     ok: false, error: null, areaMm2: area, fmaxN: nan, sigmaMaxKPa: nan, deltaPeakMm: nan, deltaMaxMm: nan, wJm2: nan,
-    epsMax: null, epsPeak: null, kNmm: null, complianceMmN: null, eAppKPa: null, fit: null, plateau: null,
+    epsMax: null, epsPeak: null, plateau: null,
     dwell, incomplete: false, resolutionN: null, peakSteps: null, zeroedN: run.zeroedGf !== null && run.zeroedGf !== undefined ? run.zeroedGf * GF_TO_N : null,
     notes, curve: { deltaMm: new Float64Array(), tN: new Float64Array() },
   };
@@ -163,24 +151,6 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
   for (let i = 1; i < px.length; i++) work += ((py[i] + py[i - 1]) / 2) * (px[i] - px[i - 1]);
   const wJm2 = (work / area) * 1000; // N·mm / mm² = N/mm = 1000 J/m²
 
-  // Initial stiffness: loading branch (onset → peak), 10–60% of F_max.
-  const fx: number[] = [];
-  const fy: number[] = [];
-  for (let i = j; i <= ip; i++) if (t[i] >= slopeFrom * fmax && t[i] <= slopeTo * fmax) { fx.push(delta[i]); fy.push(t[i]); }
-  let fit: TackMetrics['fit'] = null;
-  if (fx.length >= 3) {
-    const mx = fx.reduce((s, v) => s + v, 0) / fx.length;
-    const my = fy.reduce((s, v) => s + v, 0) / fy.length;
-    let sxx = 0;
-    let sxy = 0;
-    for (let i = 0; i < fx.length; i++) { sxx += (fx[i] - mx) ** 2; sxy += (fx[i] - mx) * (fy[i] - my); }
-    if (sxx > 0 && sxy > 0) {
-      const k = sxy / sxx;
-      fit = { k, b: my - k * mx, fromMm: Math.min(...fx), toMm: Math.max(...fx), n: fx.length };
-    }
-  }
-  if (!fit) notes.push(`Initial stiffness not computed: fewer than 3 points between ${slopeFrom * 100}% and ${slopeTo * 100}% of F_max on the loading branch.`);
-
   // Plateau after the peak (before the end of detachment): longest window with max ≤ (1+tol)/(1−tol) × min.
   const ratio = (1 + tol) / (1 - tol);
   let best: { a: number; b: number } | null = null;
@@ -213,7 +183,7 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
   for (let i = 1; i < uniq.length; i++) if (uniq[i] - uniq[i - 1] > 1e-9) res = Math.min(res, uniq[i] - uniq[i - 1]);
   const resolutionN = Number.isFinite(res) ? res : null;
   const peakSteps = resolutionN ? fmax / resolutionN : null;
-  if (peakSteps !== null && peakSteps < LOW_RESOLUTION_STEPS) notes.push(`F_max is only ${peakSteps.toFixed(1)} force steps of ${resolutionN!.toFixed(4)} N: stiffness, plateau and relaxation are approximate.`);
+  if (peakSteps !== null && peakSteps < LOW_RESOLUTION_STEPS) notes.push(`F_max is only ${peakSteps.toFixed(1)} force steps of ${resolutionN!.toFixed(4)} N: plateau and relaxation are approximate.`);
   if (base.zeroedN !== null) notes.push(`Load cell zeroed after the dwell (${base.zeroedN.toFixed(4)} N removed): forces are measured from the end of the dwell.`);
 
   return {
@@ -228,10 +198,6 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
     wJm2,
     epsMax: h0 !== null ? deltaMax / h0 : null,
     epsPeak: h0 !== null ? delta[ip] / h0 : null,
-    kNmm: fit ? fit.k : null,
-    complianceMmN: fit ? 1 / fit.k : null,
-    eAppKPa: fit && h0 !== null ? ((fit.k * h0) / area) * 1000 : null,
-    fit,
     plateau,
     incomplete,
     curve: { deltaMm: Float64Array.from(delta), tN: Float64Array.from(t) },

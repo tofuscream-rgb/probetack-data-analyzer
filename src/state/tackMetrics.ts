@@ -67,9 +67,6 @@ export const MAIN_METRICS: Metric[] = [
 
 /** Secondary quantities: Advanced / Diagnostics section only. */
 export const DIAG_METRICS: Metric[] = [
-  { key: 'k', label: 'k', html: 'k', unit: 'N/mm', digits: 4, get: (m) => m.kNmm },
-  { key: 'c', label: 'C', html: 'C', unit: 'mm/N', digits: 3, get: (m) => m.complianceMmN },
-  { key: 'eapp', label: 'E_app', html: 'E<sub>app</sub>', unit: 'kPa', digits: 2, get: (m) => m.eAppKPa },
   { key: 'dwStart', label: 'Dwell F start', html: 'Dwell F<sub>start</sub>', unit: 'N', digits: 4, get: (m) => m.dwell?.startN ?? null },
   { key: 'dwEnd', label: 'Dwell F end', html: 'Dwell F<sub>end</sub>', unit: 'N', digits: 4, get: (m) => m.dwell?.endN ?? null },
   { key: 'relax', label: 'Relaxation', html: 'Relaxation', unit: '%', digits: 1, get: (m) => m.dwell?.relaxPct ?? null },
@@ -100,7 +97,7 @@ export function tackFlags(m: TackMetrics): TackFlag[] {
   if (!m.ok) return [{ key: 'error', label: 'Not analysed', detail: m.error ?? 'The run could not be analysed.' }];
   const f: TackFlag[] = [];
   if (m.peakSteps !== null && m.peakSteps < LOW_RESOLUTION_STEPS)
-    f.push({ key: 'resolution', label: 'Low force resolution', detail: `F_max = ${m.peakSteps.toFixed(1)} force steps of ${m.resolutionN!.toFixed(4)} N; stiffness, plateau and relaxation may be approximate.` });
+    f.push({ key: 'resolution', label: 'Low force resolution', detail: `F_max = ${m.peakSteps.toFixed(1)} force steps of ${m.resolutionN!.toFixed(4)} N; plateau and relaxation may be approximate.` });
   if (m.incomplete) f.push({ key: 'incomplete', label: 'Incomplete detachment', detail: `Full detachment was not recorded (F never fell to ≤ ${TACK_DEFAULTS.endFraction * 100}% of F_max before the file ended); W_adh is underestimated and δ_break is the end of the data.` });
   if (m.zeroedN !== null) f.push({ key: 'tared', label: 'Load tared after dwell', detail: `Load was reset after dwell (${m.zeroedN.toFixed(4)} N removed); pull force is referenced to the new zero. Preload and relaxation interpretation may be affected.` });
   return f;

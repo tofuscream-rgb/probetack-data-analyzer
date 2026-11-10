@@ -26,7 +26,7 @@ function triangle(step = 0.001) {
 }
 
 describe('probe-tack metrics', () => {
-  it('peak, stress, work, displacements, stiffness and modulus of a known curve', () => {
+  it('peak, stress, work, displacements and strains of a known curve', () => {
     const m = analyzeTack(run(triangle()), { diameterMm: D, h0Mm: 2 });
     expect(m.ok).toBe(true);
     expect(m.areaMm2).toBeCloseTo(A, 12);
@@ -39,18 +39,15 @@ describe('probe-tack metrics', () => {
     expect(m.wJm2).toBeCloseTo((1.4998 / A) * 1000, 2);
     expect(m.epsMax).toBeCloseTo(1.49 / 2, 4);
     expect(m.epsPeak).toBeCloseTo(1 / 2, 6);
-    expect(m.kNmm).toBeCloseTo(2, 6);
-    expect(m.complianceMmN).toBeCloseTo(0.5, 6);
-    expect(m.eAppKPa).toBeCloseTo(((2 * 2) / A) * 1000, 3);
     expect(m.plateau).toBeNull(); // no plateau longer than 0.3 mm
     expect(m.incomplete).toBe(false);
   });
 
-  it('skips strain and modulus without h₀, and needs a probe diameter', () => {
+  it('skips the strains without h₀, and needs a probe diameter', () => {
     const m = analyzeTack(run(triangle()), { diameterMm: D, h0Mm: null });
     expect(m.epsMax).toBeNull();
-    expect(m.eAppKPa).toBeNull();
-    expect(m.kNmm).toBeCloseTo(2, 6);
+    expect(m.epsPeak).toBeNull();
+    expect(m.fmaxN).toBeCloseTo(2, 6); // the other results do not need h₀
     expect(analyzeTack(run(triangle()), { diameterMm: 0, h0Mm: 1 }).ok).toBe(false);
   });
 
@@ -119,7 +116,7 @@ describe('tack flags and failure modes', () => {
     const m = analyzeTack({ ...coarse, zeroedGf: 1.25 }, { diameterMm: D, h0Mm: null });
     const f = tackFlags(m);
     expect(f.map((x) => x.label)).toEqual(['Low force resolution', 'Incomplete detachment', 'Load tared after dwell']);
-    expect(f[0].detail).toMatch(/^F_max = [\d.]+ force steps of [\d.]+ N; stiffness, plateau and relaxation may be approximate\.$/);
+    expect(f[0].detail).toMatch(/^F_max = [\d.]+ force steps of [\d.]+ N; plateau and relaxation may be approximate\.$/);
     expect(f[1].detail).toMatch(/W_adh is underestimated/);
     expect(f[2].detail).toMatch(/pull force is referenced to the new zero/);
     expect(tackFlags(analyzeTack(run(triangle()), { diameterMm: D, h0Mm: 2 }))).toEqual([]);

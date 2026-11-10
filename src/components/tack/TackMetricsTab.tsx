@@ -64,7 +64,7 @@ function Flags({ m }: { m: Parameters<typeof tackFlags>[0] }) {
 type PlotMode = 'force' | 'stress';
 
 /** F vs δ (or σ vs ε) of the runs of one Repeat, with F_max, δ_break and plateau. */
-function TackPlot({ repeat, mode, showFit }: { repeat: TackRepeat; mode: PlotMode; showFit: boolean }) {
+function TackPlot({ repeat, mode }: { repeat: TackRepeat; mode: PlotMode }) {
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
   const stress = mode === 'stress' && repeat.h0 !== null;
   const { data, layout } = useMemo(() => {
@@ -88,11 +88,6 @@ function TackPlot({ repeat, mode, showFit }: { repeat: TackRepeat; mode: PlotMod
       traces.push({ type: 'scatter', mode: 'markers', x: [m.deltaPeakMm * fx], y: [m.fmaxN * fy], legendgroup: name, showlegend: false, marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, hovertemplate: `${name}<br>peak: ${yl} = %{y:.4f} ${yu} at ${xl} = %{x:.3f}${xu}<extra></extra>` } as Data);
       traces.push({ type: 'scatter', mode: 'markers', x: [m.deltaMaxMm * fx], y: [TACK_DEFAULTS.endFraction * m.fmaxN * fy], legendgroup: name, showlegend: false, marker: { symbol: m.incomplete ? 'x-open' : 'x', size: 12, color, line: { color, width: 2 } }, hovertemplate: `${name}<br>break: ${xl} = %{x:.3f}${xu}${m.incomplete ? ' (end of data: incomplete detachment)' : ''}<extra></extra>` } as Data);
       if (m.plateau) traces.push({ type: 'scatter', mode: 'lines', x: [m.plateau.fromMm * fx, m.plateau.toMm * fx], y: [m.plateau.levelN * fy, m.plateau.levelN * fy], legendgroup: name, showlegend: false, line: { color, width: 1.4, dash: 'dot' }, hovertemplate: `${name}<br>plateau ${m.plateau.stressKPa.toFixed(2)} kPa over ${m.plateau.lengthMm.toFixed(2)} mm<extra></extra>` } as Data);
-      if (showFit && m.fit) {
-        const x0 = -m.fit.b / m.fit.k;
-        const x1 = (0.8 * m.fmaxN - m.fit.b) / m.fit.k;
-        traces.push({ type: 'scatter', mode: 'lines', x: [x0 * fx, x1 * fx], y: [0, 0.8 * m.fmaxN * fy], legendgroup: name, showlegend: false, line: { color, width: 1.6, dash: 'dash' }, hovertemplate: `${name}<br>initial slope k = ${m.fit.k.toFixed(4)} N/mm<extra></extra>` } as Data);
-      }
     });
     const lay: Partial<Layout> = {
       ...figLayout(),
@@ -103,7 +98,7 @@ function TackPlot({ repeat, mode, showFit }: { repeat: TackRepeat; mode: PlotMod
       uirevision: `${repeat.fileId}|${stress}`,
     };
     return { data: traces, layout: lay };
-  }, [repeat, stress, showFit]);
+  }, [repeat, stress]);
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
     const Plotly = await loadPlotly();
@@ -112,7 +107,7 @@ function TackPlot({ repeat, mode, showFit }: { repeat: TackRepeat; mode: PlotMod
   return (
     <>
       <div className="table-actions">
-        <span className="note">▲ peak · × break (F ≤ {TACK_DEFAULTS.endFraction * 100}% F<sub>max</sub>; open × = end of data) · dotted = plateau{showFit ? ' · dashed = initial slope' : ''}</span>
+        <span className="note">▲ peak · × break (F ≤ {TACK_DEFAULTS.endFraction * 100}% F<sub>max</sub>; open × = end of data) · dotted = plateau</span>
         <div className="export-group"><span>Save graph</span><button className="small" onClick={() => save('png')}>PNG</button><button className="small" onClick={() => save('svg')}>SVG</button></div>
       </div>
       <PlotlyChart data={data} layout={layout} className="plot summary" onReady={(el) => (plotEl.current = el)} />
@@ -125,7 +120,6 @@ export function TackMetricsTab() {
   const t = useTackMetrics();
   const [plotId, setPlotId] = useState<string | null>(null);
   const [plotMode, setPlotMode] = useState<PlotMode>('force');
-  const [showFit, setShowFit] = useState(false);
   const [allH0, setAllH0] = useState<number | null>(null);
   const d = t.diameter;
   const area = d > 0 ? (Math.PI * d * d) / 4 : NaN;
@@ -237,9 +231,8 @@ export function TackMetricsTab() {
             <button className={plotMode === 'force' ? 'on' : ''} onClick={() => setPlotMode('force')}>F vs δ</button>
             <button className={plotMode === 'stress' ? 'on' : ''} disabled={plotRepeat.h0 === null} title={plotRepeat.h0 === null ? 'Enter h₀ for this Repeat' : ''} onClick={() => setPlotMode('stress')}>σ vs ε</button>
           </div>
-          <label className="check"><input type="checkbox" checked={showFit} onChange={(e) => setShowFit(e.target.checked)} /> Initial slope (diagnostic)</label>
         </div>
-        <TackPlot repeat={plotRepeat} mode={plotMode} showFit={showFit} />
+        <TackPlot repeat={plotRepeat} mode={plotMode} />
       </Section>
 
       <Section n={3} title="Per-run results">
@@ -337,9 +330,9 @@ export function TackMetricsTab() {
       </Section>
 
       <details className="section tack-advanced">
-        <summary>7. Advanced / Diagnostics: initial stiffness, apparent modulus, dwell relaxation</summary>
+        <summary>7. Advanced / Diagnostics: dwell forces and relaxation</summary>
         <div className="section-body">
-          <p className="note">Secondary quantities. With few force steps (Low force resolution) they are approximate.</p>
+          <p className="note">Secondary quantities. With few force steps (Low force resolution) the relaxation is approximate.</p>
           <div className="table-scroll">
             <table className="grid">
               <thead><tr><th>Repeat</th><th>Run</th>{DIAG_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}</tr></thead>

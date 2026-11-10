@@ -41,7 +41,7 @@ describe('probe-tack metrics', () => {
     expect(m.kNmm).toBeCloseTo(2, 6);
     expect(m.complianceMmN).toBeCloseTo(0.5, 6);
     expect(m.eAppKPa).toBeCloseTo(((2 * 2) / A) * 1000, 3);
-    expect(m.detachment).toBe('sharp detachment');
+    expect(m.plateau).toBeNull(); // no plateau longer than 0.3 mm
     expect(m.incomplete).toBe(false);
   });
 
@@ -53,7 +53,7 @@ describe('probe-tack metrics', () => {
     expect(analyzeTack(run(triangle()), { diameterMm: 0, h0Mm: 1 }).ok).toBe(false);
   });
 
-  it('detects a fibrillation plateau longer than 0.3 mm', () => {
+  it('measures a plateau longer than 0.3 mm', () => {
     const pts: [number, number][] = [];
     for (let x = 0; x <= 4; x += 0.001) {
       // peak 2 N at 0.5 mm, drop to a 0.9–1.1 N plateau from 0.6 to 2.0 mm, then release
@@ -61,7 +61,6 @@ describe('probe-tack metrics', () => {
       pts.push([x, tN]);
     }
     const m = analyzeTack(run(pts), { diameterMm: D, h0Mm: null });
-    expect(m.detachment).toBe('possible fibrillation');
     expect(m.plateau!.lengthMm).toBeGreaterThan(1.3);
     expect(m.plateau!.stressKPa).toBeCloseTo((1 / A) * 1000, -1);
   });
@@ -95,5 +94,17 @@ describe('probe-tack metrics', () => {
     expect(canonicalSubstrate('Stainless steel')).toBe('stainless steel');
     expect(canonicalSubstrate('ss')).toBe('stainless steel');
     expect(canonicalSubstrate('PTFE')).toBeNull();
+  });
+});
+
+describe('tack metrics project state', () => {
+  it('nothing is excluded by default, and older projects load with empty exclusions', async () => {
+    const { migrateState } = await import('../src/storage/project');
+    const { defaultProject } = await import('../src/state/defaults');
+    expect(defaultProject().tackMetrics).toEqual({ h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {} });
+    expect(migrateState({}).tackMetrics).toEqual({ h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {} });
+    const s = migrateState({ tackMetrics: { h0: { f1: 2, f2: -1 }, excludedRuns: { 'f1#c1': { reason: 'bubble', at: 'x' } } } as never });
+    expect(s.tackMetrics.h0).toEqual({ f1: 2 });
+    expect(s.tackMetrics.excludedRuns['f1#c1'].reason).toBe('bubble');
   });
 });

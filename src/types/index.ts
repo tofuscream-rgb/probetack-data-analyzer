@@ -211,6 +211,8 @@ export interface TackMetricsState {
   excludedRepeats: Record<string, DatasetExclusion>;
   /** Keyed by session (recording date of the file). */
   excludedSessions: Record<string, DatasetExclusion>;
+  /** Single runs left out by the user (by cycleId); optional, none by default. */
+  excludedRuns: Record<string, DatasetExclusion>;
 }
 
 /** Step 2 of the sidebar: which experiment (charge ratio + concentration + substrate) and which TXT files are viewed. */

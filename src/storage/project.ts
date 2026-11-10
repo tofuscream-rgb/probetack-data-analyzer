@@ -174,7 +174,7 @@ function migrateTackMetrics(raw: Partial<TackMetricsState> | undefined): TackMet
     for (const [k, v] of Object.entries(rec ?? {})) if (v && typeof v === 'object') out[k] = { reason: typeof v.reason === 'string' ? v.reason : '', at: typeof v.at === 'string' ? v.at : '' };
     return out;
   };
-  return { h0, excludedRepeats: excl(raw?.excludedRepeats), excludedSessions: excl(raw?.excludedSessions) };
+  return { h0, excludedRepeats: excl(raw?.excludedRepeats), excludedSessions: excl(raw?.excludedSessions), excludedRuns: excl(raw?.excludedRuns) };
 }
 
 /** Merge a possibly older/partial state with current defaults so new fields always exist. */
@@ -328,6 +328,7 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
       ...state.tackMetrics,
       h0: remapKeys(state.tackMetrics.h0, (k) => idMap.get(k) ?? k),
       excludedRepeats: remapKeys(state.tackMetrics.excludedRepeats, (k) => idMap.get(k) ?? k),
+      excludedRuns: remapKeys(state.tackMetrics.excludedRuns, mapCycle),
     },
     selection: state.selection.map(mapCycle),
     experiment: {

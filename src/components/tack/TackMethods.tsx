@@ -38,7 +38,7 @@ const ITEMS: { title: string; tex: string; text: string }[] = [
   {
     title: 'Plateau after the peak',
     tex: String.raw`\lvert F - F_p \rvert \le ${TACK_DEFAULTS.plateauTol}\,F_p \;\text{ over }\; \Delta\delta_p > ${TACK_DEFAULTS.plateauMinMm}\ \text{mm},\qquad \sigma_p = \frac{F_p}{A}`,
-    text: `Between the peak and δ_max, the longest stretch in which every force lies within ±${pct(TACK_DEFAULTS.plateauTol)} of one level F_p (largest/smallest ≤ ${((1 + TACK_DEFAULTS.plateauTol) / (1 - TACK_DEFAULTS.plateauTol)).toFixed(2)}). If it is longer than ${TACK_DEFAULTS.plateauMinMm} mm: plateau stress σ_p = mean F in the stretch / A, plateau length Δδ_p, flag “possible fibrillation”; otherwise “sharp detachment”. The flag describes the curve shape only.`,
+    text: `Between the peak and δ_max, the longest stretch in which every force lies within ±${pct(TACK_DEFAULTS.plateauTol)} of one level F_p (largest/smallest ≤ ${((1 + TACK_DEFAULTS.plateauTol) / (1 - TACK_DEFAULTS.plateauTol)).toFixed(2)}). If it is longer than ${TACK_DEFAULTS.plateauMinMm} mm: plateau stress σ_p = mean F in the stretch / A and plateau length Δδ_p are reported; otherwise they are left blank. The curve is not classified (no fibrillation flag).`,
   },
   {
     title: 'Dwell relaxation',
@@ -48,12 +48,12 @@ const ITEMS: { title: string; tex: string; text: string }[] = [
   {
     title: 'Data-quality flags',
     tex: String.raw`n_{\text{steps}} = \frac{F_{\max}}{\Delta F_{\text{res}}} < ${LOW_RESOLUTION_STEPS}\;\Rightarrow\;\text{“coarse”}`,
-    text: `ΔF_res = smallest step between distinct recorded force values in the run (the load cell’s resolution as recorded). If F_max is fewer than ${LOW_RESOLUTION_STEPS} steps, the run is flagged “coarse”: k, the plateau test (±${pct(TACK_DEFAULTS.plateauTol)} of a level only a few steps high) and the relaxation are approximate, and “≤ ${pct(TACK_DEFAULTS.endFraction)} of F_max” means a reading of zero. If the file has a Zero Load step between the Wait and the pull, the load cell was tared at the end of the dwell: the pull forces are measured from that state, and the run is flagged with the force that was removed.`,
+    text: `ΔF_res = smallest step between distinct recorded force values in the run (the load cell’s resolution as recorded). If F_max is fewer than ${LOW_RESOLUTION_STEPS} steps, the run is flagged “coarse”: k, the plateau (±${pct(TACK_DEFAULTS.plateauTol)} of a level only a few steps high) and the relaxation are approximate, and “≤ ${pct(TACK_DEFAULTS.endFraction)} of F_max” means a reading of zero. If the file has a Zero Load step between the Wait and the pull, the load cell was tared at the end of the dwell: the pull forces are measured from that state, and the run is flagged with the force that was removed.`,
   },
   {
     title: 'Statistics and exclusions',
     tex: String.raw`\bar{x} = \frac{1}{n}\sum x_j,\qquad s = \sqrt{\frac{\sum (x_j - \bar{x})^2}{n-1}}`,
-    text: 'Per Repeat: mean ± sample SD over its runs. Per condition (substrate × dwell): mean ± SD over the Repeat means of the included Repeats, so each Repeat counts once. Only whole Repeats (files) or whole test sessions (recording date) can be excluded, each with a reason; single runs and points are never removed.',
+    text: 'Per Repeat: mean ± sample SD over its runs. Per condition (substrate × dwell): mean ± SD over the Repeat means of the included Repeats, so each Repeat counts once. Nothing is excluded by default. You may exclude a whole Repeat (file), a whole test session (recording date) or a single run, each with a reason; points are never removed. Excluded runs leave the Repeat mean; excluded Repeats and sessions leave the condition statistics.',
   },
   {
     title: 'Force capacity (interpretation only, not computed)',

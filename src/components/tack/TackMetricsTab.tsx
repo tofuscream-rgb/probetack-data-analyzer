@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { useApp, download } from '../../state/AppContext';
-import { TACK_METRICS, useTackMetrics, type GroupStat, type TackRepeat } from '../../state/tackMetrics';
+import { TACK_METRICS, usedRuns, useTackMetrics, type GroupStat, type TackRepeat } from '../../state/tackMetrics';
 import { LOW_RESOLUTION_STEPS, TACK_DEFAULTS, type TackMetrics } from '../../analysis/tackMetrics';
 import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
 import { EXPORT_SIZE, LINE, figAxis, figLayout } from '../../plotting/figureStyle';
@@ -14,7 +14,7 @@ const SUBSTRATES = ['PET', 'stainless steel', 'glass'];
 
 function flagsOf(m: TackMetrics): string[] {
   if (!m.ok) return [m.error ?? 'not analysed'];
-  const f: string[] = [m.detachment];
+  const f: string[] = [];
   if (m.incomplete) f.push('detachment incomplete – W underestimated');
   if (m.peakSteps !== null && m.peakSteps < LOW_RESOLUTION_STEPS) f.push(`coarse: F_max = ${m.peakSteps.toFixed(1)} force steps of ${m.resolutionN!.toFixed(4)} N`);
   if (m.zeroedN !== null) f.push(`load zeroed after dwell (${m.zeroedN.toFixed(4)} N)`);
@@ -94,17 +94,18 @@ export function TackMetricsTab() {
   const sessions = [...new Set(t.repeats.map((r) => r.session))];
   const excludedRepeats = t.repeats.filter((r) => r.excluded);
   const excludedSessions = sessions.filter((s) => t.tm.excludedSessions[s]);
+  const excludedRuns = t.repeats.flatMap((rp) => rp.runs.filter((r) => r.excluded).map((r) => ({ rp, r })));
 
   const runRows = () => [
-    ['Repeat (file)', 'Path', 'Session', 'Substrate', 'Dwell (s)', 'h0 (mm)', 'Excluded', 'Run', ...TACK_METRICS.map((k) => `${k.label} (${k.unit})`), 'Detachment', 'Flags'],
+    ['Repeat (file)', 'Path', 'Session', 'Substrate', 'Dwell (s)', 'h0 (mm)', 'Repeat excluded', 'Run', 'Run excluded', 'Run exclusion reason', ...TACK_METRICS.map((k) => `${k.label} (${k.unit})`), 'Flags'],
     ...t.repeats.flatMap((rp) =>
-      rp.runs.map((r) => [rp.name, rp.file.path, rp.session, rp.substrateLabel, rp.dwellS, rp.h0, rp.included ? '' : 'yes', r.cycle.cycleNumber, ...TACK_METRICS.map((k) => (r.m.ok ? k.get(r.m) : null)), r.m.ok ? r.m.detachment : '', flagsOf(r.m).slice(1).join('; ') || (r.m.ok ? '' : r.m.error)]),
+      rp.runs.map((r) => [rp.name, rp.file.path, rp.session, rp.substrateLabel, rp.dwellS, rp.h0, rp.included ? '' : 'yes', r.cycle.cycleNumber, r.excluded ? 'yes' : '', r.excluded?.reason ?? '', ...TACK_METRICS.map((k) => (r.m.ok ? k.get(r.m) : null)), flagsOf(r.m).join('; ')]),
     ),
   ];
   const summaryRows = () => [
     ['Per Repeat (mean ± SD over runs)'],
     ['Repeat (file)', 'Substrate', 'Dwell (s)', 'Excluded', 'Runs', ...TACK_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`])],
-    ...t.repeats.map((rp) => [rp.name, rp.substrateLabel, rp.dwellS, rp.included ? '' : 'yes', rp.runs.filter((r) => r.m.ok).length, ...TACK_METRICS.flatMap((k) => { const s = t.repeatStats.get(rp.fileId)![k.key]; return [s.mean, s.sd]; })]),
+    ...t.repeats.map((rp) => [rp.name, rp.substrateLabel, rp.dwellS, rp.included ? '' : 'yes', usedRuns(rp).length, ...TACK_METRICS.flatMap((k) => { const s = t.repeatStats.get(rp.fileId)![k.key]; return [s.mean, s.sd]; })]),
     [],
     ['Per condition (substrate × dwell): mean ± SD over the Repeat means of included Repeats'],
     ['Substrate', 'Dwell (s)', 'Repeats', 'Runs', ...TACK_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`])],
@@ -112,6 +113,7 @@ export function TackMetricsTab() {
     [],
     ['Probe diameter (mm)', d, 'A (mm²)', area],
     ['Excluded Repeats'], ...excludedRepeats.map((r) => [r.name, r.excluded!.reason]),
+    ['Excluded runs'], ...excludedRuns.map(({ rp, r }) => [`${rp.name} run ${r.cycle.cycleNumber}`, r.excluded!.reason]),
     ['Excluded sessions'], ...excludedSessions.map((s) => [s, t.tm.excludedSessions[s].reason]),
   ];
   const base = `${project.name || 'tack'}_CR${t.ex.chargeRatio}_${t.ex.concentrationM}M`.replace(/[^\w.-]+/g, '_');
@@ -120,7 +122,7 @@ export function TackMetricsTab() {
     <div className="ls-results tack-metrics">
       <p className="note">
         Charge ratio <strong>{t.ex.chargeRatio}</strong>, <strong>{t.ex.concentrationM} M</strong> (chosen on the left): every substrate and dwell time. Metrics use the tensile part of
-        each pull. Exclusion is per whole Repeat (file) or test session only; single runs and points are never excluded here.
+        each pull. Nothing is excluded unless you choose to: a whole Repeat (file), a test session, or a single run (optional), each with a reason. Points are never removed.
       </p>
 
       <h3 className="ls-h">Inputs</h3>
@@ -169,7 +171,7 @@ export function TackMetricsTab() {
 
       <div className="excluded-list">
         <strong>Excluded data sets</strong>
-        {!excludedRepeats.length && !excludedSessions.length ? (
+        {!excludedRepeats.length && !excludedSessions.length && !excludedRuns.length ? (
           <span className="note"> none</span>
         ) : (
           <ul>
@@ -178,6 +180,9 @@ export function TackMetricsTab() {
             ))}
             {excludedRepeats.map((r) => (
               <li key={r.fileId}>Repeat {r.name}: <input className="reason" value={r.excluded!.reason} placeholder="reason (required)" onChange={(e) => t.excludeRepeat(r.fileId, true, e.target.value)} /></li>
+            ))}
+            {excludedRuns.map(({ rp, r }) => (
+              <li key={r.id}>Run {r.cycle.cycleNumber} of {rp.name}: <input className="reason" value={r.excluded!.reason} placeholder="reason (required)" onChange={(e) => t.excludeRun(r.id, true, e.target.value)} /> <button className="link small" onClick={() => t.excludeRun(r.id, false)}>Include again</button></li>
             ))}
           </ul>
         )}
@@ -200,22 +205,22 @@ export function TackMetricsTab() {
         <table className="grid">
           <thead>
             <tr>
-              <th>Repeat</th><th>Run</th><th>Substrate</th><th className="num">Dwell (s)</th>
+              <th title="Optional: leave this run out of the statistics (none by default)">Exclude run</th><th>Repeat</th><th>Run</th><th>Substrate</th><th className="num">Dwell (s)</th>
               {TACK_METRICS.map((k) => <th key={k.key} className="num">{k.label} ({k.unit})</th>)}
-              <th>Detachment</th><th>Flags</th>
+              <th>Flags</th>
             </tr>
           </thead>
           <tbody>
             {t.repeats.flatMap((rp) =>
               rp.runs.map((r) => (
-                <tr key={r.id} className={rp.included ? '' : 'excluded-row'}>
+                <tr key={r.id} className={rp.included && !r.excluded ? '' : 'excluded-row'}>
+                  <td><input type="checkbox" checked={!!r.excluded} disabled={!r.m.ok} onChange={(e) => t.excludeRun(r.id, e.target.checked, r.excluded?.reason ?? '')} aria-label={`Exclude run ${r.cycle.cycleNumber} of ${rp.name}`} /></td>
                   <td title={rp.file.path}>{rp.name}{rp.included ? '' : ' (excluded)'}</td>
                   <td>{r.cycle.cycleNumber}</td>
                   <td>{rp.substrateLabel}</td>
                   <td className="num">{rp.dwellS ?? '—'}</td>
                   {TACK_METRICS.map((k) => <td key={k.key} className="num">{r.m.ok ? fmt(k.get(r.m), k.digits) : '—'}</td>)}
-                  <td>{r.m.ok ? r.m.detachment : '—'}</td>
-                  <td className={r.m.incomplete || !r.m.ok ? 'warn-text' : ''}>{flagsOf(r.m).slice(r.m.ok ? 1 : 0).join('; ')}</td>
+                  <td className={r.m.incomplete || !r.m.ok ? 'warn-text' : ''}>{[...(r.excluded ? [`excluded${r.excluded.reason ? `: ${r.excluded.reason}` : ''}`] : []), ...flagsOf(r.m)].join('; ')}</td>
                 </tr>
               )),
             )}
@@ -233,7 +238,7 @@ export function TackMetricsTab() {
           <tbody>
             {t.repeats.map((rp) => (
               <tr key={rp.fileId} className={rp.included ? '' : 'excluded-row'}>
-                <td>{rp.name}{rp.included ? '' : ' (excluded)'}</td><td>{rp.substrateLabel}</td><td className="num">{rp.dwellS ?? '—'}</td><td className="num">{rp.runs.filter((r) => r.m.ok).length}</td>
+                <td>{rp.name}{rp.included ? '' : ' (excluded)'}</td><td>{rp.substrateLabel}</td><td className="num">{rp.dwellS ?? '—'}</td><td className="num">{usedRuns(rp).length}</td>
                 {TACK_METRICS.map((k) => <td key={k.key} className="num">{ms(t.repeatStats.get(rp.fileId)![k.key], k.digits)}</td>)}
               </tr>
             ))}

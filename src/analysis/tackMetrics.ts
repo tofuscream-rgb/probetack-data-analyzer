@@ -16,8 +16,7 @@
  *                              10% and 60% of F_max; C = 1/k; E_app = k h₀ / A
  *   plateau                    after the peak, the longest stretch where T stays within ±20%
  *                              of one level (max/min ≤ 1.2/0.8); > 0.3 mm → plateau stress
- *                              (mean T / A) and length, "possible fibrillation"; else
- *                              "sharp detachment"
+ *                              (mean T / A) and length (no classification of the curve)
  *   dwell                      Fz at the start and end of the preceding Wait section
  *                              (compression positive) and the relaxation in %
  *
@@ -68,7 +67,6 @@ export interface TackMetrics {
   /** Fitted line T = k δ + b over the slope window (for the plot). */
   fit: { k: number; b: number; fromMm: number; toMm: number; n: number } | null;
   plateau: { stressKPa: number; lengthMm: number; fromMm: number; toMm: number; levelN: number } | null;
-  detachment: 'possible fibrillation' | 'sharp detachment';
   dwell: { startN: number; endN: number; relaxPct: number } | null;
   /** The pull ended before T fell to ≤ 2% F_max: W and δ_max are underestimated. */
   incomplete: boolean;
@@ -110,7 +108,7 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
   const dwell = dwellOf(run.holdForce_gf);
   const base: TackMetrics = {
     ok: false, error: null, areaMm2: area, fmaxN: nan, sigmaMaxKPa: nan, deltaPeakMm: nan, deltaMaxMm: nan, wJm2: nan,
-    epsMax: null, kNmm: null, complianceMmN: null, eAppKPa: null, fit: null, plateau: null, detachment: 'sharp detachment',
+    epsMax: null, kNmm: null, complianceMmN: null, eAppKPa: null, fit: null, plateau: null,
     dwell, incomplete: false, resolutionN: null, peakSteps: null, zeroedN: run.zeroedGf !== null && run.zeroedGf !== undefined ? run.zeroedGf * GF_TO_N : null,
     notes, curve: { deltaMm: new Float64Array(), tN: new Float64Array() },
   };
@@ -232,7 +230,6 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
     eAppKPa: fit && h0 !== null ? ((fit.k * h0) / area) * 1000 : null,
     fit,
     plateau,
-    detachment: plateau ? 'possible fibrillation' : 'sharp detachment',
     incomplete,
     curve: { deltaMm: Float64Array.from(delta), tN: Float64Array.from(t) },
   };

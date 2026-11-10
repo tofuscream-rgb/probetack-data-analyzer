@@ -15,7 +15,12 @@ export interface TackRun {
   id: string;
   cycle: Cycle;
   m: TackMetrics;
+  /** Left out by the user (optional; no run is excluded by default). */
+  excluded: DatasetExclusion | null;
 }
+
+/** Runs that enter the statistics: analysed and not excluded. */
+export const usedRuns = (rp: TackRepeat) => rp.runs.filter((r) => r.m.ok && !r.excluded);
 
 export interface TackRepeat {
   fileId: string;
@@ -110,7 +115,7 @@ export function useTackMetrics() {
         dwellS: first.holdTimeS,
         session,
         h0,
-        runs: rs.map((r) => ({ id: r.cycle.cycleId, cycle: r.cycle, m: metricsOf(r.cycle, diameter, h0) })),
+        runs: rs.map((r) => ({ id: r.cycle.cycleId, cycle: r.cycle, m: metricsOf(r.cycle, diameter, h0), excluded: tm.excludedRuns[r.cycle.cycleId] ?? null })),
         excluded,
         sessionExcluded,
         included: !excluded && !sessionExcluded,
@@ -128,14 +133,14 @@ export function useTackMetrics() {
 
   /** Mean ± SD over the runs of each Repeat. */
   const repeatStats = useMemo(
-    () => new Map(repeats.map((rp) => [rp.fileId, Object.fromEntries(TACK_METRICS.map((k) => [k.key, meanSd(rp.runs.filter((r) => r.m.ok).map((r) => k.get(r.m)))]))])),
+    () => new Map(repeats.map((rp) => [rp.fileId, Object.fromEntries(TACK_METRICS.map((k) => [k.key, meanSd(usedRuns(rp).map((r) => k.get(r.m)))]))])),
     [repeats],
   );
 
   /** Per condition (substrate × dwell): mean ± SD over the Repeat means of the included Repeats. */
   const conditions = useMemo<GroupStat[]>(() => {
     const groups = new Map<string, TackRepeat[]>();
-    for (const rp of repeats.filter((x) => x.included)) {
+    for (const rp of repeats.filter((x) => x.included && usedRuns(x).length > 0)) {
       const key = `${rp.substrateLabel.toLowerCase()}|${rp.dwellS ?? '—'}`;
       groups.set(key, [...(groups.get(key) ?? []), rp]);
     }
@@ -145,7 +150,7 @@ export function useTackMetrics() {
       substrate: list[0].substrateLabel,
       dwellS: list[0].dwellS,
       nRepeats: list.length,
-      nRuns: list.reduce((s, rp) => s + rp.runs.filter((r) => r.m.ok).length, 0),
+      nRuns: list.reduce((s, rp) => s + usedRuns(rp).length, 0),
       stats: Object.fromEntries(TACK_METRICS.map((k) => [k.key, meanSd(list.map((rp) => repeatStats.get(rp.fileId)![k.key].mean))])),
     }));
   }, [repeats, repeatStats]);
@@ -181,6 +186,16 @@ export function useTackMetrics() {
       }),
     [setTm],
   );
+  const excludeRun = useCallback(
+    (cycleId: string, on: boolean, reason = '') =>
+      setTm((t) => {
+        const excludedRuns = { ...t.excludedRuns };
+        if (on) excludedRuns[cycleId] = { reason, at: excludedRuns[cycleId]?.at ?? now() };
+        else delete excludedRuns[cycleId];
+        return { ...t, excludedRuns };
+      }),
+    [setTm],
+  );
   const setSubstrate = useCallback(
     (fileId: string, v: string | null) =>
       update((p) => {
@@ -191,5 +206,5 @@ export function useTackMetrics() {
     [update],
   );
 
-  return { ex, tm, diameter, repeats, repeatStats, conditions, setH0, excludeRepeat, excludeSession, setSubstrate };
+  return { ex, tm, diameter, repeats, repeatStats, conditions, setH0, excludeRepeat, excludeSession, excludeRun, setSubstrate };
 }

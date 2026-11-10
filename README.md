@@ -123,12 +123,13 @@ The **Tack metrics** tab analyses the tensile part of each pull for every file (
 
 1. **Test settings**: probe diameter *d* (default 5.5 mm; A = π d²/4); gel thickness h₀ per Repeat (blank = strains are skipped; *Apply to all* sets one value); substrate per Repeat (PET, stainless steel, glass, or the name read from the folder); dwell time read from the Wait section; exclusion of a Repeat or test session, and the list of excluded data sets with reasons.
 2. **Plot**: F vs δ, or σ vs ε once h₀ is entered, for the runs of one Repeat, with ▲ peak, × break and the plateau.
-3. **Per-run results**: σ_max (kPa), W_adh (J/m²), true failure strain ε_failure, automatically detected plateau stress, separate failure-locus and debonding-morphology observations, and flags. F_max, displacement, plateau length and dwell quantities remain diagnostics.
+3. **Per-run results**: σ_max (kPa), W_adh (J/m²), true failure strain ε_failure, automatically detected plateau stress, separate failure-mode and debonding-morphology observations, and flags. F_max, displacement, plateau length and dwell quantities remain diagnostics.
 4. **Mean ± SD per Repeat** and 5. **per condition** (substrate × dwell; over the Repeat means of the included Repeats), with the failure-mode counts.
-6. **Failure-mode observations**, entered by you for each run: Interfacial / adhesive, Cohesive, Cavitation, Fibrillation, Cavitation + fibrillation, Mixed or Other, a free-text observation, and optionally the fibril onset displacement and the largest fibril extension (shown as strain when h₀ is known). Fibrillation is never inferred from the curve.
+6. **Failure observations**, entered by you for each run: **Failure mode** (Adhesive / interfacial, Cohesive, Mixed, Other) and, separately, **Debonding morphology** (None, Cavitation, Fibrillation, Cavitation + fibrillation, Other), a free-text observation, and optionally the fibril onset displacement and the largest fibril extension (shown as strain when h₀ is known). Neither is inferred from the curve. **Bulk assignment**: tick runs (or select all visible runs, the current Repeat or the current condition, i.e. those of the last run clicked), choose a failure mode and/or morphology and click *Apply*; *Only fill blank fields* (on by default) keeps values already entered.
 7. **Advanced / Diagnostics** (collapsed): dwell force at the start and end of the Wait and the relaxation.
 8. **Methods, equations, definitions and references**: every equation typeset with KaTeX (bundled with the site, so it renders offline), each symbol defined, with thresholds and sources: Creton & Ciccotti, Rep. Prog. Phys. 79, 046601 (2016); Bartlett et al., Prog. Mater. Sci. 137, 101086 (2023).
-9. **Export CSV**: per-run results (with failure modes, observations, flags and their details, and the diagnostic quantities) and the Repeat and condition summaries.
+9. **Definitions & References** for every failure-mode and morphology term (see [Definitions & References](#definitions--references)).
+10. **Export CSV**: per-run results (with failure modes, observations, flags and their details, and the diagnostic quantities) and the Repeat and condition summaries.
 
 | Quantity | Definition |
 |---|---|
@@ -186,7 +187,7 @@ Choose **Experiment type → 90° Peel** and open your peel files. A Mach-1 file
 1. **Choose your experiment** (step 2), as in Probe Tack: pick the **charge ratio**, then the **total monomer concentration** (only those measured at that charge ratio), then the **substrate**, from dropdowns built from the folder and file names. Each dropdown also has *All*, to put several charge ratios, concentrations or substrates on one graph. **Files and runs** (step 3) lists every file of that choice, **grouped by substrate**: versions of a file such as `PET.txt`, `PETv2.txt`, `PET v3.txt`, `PET_v4.txt` (or `PET-2.txt`) form one group *PET*, with the version as the repeat number. Tick a group to use all its files, open it (▾) to tick files one by one, and open a file (▸) to tick single runs. The Results summary has one column per group with its number of files and runs (mean ± SD). The graph, Results and Excel export use the ticked runs of the chosen experiment; *Compare charge ratios* uses the ticked runs of every experiment.
 2. **Gel dimensions** (step 4): gel length, width, thickness and peel angle (defaults 60 × 10 × 1 mm, 90°). *Apply* sets them for every selected run; single runs can be changed in the Results tab.
 3. **Graph**: the ticked runs vs peel displacement. Choose the **Y axis**: **peel energy G = F/w · (1 − cos θ) in J/m²** (the default; each run with its own gel width and peel angle, so its steady-state average equals Γ in the Results tab), peel force (gf or N) or nominal stress F/A (kPa or MPa, with each run's gel length × width). F/A is nominal: in a peel the load is carried at the peel front, not by the whole bonded area. ▲ marks the peak, × the detachment. Click a curve to highlight it. *Shade area under curve* (off by default) shows the steady-state window used for the average peel force together with that average (dashed line). Change the window above the graph. **Curve labels**: keep the *Legend box*, choose *Label on curves* to write each curve's name next to the curve in its own colour (as you would by hand; only the conditions that differ between the curves are written, e.g. “glass”, “PET”), or *None*. Drag a label to move it. **Rename curves** gives any curve your own name (for example “stainless steel”), used in the legend and on the curves. **Axis titles** lets you type your own X and Y axis titles (leave empty for the automatic one; the Y title goes back to automatic when you change the Y quantity). **Graph title** adds an optional bold title above the graph; *Use …* fills in the conditions all curves share (e.g. “0.25 · 2.5 M”). Labels and title are saved with the project and included in PNG/SVG downloads.
-4. **Results**: every run, mean ± SD, and failure mode (Adhesive, Cohesive, Mixed, chosen by you).
+4. **Results**: every run and mean ± SD per Repeat and condition. For each run you record the **Failure mode** (Adhesive / interfacial, Cohesive, Mixed, Other) and, separately, the **Debonding morphology** (No fibrillation, Transient fibrillation, Persistent fibrillation, Cavitation, Cavitation + fibrillation, Other), one by one or with the same bulk assignment as in Probe Tack. *Transient* and *persistent fibrillation* are operational categories defined by this analyzer, not standardized literature terms (see [Definitions & References](#definitions--references)).
 5. **Compare charge ratios**: as in Lap Shear, for example peel energy or average peel force per substrate, charge ratio and concentration.
 6. **Export Excel** writes a summary, an editable chart, one sheet per run and the settings.
 
@@ -205,6 +206,29 @@ Choose **Experiment type → 90° Peel** and open your peel files. A Mach-1 file
 | Peel rate, angle, width, failure mode | Test conditions to report alongside the results. |
 
 Force, displacement, baseline, loading direction, data-quality handling and work integration are the same as in Lap Shear mode.
+
+## Definitions & References
+
+Failure mode (where the separation runs) and debonding morphology (how it proceeds) are recorded separately, from observation of the specimen or video; neither is inferred from the force curve. The same table is shown in the app (Tack metrics section 9, 90° Peel Results, and Lap Shear Results for failure modes).
+
+| Term | Field | Definition | Type | Source |
+|---|---|---|---|---|
+| Adhesive / interfacial failure | Failure mode | Separation at the gel–substrate (or gel–probe) interface; no gel left on the separated surface by visual inspection. | Standard term | [1] |
+| Cohesive failure | Failure mode | Separation within the gel layer; gel remains on both surfaces. | Standard term | [1] |
+| Mixed failure | Failure mode | Adhesive failure over part of the bonded area and cohesive failure over the rest; ISO 10365 reports combinations by the approximate area fraction of each pattern. | Standard term | [1] |
+| Other (failure mode) | Failure mode | Any other pattern (e.g. substrate failure); described in the observation. | Analyzer-defined operational category | — |
+| None / No fibrillation | Debonding morphology | No cavities or fibrils observed. | Analyzer-defined operational category | — |
+| Cavitation | Debonding morphology | Nucleation and growth of cavities in the adhesive layer during debonding, typically at or near the interface. | Literature term | [2], [3] |
+| Fibrillation | Debonding morphology | Extension of the adhesive walls between cavities (or at the debonding front) into load-bearing fibrils that bridge the surfaces. | Literature term | [2], [3], [4] |
+| Cavitation + fibrillation | Debonding morphology | Cavities form first and their walls then extend into fibrils (sequence described in [2]); the combined label is how this analyzer records it. | Literature term | [2], [3] |
+| Transient fibrillation (90° peel) | Debonding morphology | Fibrils appear near the peel front but rupture/disappear quickly; no sustained fibrillated zone during steady peel. | **Analyzer-defined operational category, not standardized literature terminology** | background: [3], [4] |
+| Persistent fibrillation (90° peel) | Debonding morphology | Fibrils remain/stretch through an appreciable part of steady peeling, giving a sustained fibrillated zone. | **Analyzer-defined operational category, not standardized literature terminology** | background: [3], [4] |
+| Other (morphology) | Debonding morphology | Any other morphology; described in the observation. | Analyzer-defined operational category | — |
+
+1. ISO 10365, Adhesives — Designation of main failure patterns. https://www.iso.org/search.html?q=ISO%2010365
+2. H. Lakrout, P. Sergot, C. Creton, Direct Observation of Cavitation and Fibrillation in a Probe Tack Experiment on Model Acrylic Pressure-Sensitive-Adhesives, J. Adhesion 69 (1999). https://doi.org/10.1080/00218469908017233
+3. C. Creton, M. Ciccotti, Fracture and adhesion of soft materials: a review, Rep. Prog. Phys. 79, 046601 (2016). https://doi.org/10.1088/0034-4885/79/4/046601
+4. J. Chopin et al., Nonlinear Viscoelastic Modeling of Adhesive Failure for Polyacrylate Pressure-Sensitive Adhesives, Macromolecules 51 (2018). https://doi.org/10.1021/acs.macromol.8b01374
 
 ## Excel export
 

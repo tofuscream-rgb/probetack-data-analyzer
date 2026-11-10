@@ -9,7 +9,8 @@ import { uniqueFileNames, useExperiment } from './experiment';
 import { groupValue, type CycleResult } from '../analysis/engine';
 import { LOW_RESOLUTION_STEPS, TACK_DEFAULTS, analyzeTack, meanSd, type TackMetrics } from '../analysis/tackMetrics';
 import { bySubstrate, canonicalSubstrate } from '../analysis/substrates';
-import type { Cycle, DatasetExclusion, FailureLocus, ParsedFile, TackMetricsState, TackMorphology, TackObservation } from '../types';
+import type { Cycle, DatasetExclusion, FailureMode, ParsedFile, TackMetricsState, TackMorphology, TackObservation } from '../types';
+import { FAILURE_MODES, TACK_MORPHOLOGIES, optionLabel } from '../analysis/observations';
 
 export interface TackRun {
   id: string;
@@ -72,16 +73,9 @@ export const DIAG_METRICS: Metric[] = [
 
 export const TACK_METRICS: Metric[] = [...MAIN_METRICS, ...DIAG_METRICS];
 
-export const FAILURE_LOCI: { value: FailureLocus; label: string }[] = [
-  { value: 'unspecified', label: '—' }, { value: 'adhesive', label: 'Adhesive / interfacial' },
-  { value: 'cohesive', label: 'Cohesive' }, { value: 'mixed', label: 'Mixed' }, { value: 'other', label: 'Other' },
-];
-export const TACK_MORPHOLOGIES: { value: TackMorphology; label: string }[] = [
-  { value: 'unspecified', label: '—' }, { value: 'none', label: 'None' }, { value: 'cavitation', label: 'Cavitation' },
-  { value: 'fibrillation', label: 'Fibrillation' }, { value: 'cavitation+fibrillation', label: 'Cavitation + fibrillation' }, { value: 'other', label: 'Other' },
-];
-export const failureLocusLabel = (m: FailureLocus) => FAILURE_LOCI.find((x) => x.value === m)?.label ?? '—';
-export const morphologyLabel = (m: TackMorphology) => TACK_MORPHOLOGIES.find((x) => x.value === m)?.label ?? '—';
+export { FAILURE_MODES, TACK_MORPHOLOGIES } from '../analysis/observations';
+export const failureModeLabel = (m: FailureMode) => optionLabel(FAILURE_MODES, m);
+export const morphologyLabel = (m: TackMorphology) => optionLabel(TACK_MORPHOLOGIES, m);
 export const EMPTY_OBSERVATION: TackObservation = { locus: 'unspecified', morphology: 'unspecified', note: '', fibrilOnsetMm: null, fibrilMaxMm: null };
 
 /** Data-quality flags: warnings only (never exclude anything). Short label, details for the tooltip. */
@@ -107,7 +101,7 @@ function countLabels(labels: string[]): string {
   return [...counts.entries()].sort((a, b) => (a[0] === 'not set' ? 1 : b[0] === 'not set' ? -1 : 0)).map(([l, n]) => `${l} ${n}`).join(' · ');
 }
 export function failureModeCounts(runs: TackRun[]): string {
-  return countLabels(runs.map((r) => r.obs.locus === 'unspecified' ? 'not set' : failureLocusLabel(r.obs.locus)));
+  return countLabels(runs.map((r) => r.obs.locus === 'unspecified' ? 'not set' : failureModeLabel(r.obs.locus)));
 }
 export function morphologyCounts(runs: TackRun[]): string {
   return countLabels(runs.map((r) => r.obs.morphology === 'unspecified' ? 'not set' : morphologyLabel(r.obs.morphology)));
@@ -252,6 +246,16 @@ export function useTackMetrics() {
       setTm((t) => ({ ...t, observations: { ...t.observations, [cycleId]: { ...(t.observations[cycleId] ?? EMPTY_OBSERVATION), ...patch } } })),
     [setTm],
   );
+  /** Several runs at once (bulk assignment), in one update. */
+  const setObservations = useCallback(
+    (patches: { id: string; patch: Partial<TackObservation> }[]) =>
+      setTm((t) => {
+        const observations = { ...t.observations };
+        for (const { id, patch } of patches) observations[id] = { ...(observations[id] ?? EMPTY_OBSERVATION), ...patch };
+        return { ...t, observations };
+      }),
+    [setTm],
+  );
   const setSubstrate = useCallback(
     (fileId: string, v: string | null) =>
       update((p) => {
@@ -262,5 +266,5 @@ export function useTackMetrics() {
     [update],
   );
 
-  return { ex, tm, diameter, repeats, repeatStats, conditions, setH0, excludeRepeat, excludeSession, excludeRun, setObservation, setSubstrate };
+  return { ex, tm, diameter, repeats, repeatStats, conditions, setH0, excludeRepeat, excludeSession, excludeRun, setObservation, setObservations, setSubstrate };
 }

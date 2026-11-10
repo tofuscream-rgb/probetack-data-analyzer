@@ -30,7 +30,7 @@ export const LAP_INTEGRATION_MODES = ['full', 'toPeak', 'custom'] as const;
 
 export const FAILURE_MODE_LABEL = {
   unspecified: 'Not specified',
-  adhesive: 'Adhesive',
+  adhesive: 'Adhesive / interfacial',
   cohesive: 'Cohesive',
   mixed: 'Mixed',
   other: 'Other',

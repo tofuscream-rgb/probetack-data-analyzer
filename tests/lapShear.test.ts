@@ -251,7 +251,7 @@ describe('lap shear: Excel export', () => {
     ]) expect(header).toContain(h);
     const row2 = summary[summary.indexOf(header) + 2];
     expect(row2[header.indexOf('Bonded overlap area (mm²)')]).toBe(500);
-    expect(row2[header.indexOf('Failure mode')]).toBe('Adhesive');
+    expect(row2[header.indexOf('Failure mode')]).toBe('Adhesive / interfacial');
     expect(summary.some((r) => r[0] === 'Apparent nominal lap-shear strength' && r[1] === 'kPa' && r[4] === 2)).toBe(true);
     const runSheet = sheets[2].rows;
     expect(runSheet[0]).toEqual(expect.arrayContaining(['Time (s)', 'Position z, original (mm)', 'Relative displacement |z − z₀| (mm)', 'Fz original signed (gf)', 'Fz baseline-corrected (gf)', 'Peak (1 = peak)', 'In selected integration interval', 'Cumulative loading work (mJ)']));

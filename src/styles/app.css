@@ -532,3 +532,18 @@ details.flag[open] .flag-detail { display: block; position: absolute; z-index: 5
 table.grid.tack-runs td { white-space: nowrap; }
 table.grid tr.mean-row td { font-weight: 600; background: var(--surface-2); }
 input.obs-note { min-width: 260px; }
+
+/* Bulk assignment of failure observations */
+.bulk-bar { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface-2); padding: 6px 10px; margin: 6px 0; font-size: 12px; }
+.bulk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 2px 0; }
+.bulk-select { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.bulk-bar .note { margin: 2px 0 0; }
+table.grid tbody tr.focus td { background: var(--accent-weak); }
+
+/* Definitions & References */
+.glossary { margin-top: 12px; }
+table.glossary-table td { white-space: normal; max-width: 520px; }
+.kind { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 9px; border: 1px solid var(--rule); white-space: nowrap; }
+.kind-standard { background: #e8f1fb; color: #1f4e9c; border-color: #b9d0ee; }
+.kind-literature { background: #eaf6ef; color: #0f6b4a; border-color: #b7dfc8; }
+.kind-analyzer { background: #fff3e0; color: #8a4b00; border-color: #f0c48a; }

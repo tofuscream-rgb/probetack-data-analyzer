@@ -37,9 +37,9 @@ const ITEMS: { title: string; tex: string; text: string }[] = [
     text: `Between the peak and δ_break, the longest stretch in which every force lies within ±${pct(TACK_DEFAULTS.plateauTol)} of one level F_p. If it is longer than ${TACK_DEFAULTS.plateauMinMm} mm, the plateau stress σ_p (mean F in the stretch / A) and plateau length Δδ_p are reported; otherwise they are blank. The curve is not classified: a plateau does not by itself mean fibrillation.`,
   },
   {
-    title: 'Failure locus and debonding morphology',
-    tex: String.raw`\text{failure locus} \perp \text{debonding morphology}`,
-    text: 'Failure locus (adhesive/interfacial, cohesive, mixed) and debonding morphology (none, cavitation, fibrillation, cavitation + fibrillation) are entered separately from observation/video. Neither is inferred from the force curve.',
+    title: 'Failure mode and debonding morphology',
+    tex: String.raw`\text{failure mode} \perp \text{debonding morphology}`,
+    text: 'Failure mode (adhesive/interfacial, cohesive, mixed, other) and debonding morphology (none, cavitation, fibrillation, cavitation + fibrillation, other) are entered separately from observation/video, one run at a time or in bulk. Neither is inferred from the force curve. Each term is defined, with its source, in section 9 (Definitions & References).',
   },
   {
     title: 'Data-quality flags (warnings only)',

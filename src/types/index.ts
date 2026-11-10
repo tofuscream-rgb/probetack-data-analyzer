@@ -1,6 +1,6 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.16.0';
+export const APP_VERSION = '1.17.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.2.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
@@ -217,11 +217,13 @@ export interface TackMetricsState {
   observations: Record<string, TackObservation>;
 }
 
-export type FailureLocus = 'unspecified' | 'adhesive' | 'cohesive' | 'mixed' | 'other';
+/** Failure mode: where the separation runs (ISO 10365 patterns), recorded by the user. */
+export type FailureMode = 'unspecified' | 'adhesive' | 'cohesive' | 'mixed' | 'other';
 export type TackMorphology = 'unspecified' | 'none' | 'cavitation' | 'fibrillation' | 'cavitation+fibrillation' | 'other';
 
 export interface TackObservation {
-  locus: FailureLocus;
+  /** Failure mode (stored under the key `locus` so saved projects keep loading). */
+  locus: FailureMode;
   morphology: TackMorphology;
   /** Free text: what was seen. */
   note: string;
@@ -275,7 +277,6 @@ export interface LapShearDims {
 }
 
 /** Observed by the user on the specimen; never inferred from the curve. */
-export type FailureMode = FailureLocus;
 export type PeelMorphology = 'unspecified' | 'no-fibrils' | 'transient-fibrils' | 'persistent-fibrils' | 'cavitation' | 'cavitation+fibrillation' | 'other';
 
 export interface LapShearRunMeta extends LapShearDims {

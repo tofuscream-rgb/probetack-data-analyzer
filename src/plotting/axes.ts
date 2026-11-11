@@ -39,7 +39,7 @@ export function axisOptions(settings: AnalysisSettings, extraColumns: string[] =
     {
       id: 'strain',
       label: 'Nominal strain ε',
-      description: 'ε = (h − h₀) / h₀: the displacement of each run divided by the initial gel thickness h₀ under Settings.',
+      description: 'ε = (h − h₀) / h₀: the displacement of each run divided by the initial gel thickness h₀ under Settings. Creton & Ciccotti, Rep. Prog. Phys. 79, 046601 (2016), eq. 9.',
     },
     {
       id: 'disp_mm',

@@ -547,3 +547,5 @@ table.glossary-table td { white-space: normal; max-width: 520px; }
 .kind-standard { background: #e8f1fb; color: #1f4e9c; border-color: #b9d0ee; }
 .kind-literature { background: #eaf6ef; color: #0f6b4a; border-color: #b7dfc8; }
 .kind-analyzer { background: #fff3e0; color: #8a4b00; border-color: #f0c48a; }
+.source { color: var(--ink-2); }
+.method-item .source { margin-top: -4px; }

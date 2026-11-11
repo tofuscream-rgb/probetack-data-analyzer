@@ -5,6 +5,7 @@
  */
 import { ALGORITHM_VERSION, APP_VERSION, GF_TO_N, type LapShearSettings } from '../types';
 import { FAILURE_MODE_LABEL, INTEGRATION_LABEL, SUMMARY_PROPERTIES, describe, type LapShearResult } from '../analysis/lapShear';
+import { sourceText } from '../analysis/references';
 import { lttbIndices } from '../plotting/downsample';
 import { buildXlsx, cellRef, safeSheetName, type CellValue, type ChartSpec, type SheetSpec } from './xlsxWriter';
 
@@ -175,8 +176,8 @@ export function buildLapShearSheets(o: LapShearExportOptions): SheetSpec[] {
     ['Loading direction', s.direction, 'auto: the sign with the larger force magnitude is loading; shown as positive magnitude, original signed values kept.'],
     ['Force conversion', `1 gf = ${GF_TO_N} N`, ''],
     ['Displacement', 'δ = |z − z₀| along the pull direction', 'z₀ = first valid position of each run.'],
-    ['Apparent nominal lap-shear strength', 'τ = F_max / (L × W)', 'kPa = N/mm² × 1000; MPa = N/mm². Gel thickness does not enter. Average stress over the original bonded area, not the maximum local stress.'],
-    ['Work per bonded area', 'W (mJ) × 1000 / A (mm²) = J/m²', 'Apparent mechanical work per bonded area; may include elastic, viscoelastic, cohesive, interfacial, frictional and fixture contributions. Not labelled adhesion energy or fracture toughness.'],
+    ['Apparent nominal lap-shear strength', 'τ = F_max / (L × W)', `kPa = N/mm² × 1000; MPa = N/mm². Gel thickness does not enter. Average stress over the original bonded area, not the maximum local stress. Source: apparent shear strength of a single-lap joint, ${sourceText(['astmD1002'])} (applied here by analogy to gel joints).`],
+    ['Work per bonded area', 'W (mJ) × 1000 / A (mm²) = J/m²', 'Defined by this analyzer. Apparent mechanical work per bonded area; may include elastic, viscoelastic, cohesive, interfacial, frictional and fixture contributions. Not labelled adhesion energy or fracture toughness.'],
     ['Failure mode', 'entered by the user', 'Never inferred from the force curve.'],
     ['Default dimensions (mm)', `${s.defaults.lengthMm} × ${s.defaults.widthMm} × ${s.defaults.thicknessMm}`, 'Each run’s own dimensions are on the summary sheet.'],
     [],

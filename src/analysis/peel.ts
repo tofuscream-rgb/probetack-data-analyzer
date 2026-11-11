@@ -22,6 +22,7 @@ import type { Cycle, LapShearSettings, PeelRunMeta, PeelSettings } from '../type
 import { GF_TO_N } from '../types';
 import { analyzeLapShear, describe, type LapShearResult, type RunInput } from './lapShear';
 import { median } from './stats';
+import { sourceText } from './references';
 
 export interface PeelResult {
   ok: boolean;
@@ -194,11 +195,12 @@ export const PEEL_PROPERTIES: { key: string; label: string; unit: string; digits
 ];
 
 /** Definitions of the peel results, shown under the Results table and in the Excel settings sheet. */
-export const PEEL_DEFINITIONS: [term: string, definition: string][] = [
-  ['Steady-state window', 'Region used for the steady peel average. Default 20–80% of peeled length; a custom displacement window can be entered and is preferred when the steady region is known.'],
-  ['Average peel force F̄ (steady state)', 'Mean force inside the selected steady-state window, in N.'],
-  ['Peel energy G_peel', 'G_peel = F̄/w · (1 − cos θ), in J/m²; at 90°, G_peel = F̄/w. It is reported as measured peel energy, not automatically as intrinsic interfacial toughness.'],
-  ['Steady-state CV', 'Sample SD divided by mean steady-state force × 100%. It describes force variation but does not by itself prove stick–slip.'],
-  ['Pre-steady-state maximum', 'Highest force before the selected steady-state window. It is not automatically interpreted as the true crack-initiation force.'],
-  ['Peel rate', 'Least-squares slope of displacement versus time inside the steady-state window (mm/s).'],
+/** Definitions of the peel results, with the source of each equation ('' = defined by this analyzer). */
+export const PEEL_DEFINITIONS: [term: string, definition: string, source: string][] = [
+  ['Steady-state window', 'Region used for the steady peel average. Default 20–80% of peeled length; a custom displacement window can be entered and is preferred when the steady region is known.', `Averaging over the steady part of the peel, leaving out initiation and release: ${sourceText(['astmD6862'])}. The 20–80% default is defined by this analyzer.`],
+  ['Average peel force F̄ (steady state)', 'Mean force inside the selected steady-state window, in N.', sourceText(['astmD6862', 'bartlett2023'])],
+  ['Peel energy G_peel', 'G_peel = F̄/w · (1 − cos θ), in J/m²; at 90°, G_peel = F̄/w. It is reported as measured peel energy, not automatically as intrinsic interfacial toughness.', `Energy balance of a steadily peeled, inextensible strip (elastic term neglected): ${sourceText(['kendall1975', 'creton2016', 'bartlett2023'])}.`],
+  ['Steady-state CV', 'Sample SD divided by mean steady-state force × 100%. It describes force variation but does not by itself prove stick–slip.', 'Standard coefficient of variation; not adhesion-specific.'],
+  ['Pre-steady-state maximum', 'Highest force before the selected steady-state window. It is not automatically interpreted as the true crack-initiation force.', 'Defined by this analyzer.'],
+  ['Peel rate', 'Least-squares slope of displacement versus time inside the steady-state window (mm/s).', 'Defined by this analyzer.'],
 ];

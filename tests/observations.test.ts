@@ -65,13 +65,33 @@ describe('failure mode, morphologies and definitions', () => {
   });
 
   it('cites the agreed sources with DOI links', () => {
-    expect(REFERENCES.map((r) => r.url)).toEqual([
-      'https://www.iso.org/search.html?q=ISO%2010365',
-      'https://doi.org/10.1080/00218469908017233',
-      'https://doi.org/10.1088/0034-4885/79/4/046601',
-      'https://doi.org/10.1021/acs.macromol.8b01374',
-    ]);
+    const urls = REFERENCES.map((r) => r.url);
+    for (const u of ['https://www.iso.org/search.html?q=ISO%2010365', 'https://doi.org/10.1080/00218469908017233', 'https://doi.org/10.1088/0034-4885/79/4/046601', 'https://doi.org/10.1021/acs.macromol.8b01374', 'https://doi.org/10.1088/0022-3727/8/13/005']) {
+      expect(urls).toContain(u);
+    }
     expect(GLOSSARY.find((g) => g.term === 'Adhesive / interfacial failure')!.refs).toEqual(['iso10365']);
     expect(GLOSSARY.find((g) => g.term === 'Cavitation')!.refs).toContain('lakrout1999');
+  });
+});
+
+describe('sources of adhesion equations', () => {
+  it('every probe-tack Methods equation states its source (or that it is defined by this analyzer)', async () => {
+    const { TACK_METHOD_ITEMS } = await import('../src/components/tack/TackMethods');
+    const keys = new Set(REFERENCES.map((r) => r.key));
+    expect(TACK_METHOD_ITEMS.length).toBeGreaterThan(5);
+    for (const it of TACK_METHOD_ITEMS) {
+      expect(it.source.note.length, it.title).toBeGreaterThan(10);
+      for (const k of it.source.refs) expect(keys.has(k), `${it.title}: ${k}`).toBe(true);
+      if (!it.source.refs.length) expect(it.source.note, it.title).toMatch(/defined by this analyzer|not adhesion-specific/);
+    }
+    const w = TACK_METHOD_ITEMS.find((it) => it.title.startsWith('Work of adhesion'))!;
+    expect(w.source.refs).toContain('creton2016');
+  });
+
+  it('every peel definition states its source', async () => {
+    const { PEEL_DEFINITIONS } = await import('../src/analysis/peel');
+    for (const [term, , src] of PEEL_DEFINITIONS) expect(src.length, term).toBeGreaterThan(5);
+    const g = PEEL_DEFINITIONS.find(([t]) => t.startsWith('Peel energy'))!;
+    expect(g[2]).toMatch(/doi\.org\/10\.1088\/0022-3727\/8\/13\/005/); // Kendall 1975
   });
 });

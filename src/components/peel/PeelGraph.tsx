@@ -125,7 +125,7 @@ export function PeelGraph() {
   return (
     <section className="graph-panel" aria-label="90° peel graph">
       <div className="graph-toolbar">
-        <label title="Stress uses each run's own gel area (length × width); peel energy uses its gel width and peel angle">
+        <label title="Stress uses each run's own gel area (length × width); peel energy G = F/w · (1 − cos θ) uses its gel width and peel angle (Kendall 1975; Creton & Ciccotti 2016)">
           Y axis
           <select className="y-select" value={unit} onChange={(e) => set({ view: { ...v, unit: e.target.value as YUnit, yTitle: '' } })}>
             {Y_OPTIONS.peel.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

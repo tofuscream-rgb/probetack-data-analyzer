@@ -183,7 +183,7 @@ export function LapShearGraph() {
   return (
     <section className="graph-panel" aria-label="Lap-shear graph">
       <div className="graph-toolbar">
-        <label title="Stress uses each run's own bonded area A = overlap length × width">
+        <label title="Stress uses each run's own bonded area A = overlap length × width; τ = F/A, apparent shear strength of a single-lap joint (ASTM D1002)">
           Y axis
           <select className="y-select" value={unit} onChange={(e) => set({ view: { ...v, unit: e.target.value as YUnit, yTitle: '' } })}>
             {Y_OPTIONS.lapShear.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

@@ -76,7 +76,7 @@ export function PeelResults() {
   return (
     <div className="ls-results">
       <p className="note">
-        Primary normalized result: measured peel energy G<sub>peel</sub> = F̄<sub>ss</sub>/w at 90°. The automatic pre-steady-state maximum is not automatically a crack-initiation force.
+        Primary normalized result: measured peel energy G<sub>peel</sub> = F̄<sub>ss</sub>/w at 90° (Kendall 1975; Creton &amp; Ciccotti 2016). The automatic pre-steady-state maximum is not automatically a crack-initiation force.
         Failure mode and debonding morphology are recorded separately (definitions below).
       </p>
       <BulkAssignBar rows={rows} selection={runSel} morphologies={PEEL_MORPHOLOGIES} onApply={applyBulk} />
@@ -143,7 +143,11 @@ export function PeelResults() {
       <p className="note">Each file/Repeat counts once at condition level.</p>
 
       <h3 className="ls-h">Definitions: peel results</h3>
-      <dl className="ls-definitions note">{PEEL_DEFINITIONS.map(([a, b]) => <div key={a}><dt>{a}</dt><dd>{b}</dd></div>)}</dl>
+      <dl className="ls-definitions note">
+        {PEEL_DEFINITIONS.map(([a, b, src]) => (
+          <div key={a}><dt>{a}</dt><dd>{b} <span className="source"><strong>Source:</strong> {src}</span></dd></div>
+        ))}
+      </dl>
       <ObservationGlossary test="peel" title="Definitions & References: failure mode and debonding morphology" />
     </div>
   );

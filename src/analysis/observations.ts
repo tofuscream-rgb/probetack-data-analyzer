@@ -82,34 +82,7 @@ export function bulkPatches(rows: BulkRow[], ids: string[], mode: FailureMode | 
 }
 
 // ---- definitions and references -------------------------------------------------------------
-export interface Reference {
-  key: string;
-  citation: string;
-  url: string;
-  linkText: string;
-}
-
-export const REFERENCES: Reference[] = [
-  { key: 'iso10365', citation: 'ISO 10365, Adhesives — Designation of main failure patterns.', url: 'https://www.iso.org/search.html?q=ISO%2010365', linkText: 'iso.org' },
-  {
-    key: 'lakrout1999',
-    citation: 'H. Lakrout, P. Sergot, C. Creton, “Direct Observation of Cavitation and Fibrillation in a Probe Tack Experiment on Model Acrylic Pressure-Sensitive-Adhesives,” J. Adhesion 69 (1999).',
-    url: 'https://doi.org/10.1080/00218469908017233',
-    linkText: 'doi:10.1080/00218469908017233',
-  },
-  {
-    key: 'creton2016',
-    citation: 'C. Creton, M. Ciccotti, “Fracture and adhesion of soft materials: a review,” Rep. Prog. Phys. 79, 046601 (2016).',
-    url: 'https://doi.org/10.1088/0034-4885/79/4/046601',
-    linkText: 'doi:10.1088/0034-4885/79/4/046601',
-  },
-  {
-    key: 'chopin2018',
-    citation: 'J. Chopin et al., “Nonlinear Viscoelastic Modeling of Adhesive Failure for Polyacrylate Pressure-Sensitive Adhesives,” Macromolecules 51 (2018).',
-    url: 'https://doi.org/10.1021/acs.macromol.8b01374',
-    linkText: 'doi:10.1021/acs.macromol.8b01374',
-  },
-];
+export { REFERENCES, type Reference } from './references';
 
 export type TermKind = 'standard' | 'literature' | 'analyzer';
 export const TERM_KIND_LABEL: Record<TermKind, string> = {

@@ -1,6 +1,6 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.17.0';
+export const APP_VERSION = '1.17.1';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.2.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */

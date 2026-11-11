@@ -127,16 +127,16 @@ The **Tack metrics** tab analyses the tensile part of each pull for every file (
 4. **Mean ± SD per Repeat** and 5. **per condition** (substrate × dwell; over the Repeat means of the included Repeats), with the failure-mode counts.
 6. **Failure observations**, entered by you for each run: **Failure mode** (Adhesive / interfacial, Cohesive, Mixed, Other) and, separately, **Debonding morphology** (None, Cavitation, Fibrillation, Cavitation + fibrillation, Other), a free-text observation, and optionally the fibril onset displacement and the largest fibril extension (shown as strain when h₀ is known). Neither is inferred from the curve. **Bulk assignment**: tick runs (or select all visible runs, the current Repeat or the current condition, i.e. those of the last run clicked), choose a failure mode and/or morphology and click *Apply*; *Only fill blank fields* (on by default) keeps values already entered.
 7. **Advanced / Diagnostics** (collapsed): dwell force at the start and end of the Wait and the relaxation.
-8. **Methods, equations, definitions and references**: every equation typeset with KaTeX (bundled with the site, so it renders offline), each symbol defined, with thresholds and sources: Creton & Ciccotti, Rep. Prog. Phys. 79, 046601 (2016); Bartlett et al., Prog. Mater. Sci. 137, 101086 (2023).
+8. **Methods, equations, definitions and references**: every equation typeset with KaTeX (bundled with the site, so it renders offline), each symbol defined, with thresholds, and a **source line under each equation** (criteria defined by this analyzer are labelled as such): ISO 10365; Lakrout et al. (1999); Creton & Ciccotti (2016); Bartlett et al. (2023).
 9. **Definitions & References** for every failure-mode and morphology term (see [Definitions & References](#definitions--references)).
 10. **Export CSV**: per-run results (with failure modes, observations, flags and their details, and the diagnostic quantities) and the Repeat and condition summaries.
 
-| Quantity | Definition |
-|---|---|
-| F, δ | F = −F_z in N (gf or N files, single- or multi-axis); δ = distance travelled from where F first becomes tensile |
-| W_adh | (1/A) ∫ F dδ from the tensile onset to δ_break, trapezoidal rule, J/m² |
-| δ_break | first δ after the peak where F ≤ 2% F_max (end of data if never) |
-| Plateau | after the peak, the longest stretch where F stays within ±20% of one level; reported when longer than 0.3 mm (the curve is not classified) |
+| Quantity | Definition | Source |
+|---|---|---|
+| F, δ | F = −F_z in N (gf or N files, single- or multi-axis); δ = distance travelled from where F first becomes tensile | Creton & Ciccotti (2016); the tensile-onset zero is defined by this analyzer |
+| W_adh | (1/A) ∫ F dδ from the tensile onset to δ_failure (or to the end of the recording, then a lower bound), trapezoidal rule, J/m² | Work of debonding W_deb = h₀∫σ dε, Creton & Ciccotti (2016); background: Bartlett et al. (2023) |
+| δ_failure, ε_failure | first δ after the peak where F ≤ 2% F_max (blank if never); ε_failure = δ_failure/h₀ | ε = Δh/h₀ and maximum extension: Creton & Ciccotti (2016), eq. 9; the 2% threshold is defined by this analyzer |
+| Plateau | after the peak, the longest stretch where F stays within ±20% of one level; reported when longer than 0.3 mm (the curve is not classified) | Plateau stress σ_p: Creton & Ciccotti (2016); detection criterion defined by this analyzer |
 
 **Flags** are warnings only and never exclude a run; the table shows a short label, and hovering or clicking shows the details:
 - *Low force resolution*: F_max is fewer than 10 steps of the smallest recorded force step; the plateau and relaxation may be approximate.
@@ -167,10 +167,10 @@ Dimensions, failure modes, manual failure points and settings are saved with the
 | Loading force | The force sign with the larger magnitude is the loading direction (or set it in Settings). It is shown as a positive magnitude; the original signed values are kept and exported. |
 | Peak force | Largest loading force, in gf and N (1 gf = 0.00980665 N), with its displacement and time |
 | Bonded overlap area | A = overlap length × overlap width (mm²). Gel thickness is recorded but does not enter the strength. |
-| Apparent nominal lap-shear strength | τ = F<sub>max</sub> / A: kPa = N/mm² × 1000, MPa = N/mm². Average stress over the original bonded area at peak load, not the maximum local stress in the joint. |
+| Apparent nominal lap-shear strength | τ = F<sub>max</sub> / A: kPa = N/mm² × 1000, MPa = N/mm². Average stress over the original bonded area at peak load, not the maximum local stress in the joint. Source: apparent shear strength of a single-lap joint, ASTM D1002 (applied by analogy to gel joints). |
 | Mechanical work | W = ∫ F dδ by the trapezoidal rule, in N·mm = mJ. Full-curve work = work to peak + post-peak work. |
 | Selected integration work | Full curve, start to peak, or a custom δ range; the force is interpolated at the exact custom limits. |
-| Work per bonded area | W<sub>A</sub> = W (mJ) × 1000 / A (mm²), in J/m², for the selected and the full-curve work |
+| Work per bonded area | W<sub>A</sub> = W (mJ) × 1000 / A (mm²), in J/m², to the failure point. Defined by this analyzer (apparent quantity, not fracture toughness). |
 | Complete failure | First point after the peak where the loading force stays below 5% of the peak for 20 consecutive valid points (both adjustable). Left blank if this never happens; a typed value overrides it. The end of machine travel is never taken as separation. Work to failure is reported separately from full recorded work. |
 | Statistics | Mean and sample SD (n − 1). Strength and work per area are computed per run with that run's own area before averaging. |
 
@@ -197,8 +197,8 @@ Choose **Experiment type → 90° Peel** and open your peel files. A Mach-1 file
 |---|---|
 | Average peel force F̄ (steady state) | Mean force in the steady-state window, leaving out the initiation peak and the final release. ASTM D6862 records at least 76 mm of peel and disregards the first 25 mm; short gel strips use a fraction of the peeled length instead (default 20–80%, adjustable, or a custom mm range). Peak forces scatter much more than the plateau, so F̄ is the main result. |
 | Steady-state force SD, CV and range | Spread of the force points in the window: CV = SD / F̄ × 100% (the standard coefficient of variation). A higher CV means the force varied more within the window, for example from stick–slip, uneven bonding, or a window that still includes part of the initiation or the release. No standard sets a pass/fail value for it; compare it between your own runs. |
-| Peel strength | F̄ / w, in N/m and N/mm. |
-| Peel energy G | G = F̄ / w · (1 − cos θ), in J/m²; at 90° this equals F̄ / w. The energy balance of a steady peel of a strip that does not stretch (Rivlin 1944; Kendall 1975, J. Phys. D 8, 1449, with the elastic term neglected), as used for the interfacial toughness of hydrogels in 90° peel (e.g. Yuk et al. 2016, Nature Materials 15, 190). A 180° peel would give 2F̄/w. Called “apparent interfacial toughness Γ” before version 1.10. |
+| Peel strength | F̄ / w, in N/m and N/mm (peel force per unit width, ASTM D6862). |
+| Peel energy G | G = F̄ / w · (1 − cos θ), in J/m²; at 90° this equals F̄ / w. The energy balance of a steady peel of a strip that does not stretch (Kendall 1975, J. Phys. D 8, 1449, doi:10.1088/0022-3727/8/13/005, with the elastic term neglected; Creton & Ciccotti 2016; Bartlett et al. 2023). A 180° peel would give 2F̄/w. Called “apparent interfacial toughness Γ” before version 1.10. |
 | Peak force (maximum), peak per width | Highest force anywhere in the run. In many gel strips this is the last rise before detachment, not the start of peeling. |
 | Initiation peak force | Highest force between the start of the run and the start of the steady-state window: the force needed to start the peel front. |
 | Area under the graph (work) and work per peeled area | W = ∫ F dδ (mJ) over the full curve, to detachment, and over a chosen range (Settings › Work: full curve, start to peak, **steady-state window**, or a custom mm range); work to detachment / (w × peeled length) is an energy-based estimate that should be close to Γ for a steady peel. |
@@ -209,7 +209,7 @@ Force, displacement, baseline, loading direction, data-quality handling and work
 
 ## Definitions & References
 
-Failure mode (where the separation runs) and debonding morphology (how it proceeds) are recorded separately, from observation of the specimen or video; neither is inferred from the force curve. The same table is shown in the app (Tack metrics section 9, 90° Peel Results, and Lap Shear Results for failure modes).
+Failure mode (where the separation runs) and debonding morphology (how it proceeds) are recorded separately, from observation of the specimen or video; neither is inferred from the force curve. The same terms, definitions and sources are shown in the app: Tack metrics section 9 (without the Type column), 90° Peel Results, and Lap Shear Results (failure modes).
 
 | Term | Field | Definition | Type | Source |
 |---|---|---|---|---|

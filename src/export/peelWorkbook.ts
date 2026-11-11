@@ -2,6 +2,7 @@
 import { ALGORITHM_VERSION, APP_VERSION, GF_TO_N, type FailureMode, type PeelSettings } from '../types';
 import { FAILURE_MODE_LABEL, INTEGRATION_LABEL, describe } from '../analysis/lapShear';
 import { PEEL_DEFINITIONS, PEEL_PROPERTIES, type PeelResult } from '../analysis/peel';
+import { sourceText } from '../analysis/references';
 import { lttbIndices } from '../plotting/downsample';
 import { buildXlsx, cellRef, safeSheetName, type CellValue, type ChartSpec, type SheetSpec } from './xlsxWriter';
 
@@ -135,9 +136,9 @@ export function buildPeelSheets(o: PeelExportOptions): SheetSpec[] {
       ['Setting', 'Value', 'Explanation'],
       ['Application version', APP_VERSION, ''],
       ['Steady-state window', s.plateau.mode === 'auto' ? `${s.plateau.startFrac * 100}–${s.plateau.endFrac * 100}% of peeled length` : `${s.plateau.fromMm}–${s.plateau.toMm} mm`, 'Average peel force F̄ = mean loading force in this window (initiation peak and final release excluded; cf. ASTM D6862, which disregards the first 25 mm).'],
-      ['Peel strength', 'F̄ / w', 'N/m and N/mm.'],
-      ['Peel energy G', 'G = F̄ / w · (1 − cos θ)', 'J/m²; equals F̄ / w at 90°. Elastic stretching of the strip neglected (Rivlin 1944; Kendall 1975).'],
-      ['Work per peeled area', 'W to detachment / (w × peeled length)', 'Energy-based estimate of Γ (J/m²).'],
+      ['Peel strength', 'F̄ / w', `N/m and N/mm. Source: ${sourceText(['astmD6862'])}.`],
+      ['Peel energy G', 'G = F̄ / w · (1 − cos θ)', `J/m²; equals F̄ / w at 90°. Elastic stretching of the strip neglected. Source: ${sourceText(['kendall1975', 'creton2016'])}.`],
+      ['Work per peeled area', 'W to detachment / (w × peeled length)', 'Energy-based estimate of Γ (J/m²). Defined by this analyzer.'],
       ['Detachment', s.detach.auto ? `force < ${s.detach.fraction * 100}% of peak for ${s.detach.consecutive} consecutive points after the peak` : 'manual only', 'Gives the peeled length. Manual values override.'],
       ['Area under the graph, chosen range', INTEGRATION_LABEL[s.integration.mode], s.integration.mode === 'custom' ? `${s.integration.fromMm}–${s.integration.toMm} mm` : 'Trapezoidal rule, N·mm = mJ; displacement reversals excluded.'],
       ['Baseline correction', s.baseline.enabled ? 'ON' : 'OFF', s.baseline.enabled ? `Median of the first ${s.baseline.points} points if their spread ≤ ${s.baseline.maxSpreadGf} gf.` : 'Raw force used.'],
@@ -145,8 +146,8 @@ export function buildPeelSheets(o: PeelExportOptions): SheetSpec[] {
       ['Force conversion', `1 gf = ${GF_TO_N} N`, ''],
       ['Peel rate', 'slope of δ vs t in the window', 'mm/s'],
       [],
-      ['Term', 'Definition'],
-      ...PEEL_DEFINITIONS.map(([t, d]) => [t, d]),
+      ['Term', 'Definition', 'Source'],
+      ...PEEL_DEFINITIONS.map(([t, d, src]) => [t, d, `Source: ${src}`]),
       [],
       ['Files deselected by the user (not used)'],
       ...(o.deselectedFiles?.length ? o.deselectedFiles.map((f) => [f.path, f.sha256]) : [['none']]),

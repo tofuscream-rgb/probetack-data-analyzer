@@ -47,6 +47,13 @@ export function lapEquations(fraction: number, consecutive: number): EquationIte
       note: 'defined by this analyzer (no literature source).',
     },
     {
+      title: 'Custom area under the curve (additional tool)',
+      tex: String.raw`W_{\text{selected}} = \int_{\delta_1}^{\delta_2} F\,\mathrm{d}\delta,\qquad \frac{W_{\text{selected}}}{A}`,
+      text: 'Boundaries δ₁, δ₂ set on the Graph tab (draggable or typed); trapezoidal rule with the force interpolated at the exact boundaries; mJ and apparent J/m² (A = overlap area of each run). It does not change any automatic result.',
+      refs: [],
+      note: 'numerical integration (trapezoidal rule), defined by this analyzer; the limits are chosen by you.',
+    },
+    {
       title: 'Statistics',
       tex: String.raw`\bar{x} = \frac{1}{n}\sum x_j,\qquad s = \sqrt{\frac{\sum (x_j - \bar{x})^2}{n - 1}}`,
       text: 'Per Repeat/file over its runs; per condition over the Repeat/file means (each Repeat counts once).',

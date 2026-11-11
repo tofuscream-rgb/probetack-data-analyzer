@@ -124,7 +124,9 @@ The **Tack metrics** tab analyses the tensile part of each pull for every file (
 1. **Test settings**: probe diameter *d* (default 5.5 mm; A = π d²/4); gel thickness h₀ per Repeat (blank = strains are skipped; *Apply to all* sets one value); substrate per Repeat (PET, stainless steel, glass, or the name read from the folder); dwell time read from the Wait section; exclusion of a Repeat or test session, and the list of excluded data sets with reasons.
 2. **Plot**: F vs δ, or σ vs ε once h₀ is entered, for the runs of one Repeat, with ▲ peak, × break and the plateau.
 3. **Per-run results**: σ_max (kPa), W_adh (J/m²), true failure strain ε_failure, automatically detected plateau stress, separate failure-mode and debonding-morphology observations, and flags. F_max, displacement, plateau length and dwell quantities remain diagnostics.
-4. **Mean ± SD per Repeat** and 5. **per condition** (substrate × dwell; over the Repeat means of the included Repeats), with the failure-mode counts.
+**Exclusions are shared with Data analysis** (one state, saved in the project): the automatic QC rule, the *In average* choices, and whole-Repeat or session exclusions made in Tack metrics. Excluding or re-including a run in either tab updates both, with the reason kept; excluded rows stay visible (struck through, with an *Excluded (manual / QC rule / Repeat or session)* label). Single-run exclusions saved by earlier versions of Tack metrics are moved into the shared state when a project is opened.
+
+4. **Mean ± SD per Repeat** and 5. **per condition** (substrate × dwell; over the Repeat means), each **after exclusion and before exclusion (all runs)**, as in Data analysis, with the failure-mode counts.
 6. **Failure observations**, entered by you for each run: **Failure mode** (Adhesive / interfacial, Cohesive, Mixed, Other) and, separately, **Debonding morphology** (None, Cavitation, Fibrillation, Cavitation + fibrillation, Other), a free-text observation, and optionally the fibril onset displacement and the largest fibril extension (shown as strain when h₀ is known). Neither is inferred from the curve. **Bulk assignment**: tick runs (or select all visible runs, the current Repeat or the current condition, i.e. those of the last run clicked), choose a failure mode and/or morphology and click *Apply*; *Only fill blank fields* (on by default) keeps values already entered.
 7. **Advanced / Diagnostics** (collapsed): dwell force at the start and end of the Wait and the relaxation.
 8. **Methods, equations, definitions and references**: every equation typeset with KaTeX (bundled with the site, so it renders offline), each symbol defined, with thresholds, and a **source line under each equation** (criteria defined by this analyzer are labelled as such): ISO 10365; Lakrout et al. (1999); Creton & Ciccotti (2016); Bartlett et al. (2023).
@@ -206,6 +208,18 @@ Choose **Experiment type → 90° Peel** and open your peel files. A Mach-1 file
 | Peel rate, angle, width, failure mode | Test conditions to report alongside the results. |
 
 Force, displacement, baseline, loading direction, data-quality handling and work integration are the same as in Lap Shear mode.
+
+## Custom area under the curve
+
+An additional tool in Probe Tack (Tack metrics plot), Lap Shear and 90° Peel (Graph tab); the automatic results are not changed. Click **Set boundaries** (or type **From δ₁ / To δ₂** in mm), then drag the two dashed vertical lines on the graph; the area under each curve between them is shaded and the selected work is recalculated live:
+
+W_selected = ∫ from δ₁ to δ₂ of F dδ, by the trapezoidal rule over the recorded points with the force interpolated linearly at the exact boundaries (N·mm = mJ).
+
+- Probe Tack: also W/A_probe (J/m²), A_probe = π d²/4; δ is measured from the tensile onset, as on the plot.
+- Lap Shear: also the apparent W/A_overlap (J/m²) of each run.
+- 90° Peel: raw selected work only (it is not the peel energy G_peel).
+
+**Clear** removes the boundaries. The limits are saved in the project and exported (Probe Tack per-run CSV; a *Custom area* sheet in the Lap Shear and 90° Peel Excel files).
 
 ## Definitions & References
 

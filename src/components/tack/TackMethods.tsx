@@ -64,8 +64,14 @@ export const TACK_METHOD_ITEMS: { title: string; tex: string; text: string; sour
   {
     title: 'Statistics and exclusions',
     tex: String.raw`\bar{x} = \frac{1}{n}\sum_{j=1}^{n} x_j,\qquad s = \sqrt{\frac{1}{n-1}\sum_{j=1}^{n} \left(x_j - \bar{x}\right)^2}`,
-    text: 'Per Repeat: mean ± sample SD over its runs. Per condition (substrate × dwell): mean ± SD over the Repeat means of the included Repeats, so each Repeat counts once. Nothing is excluded by default; you may exclude a whole Repeat, a test session (recording date) or a single run, each with a reason. Points are never removed.',
+    text: 'Per Repeat: mean ± sample SD over its runs; per condition (substrate × dwell): mean ± SD over the Repeat means, so each Repeat counts once. Both are reported before exclusion (all analysed runs) and after exclusion. Inclusion is shared with the Data analysis tab (one state): its automatic QC rule, the In average choices, and whole-Repeat or session exclusions made here; excluding or re-including a run in either tab updates both, with the reason kept. Excluded rows stay visible. Points are never removed.',
     source: { refs: [], note: `standard sample mean and standard deviation (n − 1); not adhesion-specific. The Repeat-level averaging is defined by this analyzer.` },
+  },
+  {
+    title: 'Custom area under the curve (additional tool)',
+    tex: String.raw`W_{\text{selected}} = \int_{\delta_1}^{\delta_2} F\,\mathrm{d}\delta \approx \sum_i \frac{F_i + F_{i-1}}{2}\left(\delta_i - \delta_{i-1}\right),\qquad \frac{W_{\text{selected}}}{A_{\text{probe}}}`,
+    text: 'δ₁, δ₂ = boundaries you set (draggable lines or typed, in mm from the tensile onset); the force is interpolated linearly at δ₁ and δ₂. W in N·mm = mJ; W/A_probe in J/m². It does not change W_adh or any other automatic result.',
+    source: { refs: [], note: `numerical integration (trapezoidal rule), defined by this analyzer; the limits are chosen by you.` },
   },
   {
     title: 'Advanced: dwell relaxation',

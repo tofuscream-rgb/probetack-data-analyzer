@@ -96,14 +96,16 @@ describe('probe-tack metrics', () => {
 });
 
 describe('tack metrics project state', () => {
-  it('nothing is excluded by default, and older projects load with empty exclusions', async () => {
+  it('no manual exclusions by default, and older projects keep theirs', async () => {
     const { migrateState } = await import('../src/storage/project');
     const { defaultProject } = await import('../src/state/defaults');
-    expect(defaultProject().tackMetrics).toEqual({ h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {}, observations: {} });
-    expect(migrateState({}).tackMetrics).toEqual({ h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {}, observations: {} });
+    expect(defaultProject().tackMetrics).toEqual({ h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {}, observations: {}, area: { fromMm: null, toMm: null } });
+    expect(migrateState({}).tackMetrics).toEqual({ h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {}, observations: {}, area: { fromMm: null, toMm: null } });
     const s = migrateState({ tackMetrics: { h0: { f1: 2, f2: -1 }, excludedRuns: { 'f1#c1': { reason: 'bubble', at: 'x' } } } as never });
     expect(s.tackMetrics.h0).toEqual({ f1: 2 });
-    expect(s.tackMetrics.excludedRuns['f1#c1'].reason).toBe('bubble');
+    // Single-run exclusions of older Tack metrics versions move to the shared Data analysis overrides.
+    expect(s.tackMetrics.excludedRuns).toEqual({});
+    expect(s.runOverrides['f1#c1']).toMatchObject({ action: 'exclude', reason: 'bubble (Tack metrics)' });
   });
 });
 

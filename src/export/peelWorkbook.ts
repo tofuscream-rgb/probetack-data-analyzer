@@ -4,6 +4,7 @@ import { FAILURE_MODE_LABEL, INTEGRATION_LABEL, describe } from '../analysis/lap
 import { PEEL_DEFINITIONS, PEEL_PROPERTIES, type PeelResult } from '../analysis/peel';
 import { sourceText } from '../analysis/references';
 import { lttbIndices } from '../plotting/downsample';
+import { areaLimits, integrateRange, type CustomArea } from '../analysis/customArea';
 import { buildXlsx, cellRef, safeSheetName, type CellValue, type ChartSpec, type SheetSpec } from './xlsxWriter';
 
 export interface PeelExportRun {
@@ -24,6 +25,8 @@ export interface PeelExportOptions {
   includeRunData: boolean;
   includeChart: boolean;
   deselectedFiles?: { path: string; sha256: string }[];
+  /** Custom area-under-curve limits (additional tool); null limits = not set. */
+  customArea?: CustomArea;
 }
 
 const num = (v: number | null | undefined): CellValue => (v === null || v === undefined || !Number.isFinite(v) ? null : v);
@@ -153,6 +156,21 @@ export function buildPeelSheets(o: PeelExportOptions): SheetSpec[] {
       ...(o.deselectedFiles?.length ? o.deselectedFiles.map((f) => [f.path, f.sha256]) : [['none']]),
     ],
   });
+  // Custom area under the curve (additional tool), when limits are set.
+  const lim = areaLimits(o.customArea);
+  if (lim) {
+    sheets.push({
+      name: name('Custom area'),
+      headerRows: 3,
+      colWidths: [34, 50, 18, 26, 26],
+      rows: [
+        ['Custom area under the curve', `δ1 = ${lim[0]} mm`, `δ2 = ${lim[1]} mm`],
+        ['W_selected = ∫ F dδ between the limits (trapezoidal rule, force interpolated at the exact limits; N·mm = mJ). Raw selected work only; it is not the peel energy G_peel. Additional tool: the automatic results are not changed.'],
+        ['Run', 'File path', 'W_selected (mJ)', 'Recording covers both limits'],
+        ...runs.map((r) => { const sr = r.result.curve.series; const w = integrateRange(sr.dispMm, Array.from(sr.loadGf, (g) => g * GF_TO_N), lim[0], lim[1]); return [r.label, r.filePath, num(w.workMJ), w.covered ? 'yes' : 'no (recorded part only)']; }),
+      ],
+    });
+  }
   return sheets;
 }
 

@@ -72,6 +72,13 @@ export function saveProjectZip(
 const withoutGel = (keys: GroupKey[]) => keys.filter((k) => k !== 'gel');
 const MAIN_TABS: MainTab[] = ['graph', 'analysis', 'metrics', 'compare', 'settings', 'files'];
 
+/** Custom area limits; missing or invalid values = not set. */
+function migrateArea(a: unknown): { fromMm: number | null; toMm: number | null } {
+  const v = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+  const o = (a && typeof a === 'object' ? a : {}) as { fromMm?: unknown; toMm?: unknown };
+  return { fromMm: v(o.fromMm), toMm: v(o.toMm) };
+}
+
 /** Graph options; projects from 1.5 stored `shade` as true/false (now Off by default to keep the graph readable). */
 function migrateView(d: RunGraphView, v: Partial<RunGraphView> | undefined): RunGraphView {
   const out = { ...d, ...(v ?? {}) };
@@ -83,6 +90,7 @@ function migrateView(d: RunGraphView, v: Partial<RunGraphView> | undefined): Run
   if (!out.names || typeof out.names !== 'object') out.names = {};
   if (typeof out.xTitle !== 'string') out.xTitle = '';
   if (typeof out.yTitle !== 'string') out.yTitle = '';
+  out.area = migrateArea(out.area);
   return out;
 }
 
@@ -194,7 +202,7 @@ function migrateTackMetrics(raw: Partial<TackMetricsState> | undefined): TackMet
       fibrilOnsetMm: num(v.fibrilOnsetMm), fibrilMaxMm: num(v.fibrilMaxMm),
     };
   }
-  return { h0, excludedRepeats: excl(raw?.excludedRepeats), excludedSessions: excl(raw?.excludedSessions), excludedRuns: excl(raw?.excludedRuns), observations };
+  return { h0, excludedRepeats: excl(raw?.excludedRepeats), excludedSessions: excl(raw?.excludedSessions), excludedRuns: excl(raw?.excludedRuns), observations, area: migrateArea(raw?.area) };
 }
 
 /** Merge a possibly older/partial state with current defaults so new fields always exist. */
@@ -209,6 +217,11 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
   const runOverrides: Record<string, RunOverride> = {};
   for (const [id, e] of Object.entries(raw.excludedCycles ?? {})) runOverrides[id] = { action: 'exclude', reason: e.reason, at: e.at };
   Object.assign(runOverrides, raw.runOverrides ?? {});
+  // Before 1.18, Tack metrics kept its own single-run exclusions; they become shared Data analysis
+  // overrides (a decision already made in Data analysis wins), with their reasons.
+  for (const [id, e] of Object.entries(raw.tackMetrics?.excludedRuns ?? {})) {
+    if (!runOverrides[id] && e && typeof e === 'object') runOverrides[id] = { action: 'exclude', reason: e.reason ? `${e.reason} (Tack metrics)` : 'Left out after review (Tack metrics)', at: typeof e.at === 'string' ? e.at : '' };
+  }
   const state: ProjectState = {
     ...d,
     ...raw,
@@ -234,7 +247,7 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
     graphs: Array.isArray(raw.graphs) && raw.graphs.length ? raw.graphs.map((g) => ({ ...g, showExcluded: g.showExcluded ?? true })) : d.graphs,
     // 'summary' was the per-condition summary tab of 1.3; it became part of Data analysis.
     mode: raw.mode === 'lapShear' || raw.mode === 'peel' ? raw.mode : 'tack',
-    tackMetrics: migrateTackMetrics(raw.tackMetrics),
+    tackMetrics: { ...migrateTackMetrics(raw.tackMetrics), excludedRuns: {} },
     lapShear: migrateLapShear(raw.lapShear),
     peel: migratePeel(raw.peel),
     mainTab: (raw.mainTab as string) === 'summary' ? 'analysis' : raw.mainTab && MAIN_TABS.includes(raw.mainTab) ? raw.mainTab : 'graph',

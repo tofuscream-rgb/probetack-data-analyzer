@@ -5,6 +5,9 @@ import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
 import { lttbIndices } from '../../plotting/downsample';
 import { EXPORT_SIZE, figAxis, figLayout, peakLabelFont } from '../../plotting/figureStyle';
 import { CURVE_COLORS } from '../../plotting/colors';
+import { AreaTool, areaFillTrace, areaShapes } from '../AreaTool';
+import { areaFromRelayout, areaLimits, integrateRange } from '../../analysis/customArea';
+import { GF_TO_N } from '../../types';
 import { NumberField } from '../lapShear/NumberField';
 import { GraphLabelControls, RunGraphControls, Y_OPTIONS, commonTitle, curveLabelAnnotations, shortLabels, type LabelSeries, runStyle, unitText, yDigits, yFactor, type YUnit } from '../RunGraphControls';
 
@@ -37,6 +40,11 @@ export function PeelGraph() {
   const xTitle = v.xTitle.trim() || autoX;
   const ut = unitText(unit);
   const runs = selected.filter((r) => r.result.ok);
+  const areaRange = useMemo<[number, number] | null>(() => {
+    let a = Infinity, b = -Infinity;
+    for (const r of runs) { const sr = r.result.curve.series; for (const x of sr.dispMm) if (Number.isFinite(x)) { if (x < a) a = x; if (x > b) b = x; } }
+    return Number.isFinite(a) && b > a ? [a, b] : null;
+  }, [runs]);
 
   const { data, layout } = useMemo(() => {
     const traces: Data[] = [];
@@ -58,6 +66,9 @@ export function PeelGraph() {
       const y = (i: number) => series.loadGf[i] * f;
       const name = v.names[r.id]?.trim() || short[k];
       labelSeries.push({ id: r.id, name, color, x: idx.map((i) => xs[i]), y: idx.map(y) });
+      // Custom area (additional tool): shaded under this curve between the dashed boundaries.
+      const areaFill = areaFillTrace(idx.map((i) => xs[i]), idx.map(y), v.area, rgba(color, 0.22), r.id);
+      if (areaFill) traces.push(areaFill);
       if (st.shade && res.window.n > 1) {
         const inside = idx.filter((i) => series.dispMm[i] >= res.window.fromMm && series.dispMm[i] <= res.window.toMm);
         traces.push({ type: 'scatter', mode: 'lines', x: inside.map((i) => xs[i]), y: inside.map(y), fill: 'tozeroy', fillcolor: rgba(color, 0.18), line: { width: 0 }, hoverinfo: 'skip', showlegend: false, legendgroup: r.id } as unknown as Data);
@@ -106,6 +117,7 @@ export function PeelGraph() {
       dragmode: 'zoom',
       hovermode: 'closest',
       uirevision: unit,
+      shapes: areaShapes(v.area),
     };
     return { data: traces, layout: lay };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -170,7 +182,10 @@ export function PeelGraph() {
           <p>Open your 90° peel TXT files on the left and tick the runs to compare.</p>
         </div>
       ) : (
-        <PlotlyChart data={data} layout={layout} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={{ editable: true, edits: { annotationPosition: true, annotationTail: true, annotationText: false, axisTitleText: false, titleText: false, legendText: false, legendPosition: true, colorbarTitleText: false, colorbarPosition: false, shapePosition: false }, toImageButtonOptions: { format: 'png', filename: 'peel_90', scale: 3 } }} />
+        <>
+          <PlotlyChart data={data} layout={layout} onRelayout={(e) => { const a = areaFromRelayout(e, v.area); if (a && a.fromMm !== null && a.toMm !== null) set({ view: { ...v, area: { fromMm: +a.fromMm.toFixed(4), toMm: +a.toMm.toFixed(4) } } }); }} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={{ editable: true, edits: { annotationPosition: true, annotationTail: true, annotationText: false, axisTitleText: false, titleText: false, legendText: false, legendPosition: true, colorbarTitleText: false, colorbarPosition: false, shapePosition: true }, toImageButtonOptions: { format: 'png', filename: 'peel_90', scale: 3 } }} />
+          <AreaTool area={v.area} setArea={(area) => set({ view: { ...v, area } })} xRangeMm={areaRange} rows={runs.filter((r) => r.result.ok).map((r) => { const lim = areaLimits(v.area); const sr = r.result.curve.series; const res = lim ? integrateRange(sr.dispMm, Array.from(sr.loadGf, (g) => g * GF_TO_N), lim[0], lim[1]) : { workMJ: NaN, covered: true }; return { id: r.id, label: v.names[r.id]?.trim() || r.label, workMJ: res.workMJ, covered: res.covered }; })}  note="Raw selected work only; it is not the peel energy G_peel." />
+        </>
       )}
     </section>
   );

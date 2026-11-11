@@ -157,7 +157,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         project,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [used, meta, project.settings, project.runOverrides, project.excludedPoints, project.groupBy],
+    [used, meta, project.settings, project.runOverrides, project.excludedPoints, project.groupBy, project.tackMetrics.excludedRepeats, project.tackMetrics.excludedSessions],
   );
 
   const records = useCallback(

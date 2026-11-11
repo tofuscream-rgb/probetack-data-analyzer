@@ -16,14 +16,16 @@ interface Props {
   onSelected?: (e: PlotSelectionEvent) => void;
   onClick?: (e: { points: { curveNumber: number; pointIndex: number; customdata?: unknown; data: { meta?: unknown } }[] }) => void;
   onReady?: (el: PlotlyHTMLElement) => void;
+  /** Layout changes made in the graph, e.g. a dragged shape. */
+  onRelayout?: (e: Record<string, unknown>) => void;
   className?: string;
 }
 
-export function PlotlyChart({ data, layout, config, onSelected, onClick, onReady, className }: Props) {
+export function PlotlyChart({ data, layout, config, onSelected, onClick, onReady, onRelayout, className }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const handlers = useRef({ onSelected, onClick });
-  handlers.current = { onSelected, onClick };
+  const handlers = useRef({ onSelected, onClick, onRelayout });
+  handlers.current = { onSelected, onClick, onRelayout };
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +44,7 @@ export function PlotlyChart({ data, layout, config, onSelected, onClick, onReady
           anyEl._m1Bound = true;
           el.on('plotly_selected', (e) => e && handlers.current.onSelected?.(e));
           el.on('plotly_click', (e) => handlers.current.onClick?.(e as never));
+          el.on('plotly_relayout', (e) => handlers.current.onRelayout?.(e as unknown as Record<string, unknown>));
         }
         onReady?.(el);
       })

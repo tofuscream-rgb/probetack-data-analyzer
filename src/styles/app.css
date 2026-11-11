@@ -549,3 +549,9 @@ table.glossary-table td { white-space: normal; max-width: 520px; }
 .kind-analyzer { background: #fff3e0; color: #8a4b00; border-color: #f0c48a; }
 .source { color: var(--ink-2); }
 .method-item .source { margin-top: -4px; }
+.excl-chip { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 9px; margin-right: 4px; white-space: nowrap; background: #eef1f5; color: #4b5d73; border: 1px solid #cfd7e2; text-decoration: none; }
+.excl-auto { background: #fdecec; color: #9b1c1c; border-color: #f2b8b8; }
+table.grid tr.excluded-row td .excl-chip, table.grid tr.excluded-row td .flags { text-decoration: none; display: inline-block; }
+.note.before { font-size: 11px; }
+.area-tool { border: 1px solid var(--rule); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
+table.area-table td.note { font-size: 11px; }

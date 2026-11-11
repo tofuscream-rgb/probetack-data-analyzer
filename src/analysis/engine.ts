@@ -145,7 +145,7 @@ export function computeDerived(
   files: ParsedFile[],
   cyclesByFile: Map<string, Cycle[]>,
   metaByFile: Map<string, ExperimentMeta>,
-  project: Pick<ProjectState, 'settings' | 'runOverrides' | 'excludedPoints' | 'groupBy'>,
+  project: Pick<ProjectState, 'settings' | 'runOverrides' | 'excludedPoints' | 'groupBy'> & { tackMetrics?: Pick<ProjectState['tackMetrics'], 'excludedRepeats' | 'excludedSessions'> },
 ): Derived {
   const s = project.settings;
   const results = new Map<string, CycleResult>();
@@ -210,17 +210,40 @@ export function computeDerived(
   applyStartPositionFlags(ordered, s);
   for (const r of ordered) {
     r.qc = r.flags.reduce<QCClass>((acc, f) => worst(acc, f.cls), 'green');
-    applyStatus(r, s);
+    applyStatus(r, s, datasetExclusion(r, project.tackMetrics));
   }
   const groups = computeGroups(ordered, project.groupBy);
   return { files, results, ordered, groups };
+}
+
+/** Test session of a run: the recording date of its file (else its top folder). */
+export const sessionOf = (r: Pick<CycleResult, 'cycle' | 'file'>) => r.cycle.date ?? r.file.path.split('/')[0] ?? '—';
+
+/**
+ * Exclusion of the run's whole Repeat (file) or test session, with its reason; null if neither.
+ * Shared by Data analysis and Tack metrics. A manual decision on the run itself wins.
+ */
+export function datasetExclusion(
+  r: Pick<CycleResult, 'cycle' | 'file'>,
+  t: Pick<ProjectState['tackMetrics'], 'excludedRepeats' | 'excludedSessions'> | undefined,
+): string | null {
+  const rep = t?.excludedRepeats?.[r.file.fileId];
+  if (rep) return `whole Repeat (file) excluded${rep.reason ? ` — ${rep.reason}` : ''}`;
+  const ses = t?.excludedSessions?.[sessionOf(r)];
+  if (ses) return `whole test session ${sessionOf(r)} excluded${ses.reason ? ` — ${ses.reason}` : ''}`;
+  return null;
+}
+
+/** Whether the run would be included without a manual decision on the run itself. */
+export function defaultIncluded(r: CycleResult, project: Pick<ProjectState, 'settings' | 'tackMetrics'>): boolean {
+  return datasetExclusion(r, project.tackMetrics) === null && !project.settings.runExclusion.excludeClasses.includes(r.qc);
 }
 
 /**
  * Decides whether a run enters processed results. Runs only after every flag is
  * final, so the automatic rule never feeds back into the flags themselves.
  */
-function applyStatus(r: CycleResult, s: AnalysisSettings) {
+function applyStatus(r: CycleResult, s: AnalysisSettings, dataset: string | null) {
   const o = r.override;
   if (o?.action === 'exclude') {
     r.status = 'excludedManual';
@@ -228,6 +251,9 @@ function applyStatus(r: CycleResult, s: AnalysisSettings) {
   } else if (o?.action === 'include') {
     r.status = 'keptManual';
     r.statusReason = `Kept manually (QC ${r.qc}): ${o.reason}`;
+  } else if (dataset !== null) {
+    r.status = 'excludedManual';
+    r.statusReason = `Excluded manually: ${dataset}`;
   } else if (s.runExclusion.excludeClasses.includes(r.qc)) {
     r.status = 'excludedAuto';
     const reasons = r.flags.filter((f) => f.cls === r.qc).map((f) => f.message);

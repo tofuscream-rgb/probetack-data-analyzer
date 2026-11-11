@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { useApp, download } from '../../state/AppContext';
 import {
-  DIAG_METRICS, FAILURE_MODES, MAIN_METRICS, TACK_MORPHOLOGIES, failureModeCounts, failureModeLabel, morphologyCounts, morphologyLabel, tackFlags, usedRuns, useTackMetrics,
+  DIAG_METRICS, FAILURE_MODES, MAIN_METRICS, TACK_MORPHOLOGIES, failureModeCounts, failureModeLabel, morphologyCounts, morphologyLabel, tackFlags, usedRuns, allOkRuns, useTackMetrics,
   type Metric, type TackRepeat,
 } from '../../state/tackMetrics';
 import { TACK_DEFAULTS } from '../../analysis/tackMetrics';
@@ -12,6 +12,15 @@ import { CURVE_COLORS } from '../../plotting/colors';
 import { NumberField } from '../lapShear/NumberField';
 import { fmt } from '../common';
 import { TackMethods } from './TackMethods';
+import { AREA_EDITS, AreaTool, areaFillTrace, areaShapes } from '../AreaTool';
+import { areaFromRelayout, areaLimits, integrateRange, type CustomArea } from '../../analysis/customArea';
+
+/** Plot edits off, except what a tool switches on. */
+const NO_EDITS = { annotationPosition: false, annotationTail: false, annotationText: false, axisTitleText: false, titleText: false, legendText: false, legendPosition: false, colorbarTitleText: false, colorbarPosition: false, shapePosition: false };
+const rgbaOf = (hex: string, a: number) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+};
 import type { FailureMode, TackMorphology } from '../../types';
 import { BulkAssignBar, ObservationGlossary, useRunSelection, type SelectableRow } from '../ObservationTools';
 
@@ -24,6 +33,17 @@ const csvCell = (v: unknown) => {
 const toCsv = (rows: unknown[][]) => rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 const saveCsv = (rows: unknown[][], name: string) => download(new Blob(['﻿' + toCsv(rows)], { type: 'text/csv;charset=utf-8' }), name);
 const ms = (s: { mean: number; sd: number; n: number } | undefined, d: number) => (s && s.n ? `${fmt(s.mean, d)} ± ${s.n > 1 ? fmt(s.sd, d) : '—'}` : '—');
+type MSv = { mean: number; sd: number; n: number } | undefined;
+/** After exclusion (main line) and before exclusion (all runs), as in Data analysis. */
+function Both({ after, before, d }: { after: MSv; before: MSv; d: number }) {
+  return (
+    <>
+      <div title="After exclusion">{ms(after, d)}</div>
+      <div className="note before" title="Before exclusion (all runs)">all: {ms(before, d)}</div>
+    </>
+  );
+}
+const EXCL_LABEL = { manual: 'Excluded (manual)', dataset: 'Excluded (Repeat/session)', auto: 'Excluded (QC rule)' } as const;
 
 /** Table header of a metric: name with subscripts, unit below. */
 function MetricTh({ k }: { k: Metric }) {
@@ -65,7 +85,7 @@ function Flags({ m }: { m: Parameters<typeof tackFlags>[0] }) {
 type PlotMode = 'force' | 'stress';
 
 /** F vs δ (or σ vs ε) of the runs of one Repeat, with F_max, δ_break and plateau. */
-function TackPlot({ repeat, mode }: { repeat: TackRepeat; mode: PlotMode }) {
+function TackPlot({ repeat, mode, area, setArea }: { repeat: TackRepeat; mode: PlotMode; area: CustomArea; setArea: (a: CustomArea) => void }) {
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
   const stress = mode === 'stress' && repeat.h0 !== null;
   const { data, layout } = useMemo(() => {
@@ -85,6 +105,8 @@ function TackPlot({ repeat, mode }: { repeat: TackRepeat; mode: PlotMode }) {
       const yl = stress ? 'σ' : 'F';
       const yu = stress ? 'kPa' : 'N';
       const xu = stress ? '' : ' mm';
+      const fill = areaFillTrace(xs, ys, area, rgbaOf(color, 0.18), name, (mm) => mm * fx);
+      if (fill) traces.push(fill);
       traces.push({ type: 'scatter', mode: 'lines', x: xs, y: ys, name, legendgroup: name, line: { color, width: LINE.normal, dash: r.excluded ? 'dash' : 'solid' }, hovertemplate: `${name}<br>${xl} = %{x:.3f}${xu}<br>${yl} = %{y:.4f} ${yu}<extra></extra>` } as Data);
       traces.push({ type: 'scatter', mode: 'markers', x: [m.deltaPeakMm * fx], y: [m.fmaxN * fy], legendgroup: name, showlegend: false, marker: { symbol: 'triangle-up', size: 12, color, line: { color: '#18263A', width: 1 } }, hovertemplate: `${name}<br>peak: ${yl} = %{y:.4f} ${yu} at ${xl} = %{x:.3f}${xu}<extra></extra>` } as Data);
       if (!m.incomplete && m.failureDispMm !== null) traces.push({ type: 'scatter', mode: 'markers', x: [m.failureDispMm * fx], y: [TACK_DEFAULTS.endFraction * m.fmaxN * fy], legendgroup: name, showlegend: false, marker: { symbol: 'x', size: 12, color, line: { color, width: 2 } }, hovertemplate: `${name}<br>failure: ${xl} = %{x:.3f}${xu}<extra></extra>` } as Data);
@@ -97,9 +119,15 @@ function TackPlot({ repeat, mode }: { repeat: TackRepeat; mode: PlotMode }) {
       legend: { x: 1.01, y: 1, font: { size: 14 } },
       hovermode: 'closest',
       uirevision: `${repeat.fileId}|${stress}`,
+      shapes: areaShapes(area, (mm) => (stress ? mm / repeat.h0! : mm)),
     };
     return { data: traces, layout: lay };
-  }, [repeat, stress]);
+  }, [repeat, stress, area]);
+  const xRange = useMemo<[number, number] | null>(() => {
+    let a = Infinity, b = -Infinity;
+    for (const r of repeat.runs) if (r.m.ok) for (const v of r.m.curve.deltaMm) { if (v < a) a = v; if (v > b) b = v; }
+    return Number.isFinite(a) && b > a ? [Math.max(0, a), b] : null;
+  }, [repeat]);
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
     const Plotly = await loadPlotly();
@@ -111,7 +139,26 @@ function TackPlot({ repeat, mode }: { repeat: TackRepeat; mode: PlotMode }) {
         <span className="note">▲ peak · × true failure · dotted = automatically detected plateau. Incomplete runs have no true-failure marker.</span>
         <div className="export-group"><span>Save graph</span><button className="small" onClick={() => save('png')}>PNG</button><button className="small" onClick={() => save('svg')}>SVG</button></div>
       </div>
-      <PlotlyChart data={data} layout={layout} className="plot summary" onReady={(el) => (plotEl.current = el)} />
+      <PlotlyChart
+        data={data}
+        layout={layout}
+        className="plot summary"
+        onReady={(el) => (plotEl.current = el)}
+        config={{ editable: true, edits: { ...NO_EDITS, ...AREA_EDITS } }}
+        onRelayout={(e) => { const a = areaFromRelayout(e, area, (x) => (stress ? x * repeat.h0! : x)); if (a && a.fromMm !== null && a.toMm !== null) setArea({ fromMm: +a.fromMm.toFixed(4), toMm: +a.toMm.toFixed(4) }); }}
+      />
+      <AreaTool
+        area={area}
+        setArea={setArea}
+        xRangeMm={xRange}
+        rows={repeat.runs.filter((r) => r.m.ok).map((r) => {
+          const lim = areaLimits(area)!;
+          const res = lim ? integrateRange(r.m.curve.deltaMm, r.m.curve.tN, lim[0], lim[1]) : { workMJ: NaN, covered: true };
+          return { id: r.id, label: `${repeat.name} – Run ${r.cycle.cycleNumber}${r.excluded ? ' (excluded)' : ''}`, workMJ: res.workMJ, perAreaJm2: (res.workMJ / r.m.areaMm2) * 1000, covered: res.covered };
+        })}
+        perAreaLabel="W/A_probe (J/m²)"
+        note="δ is measured from the tensile onset, as on the graph; A_probe = π d²/4."
+      />
     </>
   );
 }
@@ -137,28 +184,35 @@ export function TackMetricsTab() {
   const sessions = [...new Set(t.repeats.map((r) => r.session))];
   const excludedRepeats = t.repeats.filter((r) => r.excluded);
   const excludedSessions = sessions.filter((s) => t.tm.excludedSessions[s]);
-  const excludedRuns = t.repeats.flatMap((rp) => rp.runs.filter((r) => r.excluded).map((r) => ({ rp, r })));
+  // Runs excluded on their own (runs of an excluded Repeat/session are covered by that entry).
+  const excludedRuns = t.repeats.flatMap((rp) => rp.runs.filter((r) => r.excluded && r.excluded.kind !== 'dataset').map((r) => ({ rp, r })));
   const base = `${project.name || 'tack'}_CR${t.ex.chargeRatio}_${t.ex.concentrationM}M`.replace(/[^\w.-]+/g, '_');
 
   const runCsv = () => [
     ['Repeat (file)', 'Path', 'Session', 'Substrate', 'Dwell (s)', 'h0 (mm)', 'Probe d (mm)', 'Repeat excluded', 'Run', 'Run excluded', 'Exclusion reason',
       ...MAIN_METRICS.map((k) => `${k.label} (${k.unit})`), 'Failure mode', 'Debonding morphology', 'Observation', 'Fibril onset δ (mm)', 'Max fibril extension (mm)', 'Flags', 'Flag details',
-      ...DIAG_METRICS.map((k) => `${k.label} (${k.unit})`)],
+      ...DIAG_METRICS.map((k) => `${k.label} (${k.unit})`), 'Custom area δ1 (mm)', 'Custom area δ2 (mm)', 'W_selected (mJ)', 'W_selected/A_probe (J/m²)'],
     ...allRuns.map(({ rp, r }) => {
       const flags = tackFlags(r.m);
       return [rp.name, rp.file.path, rp.session, rp.substrateLabel, rp.dwellS, rp.h0, d, rp.included ? '' : 'yes', r.cycle.cycleNumber, r.excluded ? 'yes' : '', r.excluded?.reason ?? '',
         ...MAIN_METRICS.map((k) => (r.m.ok ? k.get(r.m) : null)), r.obs.locus === 'unspecified' ? '' : failureModeLabel(r.obs.locus), r.obs.morphology === 'unspecified' ? '' : morphologyLabel(r.obs.morphology), r.obs.note, r.obs.fibrilOnsetMm, r.obs.fibrilMaxMm,
-        flags.map((f) => f.label).join('; '), flags.map((f) => f.detail).join(' | '), ...DIAG_METRICS.map((k) => (r.m.ok ? k.get(r.m) : null))];
+        flags.map((f) => f.label).join('; '), flags.map((f) => f.detail).join(' | '), ...DIAG_METRICS.map((k) => (r.m.ok ? k.get(r.m) : null)),
+        ...(() => {
+          const lim = areaLimits(t.tm.area);
+          if (!lim || !r.m.ok) return [t.tm.area.fromMm, t.tm.area.toMm, null, null];
+          const w = integrateRange(r.m.curve.deltaMm, r.m.curve.tN, lim[0], lim[1]).workMJ;
+          return [lim[0], lim[1], w, (w / r.m.areaMm2) * 1000];
+        })()];
     }),
   ];
   const summaryCsv = () => [
-    ['Mean ± SD per Repeat (over its runs, excluded runs left out)'],
-    ['Repeat (file)', 'Substrate', 'Dwell (s)', 'Repeat excluded', 'Runs', ...MAIN_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`]), 'Failure modes'],
-    ...t.repeats.map((rp) => [rp.name, rp.substrateLabel, rp.dwellS, rp.included ? '' : 'yes', usedRuns(rp).length, ...MAIN_METRICS.flatMap((k) => { const s = t.repeatStats.get(rp.fileId)![k.key]; return [s.mean, s.sd]; }), failureModeCounts(usedRuns(rp))]),
+    ['Mean ± SD per Repeat over its runs: after exclusion (shared with Data analysis) and before exclusion (all runs)'],
+    ['Repeat (file)', 'Substrate', 'Dwell (s)', 'Repeat excluded', 'Runs used', 'Runs (all)', ...MAIN_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`, `${k.label} mean, all runs (${k.unit})`, `${k.label} SD, all runs (${k.unit})`]), 'Failure modes'],
+    ...t.repeats.map((rp) => [rp.name, rp.substrateLabel, rp.dwellS, rp.included ? '' : 'yes', usedRuns(rp).length, allOkRuns(rp).length, ...MAIN_METRICS.flatMap((k) => { const s = t.repeatStats.get(rp.fileId)![k.key]; const a = t.repeatStatsAll.get(rp.fileId)![k.key]; return [s.mean, s.sd, a.mean, a.sd]; }), failureModeCounts(usedRuns(rp))]),
     [],
-    ['Mean ± SD per condition (substrate × dwell; over the Repeat means of included Repeats)'],
-    ['Substrate', 'Dwell (s)', 'Repeats', 'Runs', ...MAIN_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`]), 'Failure modes'],
-    ...t.conditions.map((c) => [c.substrate, c.dwellS, c.nRepeats, c.nRuns, ...MAIN_METRICS.flatMap((k) => [c.stats[k.key].mean, c.stats[k.key].sd]), c.modes]),
+    ['Mean ± SD per condition (substrate × dwell) over the Repeat means: after exclusion and before exclusion (all runs)'],
+    ['Substrate', 'Dwell (s)', 'Repeats used', 'Repeats (all)', 'Runs used', 'Runs (all)', ...MAIN_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`, `${k.label} mean, all runs (${k.unit})`, `${k.label} SD, all runs (${k.unit})`]), 'Failure modes'],
+    ...t.conditions.map((c) => [c.substrate, c.dwellS, c.nRepeats, c.nRepeatsAll, c.nRuns, c.nRunsAll, ...MAIN_METRICS.flatMap((k) => [c.stats[k.key].mean, c.stats[k.key].sd, c.statsAll[k.key].mean, c.statsAll[k.key].sd]), c.modes]),
     [],
     ['Probe diameter (mm)', d, 'A (mm²)', area],
     ['Excluded Repeats'], ...excludedRepeats.map((r) => [r.name, r.excluded!.reason]),
@@ -211,7 +265,7 @@ export function TackMetricsTab() {
           ))}
         </div>
         <div className="excluded-list">
-          <strong>Excluded data sets</strong>
+          <strong>Excluded data sets</strong> <span className="note">(shared with Data analysis: excluding or re-including a run here or there updates both tabs)</span>
           {!excludedRepeats.length && !excludedSessions.length && !excludedRuns.length ? (
             <span className="note"> none</span>
           ) : (
@@ -219,7 +273,13 @@ export function TackMetricsTab() {
               {excludedSessions.map((s) => <li key={s}>Session {s}: <input className="reason" value={t.tm.excludedSessions[s].reason} placeholder="reason" onChange={(e) => t.excludeSession(s, true, e.target.value)} /></li>)}
               {excludedRepeats.map((r) => <li key={r.fileId}>Repeat {r.name}: <input className="reason" value={r.excluded!.reason} placeholder="reason" onChange={(e) => t.excludeRepeat(r.fileId, true, e.target.value)} /></li>)}
               {excludedRuns.map(({ rp, r }) => (
-                <li key={r.id}>Run {r.cycle.cycleNumber} of {rp.name}: <input className="reason" value={r.excluded!.reason} placeholder="reason" onChange={(e) => t.excludeRun(r.id, true, e.target.value)} /> <button className="link small" onClick={() => t.excludeRun(r.id, false)}>Include again</button></li>
+                <li key={r.id}>
+                  Run {r.cycle.cycleNumber} of {rp.name}:{' '}
+                  {r.excluded!.kind === 'manual'
+                    ? <input className="reason" value={r.result.override?.reason ?? ''} placeholder="reason" onChange={(e) => t.setRunReason(r.id, e.target.value)} aria-label={`Reason for excluding run ${r.cycle.cycleNumber} of ${rp.name}`} />
+                    : <span className="note">{r.excluded!.reason}</span>}{' '}
+                  <button className="link small" onClick={() => t.excludeRun(r.id, false)}>Include again</button>
+                </li>
               ))}
             </ul>
           )}
@@ -239,7 +299,7 @@ export function TackMetricsTab() {
             <button className={plotMode === 'stress' ? 'on' : ''} disabled={plotRepeat.h0 === null} title={plotRepeat.h0 === null ? 'Enter h₀ for this Repeat' : ''} onClick={() => setPlotMode('stress')}>σ vs ε</button>
           </div>
         </div>
-        <TackPlot repeat={plotRepeat} mode={plotMode} />
+        <TackPlot repeat={plotRepeat} mode={plotMode} area={t.tm.area} setArea={t.setArea} />
       </Section>
 
       <Section n={3} title="Per-run results">
@@ -247,7 +307,7 @@ export function TackMetricsTab() {
           <table className="grid tack-runs">
             <thead>
               <tr>
-                <th title="Optional: leave this run out of the statistics (none by default)">Excl.</th><th>Repeat</th><th>Run</th><th>Substrate</th><th className="num">Dwell (s)</th>
+                <th title="Left out of the averages: the same decision as the In average box in Data analysis">Excl.</th><th>Repeat</th><th>Run</th><th>Substrate</th><th className="num">Dwell (s)</th>
                 {MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}
                 <th>Failure mode</th><th>Debonding morphology</th><th>Flags</th>
               </tr>
@@ -255,7 +315,7 @@ export function TackMetricsTab() {
             <tbody>
               {allRuns.map(({ rp, r }) => (
                 <tr key={r.id} className={rp.included && !r.excluded ? '' : 'excluded-row'}>
-                  <td><input type="checkbox" checked={!!r.excluded} disabled={!r.m.ok} onChange={(e) => t.excludeRun(r.id, e.target.checked, r.excluded?.reason ?? '')} aria-label={`Exclude run ${r.cycle.cycleNumber} of ${rp.name}`} /></td>
+                  <td><input type="checkbox" checked={!!r.excluded} disabled={!r.m.ok} title={r.excluded ? r.excluded.reason : 'Included'} onChange={(e) => t.excludeRun(r.id, e.target.checked)} aria-label={`Exclude run ${r.cycle.cycleNumber} of ${rp.name}`} /></td>
                   <td title={rp.file.path}>{rp.name}</td>
                   <td>{r.cycle.cycleNumber}</td>
                   <td>{rp.substrateLabel}</td>
@@ -263,24 +323,24 @@ export function TackMetricsTab() {
                   {MAIN_METRICS.map((k) => <td key={k.key} className="num">{r.m.ok ? fmt(k.get(r.m), k.digits) : '—'}</td>)}
                   <td title={r.obs.note}>{r.obs.locus === 'unspecified' ? '—' : failureModeLabel(r.obs.locus)}</td>
                   <td title={r.obs.note}>{r.obs.morphology === 'unspecified' ? '—' : morphologyLabel(r.obs.morphology)}</td>
-                  <td><Flags m={r.m} /></td>
+                  <td>{r.excluded && <span className={`excl-chip excl-${r.excluded.kind}`} title={r.excluded.reason}>{EXCL_LABEL[r.excluded.kind]}</span>}<Flags m={r.m} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="note">ε needs h₀ for the Repeat. Hover or click a flag for details. Failure mode and debonding morphology are entered in section 6. Incomplete runs have blank true failure strain.</p>
+        <p className="note">Excluded rows stay visible (struck through). Exclusion is shared with Data analysis, including its automatic QC rule; tick or untick Excl. here or In average there. ε needs h₀ for the Repeat. Hover or click a flag for details. Failure mode and debonding morphology are entered in section 6. Incomplete runs have blank true failure strain.</p>
       </Section>
 
-      <Section n={4} title="Mean ± SD per Repeat">
+      <Section n={4} title="Mean ± SD per Repeat (after exclusion; all runs below)">
         <div className="table-scroll">
           <table className="grid">
-            <thead><tr><th>Repeat</th><th>Substrate</th><th className="num">Dwell (s)</th><th className="num">Runs</th>{MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure modes</th><th>Debonding morphologies</th></tr></thead>
+            <thead><tr><th>Repeat</th><th>Substrate</th><th className="num">Dwell (s)</th><th className="num" title="Runs used after exclusion / all analysed runs">Runs</th>{MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure modes</th><th>Debonding morphologies</th></tr></thead>
             <tbody>
               {t.repeats.map((rp) => (
                 <tr key={rp.fileId} className={rp.included ? '' : 'excluded-row'}>
-                  <td>{rp.name}</td><td>{rp.substrateLabel}</td><td className="num">{rp.dwellS ?? '—'}</td><td className="num">{usedRuns(rp).length}</td>
-                  {MAIN_METRICS.map((k) => <td key={k.key} className="num">{ms(t.repeatStats.get(rp.fileId)![k.key], k.digits)}</td>)}
+                  <td>{rp.name}</td><td>{rp.substrateLabel}</td><td className="num">{rp.dwellS ?? '—'}</td><td className="num">{usedRuns(rp).length} / {allOkRuns(rp).length}</td>
+                  {MAIN_METRICS.map((k) => <td key={k.key} className="num"><Both after={t.repeatStats.get(rp.fileId)![k.key]} before={t.repeatStatsAll.get(rp.fileId)![k.key]} d={k.digits} /></td>)}
                   <td>{failureModeCounts(usedRuns(rp))}</td><td>{morphologyCounts(usedRuns(rp))}</td>
                 </tr>
               ))}
@@ -289,16 +349,16 @@ export function TackMetricsTab() {
         </div>
       </Section>
 
-      <Section n={5} title="Mean ± SD per condition (substrate × dwell)">
+      <Section n={5} title="Mean ± SD per condition (substrate × dwell; after exclusion, all runs below)">
         <div className="table-scroll">
           <table className="grid">
-            <thead><tr><th>Condition</th><th className="num">Repeats</th><th className="num">Runs</th>{MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure modes</th><th>Debonding morphologies</th></tr></thead>
+            <thead><tr><th>Condition</th><th className="num" title="Repeats with included runs / all Repeats">Repeats</th><th className="num" title="Runs used after exclusion / all analysed runs">Runs</th>{MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure modes</th><th>Debonding morphologies</th></tr></thead>
             <tbody>
               {t.conditions.map((c) => (
                 <tr key={c.key}>
-                  <td className="strong">{c.label}</td><td className="num">{c.nRepeats}</td><td className="num">{c.nRuns}</td>
-                  {MAIN_METRICS.map((k) => <td key={k.key} className="num">{ms(c.stats[k.key], k.digits)}</td>)}
-                  <td>{c.modes}</td><td>{morphologyCounts(t.repeats.filter((rp) => rp.included && rp.substrateLabel === c.substrate && rp.dwellS === c.dwellS).flatMap(usedRuns))}</td>
+                  <td className="strong">{c.label}</td><td className="num">{c.nRepeats} / {c.nRepeatsAll}</td><td className="num">{c.nRuns} / {c.nRunsAll}</td>
+                  {MAIN_METRICS.map((k) => <td key={k.key} className="num"><Both after={c.stats[k.key]} before={c.statsAll[k.key]} d={k.digits} /></td>)}
+                  <td>{c.modes}</td><td>{morphologyCounts(t.repeats.filter((rp) => rp.substrateLabel === c.substrate && rp.dwellS === c.dwellS).flatMap(usedRuns))}</td>
                 </tr>
               ))}
             </tbody>

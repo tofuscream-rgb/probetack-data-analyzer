@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { Data, Layout } from 'plotly.js';
 import { useApp } from '../state/AppContext';
+import { withRunInclusion } from '../state/inclusion';
 import { STATUS_LABEL, computeGroups, groupValue, isIncluded, type CycleResult } from '../analysis/engine';
 import { displayFactor, peakLabel, type Metrics } from '../analysis/cycleMetrics';
 import { QC_LABEL, QC_ORDER } from '../analysis/pointOutliers';
@@ -58,15 +59,9 @@ function RunChoiceSelect({ r }: { r: CycleResult }) {
 
 /** "In average" checkbox: writes a manual override only when the choice differs from the automatic rule. */
 function InAverage({ r }: { r: CycleResult }) {
-  const { project, update } = useApp();
-  const autoIncluded = !project.settings.runExclusion.excludeClasses.includes(r.qc);
-  const toggle = (want: boolean) =>
-    update((p) => {
-      const ro = { ...p.runOverrides };
-      if (want === autoIncluded) delete ro[r.cycle.cycleId];
-      else ro[r.cycle.cycleId] = { action: want ? 'include' : 'exclude', reason: want ? 'Kept after review (Data analysis)' : 'Left out after review (Data analysis)', at: new Date().toISOString() };
-      return { ...p, runOverrides: ro };
-    });
+  const { update } = useApp();
+  // Shared with Tack metrics: the override is relative to the automatic rule and any whole-Repeat/session exclusion.
+  const toggle = (want: boolean) => update((p) => withRunInclusion(p, r, want, want ? 'Kept after review (Data analysis)' : 'Left out after review (Data analysis)'));
   return (
     <input
       type="checkbox"
@@ -74,7 +69,7 @@ function InAverage({ r }: { r: CycleResult }) {
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => toggle(e.target.checked)}
       aria-label={`Use run ${r.cycle.cycleNumber} of ${r.file.name} in the average`}
-      title={r.override ? `Your choice: ${r.override.reason}. Untick/tick again to go back to automatic.` : autoIncluded ? 'Used in the average' : 'Outlier: left out of the average automatically. Tick to keep it anyway.'}
+      title={r.override ? `Your choice: ${r.override.reason}. Untick/tick again to go back to automatic.` : isIncluded(r) ? 'Used in the average' : `${r.statusReason}. Tick to keep it anyway.`}
     />
   );
 }

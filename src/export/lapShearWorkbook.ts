@@ -7,6 +7,7 @@ import { ALGORITHM_VERSION, APP_VERSION, GF_TO_N, type LapShearSettings } from '
 import { FAILURE_MODE_LABEL, INTEGRATION_LABEL, SUMMARY_PROPERTIES, describe, type LapShearResult } from '../analysis/lapShear';
 import { sourceText } from '../analysis/references';
 import { lttbIndices } from '../plotting/downsample';
+import { areaLimits, integrateRange, type CustomArea } from '../analysis/customArea';
 import { buildXlsx, cellRef, safeSheetName, type CellValue, type ChartSpec, type SheetSpec } from './xlsxWriter';
 
 /** What the workbook needs about one run (decoupled from the React state). */
@@ -29,6 +30,8 @@ export interface LapShearExportOptions {
   includeRunData: boolean;
   includeChart: boolean;
   deselectedFiles?: { path: string; sha256: string }[];
+  /** Custom area-under-curve limits (additional tool); null limits = not set. */
+  customArea?: CustomArea;
 }
 
 const num = (v: number | null | undefined): CellValue => (v === null || v === undefined || !Number.isFinite(v) ? null : v);
@@ -185,6 +188,21 @@ export function buildLapShearSheets(o: LapShearExportOptions): SheetSpec[] {
     ...(o.deselectedFiles?.length ? o.deselectedFiles.map((f) => [f.path, f.sha256]) : [['none']]),
   ];
   sheets.push({ name: name('Analysis Settings'), rows: set, headerRows: 1, colWidths: [34, 46, 100] });
+  // Custom area under the curve (additional tool), when limits are set.
+  const lim = areaLimits(o.customArea);
+  if (lim) {
+    sheets.push({
+      name: name('Custom area'),
+      headerRows: 3,
+      colWidths: [34, 50, 18, 26, 26],
+      rows: [
+        ['Custom area under the curve', `δ1 = ${lim[0]} mm`, `δ2 = ${lim[1]} mm`],
+        ['W_selected = ∫ F dδ between the limits (trapezoidal rule, force interpolated at the exact limits; N·mm = mJ). Additional tool: the automatic results are not changed. W/A_overlap is an apparent work per bonded area, not fracture toughness.'],
+        ['Run', 'File path', 'W_selected (mJ)', 'Apparent W_selected / A_overlap (J/m²)', 'Recording covers both limits'],
+        ...runs.map((r) => { const sr = r.result.series; const w = integrateRange(sr.dispMm, Array.from(sr.loadGf, (g) => g * GF_TO_N), lim[0], lim[1]); return [r.label, r.filePath, num(w.workMJ), num((w.workMJ / r.result.areaMm2) * 1000), w.covered ? 'yes' : 'no (recorded part only)']; }),
+      ],
+    });
+  }
   return sheets;
 }
 

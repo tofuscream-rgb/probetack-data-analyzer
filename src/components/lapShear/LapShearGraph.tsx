@@ -7,6 +7,9 @@ import { lttbIndices } from '../../plotting/downsample';
 import { EXPORT_SIZE, figAxis, figLayout, peakLabelFont } from '../../plotting/figureStyle';
 import { CURVE_COLORS } from '../../plotting/colors';
 import type { IntegrationMode } from '../../types';
+import { AreaTool, areaFillTrace, areaShapes } from '../AreaTool';
+import { areaFromRelayout, areaLimits, integrateRange } from '../../analysis/customArea';
+import { GF_TO_N } from '../../types';
 import { NumberField } from './NumberField';
 import { GraphLabelControls, RunGraphControls, Y_OPTIONS, commonTitle, curveLabelAnnotations, shortLabels, type LabelSeries, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
 
@@ -45,6 +48,11 @@ export function LapShearGraph() {
   const autoY = stress ? `Shear strength (${unit})` : `Loading force (${unit})`;
   const yTitle = v.yTitle.trim() || autoY;
   const runs = selected.filter((r) => r.result.ok);
+  const areaRange = useMemo<[number, number] | null>(() => {
+    let a = Infinity, b = -Infinity;
+    for (const r of runs) { const sr = r.result.series; for (const x of sr.dispMm) if (Number.isFinite(x)) { if (x < a) a = x; if (x > b) b = x; } }
+    return Number.isFinite(a) && b > a ? [a, b] : null;
+  }, [runs]);
 
   const { data, layout } = useMemo(() => {
     const traces: Data[] = [];
@@ -64,6 +72,9 @@ export function LapShearGraph() {
       const y = (i: number) => res.series.loadGf[i] * f;
       const name = v.names[r.id]?.trim() || short[k];
       labelSeries.push({ id: r.id, name, color, x: idx.map((i) => xs[i]), y: idx.map(y) });
+      // Custom area (additional tool): shaded under this curve between the dashed boundaries.
+      const areaFill = areaFillTrace(idx.map((i) => xs[i]), idx.map(y), v.area, hexToRgba(color, 0.22), r.id);
+      if (areaFill) traces.push(areaFill);
 
       // Shaded integration interval (the one used for "Selected integration work").
       if (st.shade && Number.isFinite(res.work.selectedMJ)) {
@@ -163,6 +174,7 @@ export function LapShearGraph() {
       dragmode: 'zoom',
       hovermode: 'closest',
       uirevision: unit,
+      shapes: areaShapes(v.area),
     };
     return { data: traces, layout: lay };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,7 +236,10 @@ export function LapShearGraph() {
           <p>Open your lap-shear TXT files on the left and tick the runs to compare.</p>
         </div>
       ) : (
-        <PlotlyChart data={data} layout={layout} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={{ editable: true, edits: { annotationPosition: true, annotationTail: true, annotationText: false, axisTitleText: false, titleText: false, legendText: false, legendPosition: true, colorbarTitleText: false, colorbarPosition: false, shapePosition: false }, toImageButtonOptions: { format: 'png', filename: 'lap_shear', scale: 3 } }} />
+        <>
+          <PlotlyChart data={data} layout={layout} onRelayout={(e) => { const a = areaFromRelayout(e, v.area); if (a && a.fromMm !== null && a.toMm !== null) set({ view: { ...v, area: { fromMm: +a.fromMm.toFixed(4), toMm: +a.toMm.toFixed(4) } } }); }} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={{ editable: true, edits: { annotationPosition: true, annotationTail: true, annotationText: false, axisTitleText: false, titleText: false, legendText: false, legendPosition: true, colorbarTitleText: false, colorbarPosition: false, shapePosition: true }, toImageButtonOptions: { format: 'png', filename: 'lap_shear', scale: 3 } }} />
+          <AreaTool area={v.area} setArea={(area) => set({ view: { ...v, area } })} xRangeMm={areaRange} rows={runs.filter((r) => r.result.ok).map((r) => { const lim = areaLimits(v.area); const sr = r.result.series; const res = lim ? integrateRange(sr.dispMm, Array.from(sr.loadGf, (g) => g * GF_TO_N), lim[0], lim[1]) : { workMJ: NaN, covered: true }; return { id: r.id, label: v.names[r.id]?.trim() || r.label, workMJ: res.workMJ, perAreaJm2: (res.workMJ / r.result.areaMm2) * 1000, covered: res.covered }; })} perAreaLabel="Apparent W/A_overlap (J/m²)" note="Apparent work per overlap area A = L × W of each run; not fracture toughness." />
+        </>
       )}
     </section>
   );

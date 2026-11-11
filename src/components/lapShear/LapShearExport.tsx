@@ -20,6 +20,7 @@ export function LapShearExportDialog({ onClose }: { onClose: () => void }) {
       const bytes = buildLapShearWorkbook({
         projectName: project.name,
         settings: ls.settings,
+        customArea: ls.view.area,
         includeRunData: runData,
         includeChart: chart,
         deselectedFiles: files.filter((l) => off.has(l.parsed.fileId)).map((l) => ({ path: l.parsed.path, sha256: l.parsed.sha256 })),

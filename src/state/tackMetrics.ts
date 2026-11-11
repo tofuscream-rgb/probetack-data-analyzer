@@ -6,24 +6,42 @@
 import { useCallback, useMemo } from 'react';
 import { useApp } from './AppContext';
 import { uniqueFileNames, useExperiment } from './experiment';
-import { groupValue, type CycleResult } from '../analysis/engine';
+import { groupValue, isIncluded, sessionOf, type CycleResult } from '../analysis/engine';
+import { withOverrideReason, withRunInclusion } from './inclusion';
 import { LOW_RESOLUTION_STEPS, TACK_DEFAULTS, analyzeTack, meanSd, type TackMetrics } from '../analysis/tackMetrics';
 import { bySubstrate, canonicalSubstrate } from '../analysis/substrates';
 import type { Cycle, DatasetExclusion, FailureMode, ParsedFile, TackMetricsState, TackMorphology, TackObservation } from '../types';
 import { FAILURE_MODES, TACK_MORPHOLOGIES, optionLabel } from '../analysis/observations';
 
+/** Why a run is left out, from the shared Data analysis status. */
+export interface RunExclusion {
+  /** 'manual': excluded by you (Data analysis or Tack metrics); 'dataset': its whole Repeat/session; 'auto': automatic QC rule. */
+  kind: 'manual' | 'dataset' | 'auto';
+  reason: string;
+}
+
 export interface TackRun {
   id: string;
   cycle: Cycle;
+  /** The shared Data analysis result of this run (status, QC, override). */
+  result: CycleResult;
   m: TackMetrics;
-  /** Left out by the user (optional; no run is excluded by default). */
-  excluded: DatasetExclusion | null;
+  /** null = included in the averages (the same decision as in Data analysis). */
+  excluded: RunExclusion | null;
   /** Failure mode and notes entered by the user. */
   obs: TackObservation;
 }
 
-/** Runs that enter the statistics: analysed and not excluded. */
+/** Runs that enter the statistics after exclusion: analysed and included (shared with Data analysis). */
 export const usedRuns = (rp: TackRepeat) => rp.runs.filter((r) => r.m.ok && !r.excluded);
+/** All analysed runs, before exclusion. */
+export const allOkRuns = (rp: TackRepeat) => rp.runs.filter((r) => r.m.ok);
+
+function runExclusion(r: CycleResult): RunExclusion | null {
+  if (isIncluded(r)) return null;
+  if (r.status === 'excludedAuto') return { kind: 'auto', reason: r.statusReason };
+  return { kind: r.override?.action === 'exclude' ? 'manual' : 'dataset', reason: r.statusReason };
+}
 
 export interface TackRepeat {
   fileId: string;
@@ -39,9 +57,11 @@ export interface TackRepeat {
   runs: TackRun[];
   excluded: DatasetExclusion | null;
   sessionExcluded: DatasetExclusion | null;
-  /** Used in the condition statistics. */
+  /** Not excluded as a whole Repeat or session. */
   included: boolean;
 }
+
+type MS = { mean: number; sd: number; n: number };
 
 export interface Metric {
   key: string;
@@ -117,17 +137,21 @@ function metricsOf(c: Cycle, diameterMm: number, h0: number | null): TackMetrics
   return m;
 }
 
-/** Test session of a file: its recording date (else its top folder). */
-export const sessionOf = (r: CycleResult) => r.cycle.date ?? r.file.path.split('/')[0] ?? '—';
+export { sessionOf };
 
 export interface GroupStat {
   key: string;
   label: string;
   substrate: string;
   dwellS: number | null;
+  /** After exclusion (Repeats with at least one included run; each Repeat counts once). */
   nRepeats: number;
   nRuns: number;
-  stats: Record<string, { mean: number; sd: number; n: number }>;
+  stats: Record<string, MS>;
+  /** Before exclusion: every analysed run of every Repeat. */
+  nRepeatsAll: number;
+  nRunsAll: number;
+  statsAll: Record<string, MS>;
   /** Failure modes of the runs used. */
   modes: string;
 }
@@ -159,7 +183,7 @@ export function useTackMetrics() {
         dwellS: first.holdTimeS,
         session,
         h0,
-        runs: rs.map((r) => ({ id: r.cycle.cycleId, cycle: r.cycle, m: metricsOf(r.cycle, diameter, h0), excluded: tm.excludedRuns[r.cycle.cycleId] ?? null, obs: tm.observations[r.cycle.cycleId] ?? EMPTY_OBSERVATION })),
+        runs: rs.map((r) => ({ id: r.cycle.cycleId, cycle: r.cycle, result: r, m: metricsOf(r.cycle, diameter, h0), excluded: runExclusion(r), obs: tm.observations[r.cycle.cycleId] ?? EMPTY_OBSERVATION })),
         excluded,
         sessionExcluded,
         included: !excluded && !sessionExcluded,
@@ -175,30 +199,36 @@ export function useTackMetrics() {
     );
   }, [derived, ex.chargeRatio, ex.concentrationM, tm, diameter]);
 
-  /** Mean ± SD over the runs of each Repeat. */
-  const repeatStats = useMemo(
-    () => new Map(repeats.map((rp) => [rp.fileId, Object.fromEntries(TACK_METRICS.map((k) => [k.key, meanSd(usedRuns(rp).map((r) => k.get(r.m)))]))])),
-    [repeats],
-  );
+  const statsOf = (runs: TackRun[]) => Object.fromEntries(TACK_METRICS.map((k) => [k.key, meanSd(runs.map((r) => k.get(r.m)))])) as Record<string, MS>;
+  /** Mean ± SD over the runs of each Repeat: after exclusion (shared with Data analysis). */
+  const repeatStats = useMemo(() => new Map(repeats.map((rp) => [rp.fileId, statsOf(usedRuns(rp))])), [repeats]);
+  /** Mean ± SD over the runs of each Repeat: before exclusion (all analysed runs). */
+  const repeatStatsAll = useMemo(() => new Map(repeats.map((rp) => [rp.fileId, statsOf(allOkRuns(rp))])), [repeats]);
 
-  /** Per condition (substrate × dwell): mean ± SD over the Repeat means of the included Repeats. */
+  /** Per condition (substrate × dwell): mean ± SD over the Repeat means, before and after exclusion. */
   const conditions = useMemo<GroupStat[]>(() => {
     const groups = new Map<string, TackRepeat[]>();
-    for (const rp of repeats.filter((x) => x.included && usedRuns(x).length > 0)) {
+    for (const rp of repeats.filter((x) => allOkRuns(x).length > 0)) {
       const key = `${rp.substrateLabel.toLowerCase()}|${rp.dwellS ?? '—'}`;
       groups.set(key, [...(groups.get(key) ?? []), rp]);
     }
-    return [...groups.entries()].map(([key, list]) => ({
-      key,
-      label: `${list[0].substrateLabel} · ${list[0].dwellS !== null ? `${list[0].dwellS} s` : 'dwell unknown'}`,
-      substrate: list[0].substrateLabel,
-      dwellS: list[0].dwellS,
-      nRepeats: list.length,
-      nRuns: list.reduce((s, rp) => s + usedRuns(rp).length, 0),
-      stats: Object.fromEntries(TACK_METRICS.map((k) => [k.key, meanSd(list.map((rp) => repeatStats.get(rp.fileId)![k.key].mean))])),
-      modes: failureModeCounts(list.flatMap(usedRuns)),
-    }));
-  }, [repeats, repeatStats]);
+    return [...groups.entries()].map(([key, all]) => {
+      const used = all.filter((rp) => usedRuns(rp).length > 0);
+      return {
+        key,
+        label: `${all[0].substrateLabel} · ${all[0].dwellS !== null ? `${all[0].dwellS} s` : 'dwell unknown'}`,
+        substrate: all[0].substrateLabel,
+        dwellS: all[0].dwellS,
+        nRepeats: used.length,
+        nRuns: used.reduce((s, rp) => s + usedRuns(rp).length, 0),
+        stats: Object.fromEntries(TACK_METRICS.map((k) => [k.key, meanSd(used.map((rp) => repeatStats.get(rp.fileId)![k.key].mean))])) as Record<string, MS>,
+        nRepeatsAll: all.length,
+        nRunsAll: all.reduce((s, rp) => s + allOkRuns(rp).length, 0),
+        statsAll: Object.fromEntries(TACK_METRICS.map((k) => [k.key, meanSd(all.map((rp) => repeatStatsAll.get(rp.fileId)![k.key].mean))])) as Record<string, MS>,
+        modes: failureModeCounts(used.flatMap(usedRuns)),
+      };
+    });
+  }, [repeats, repeatStats, repeatStatsAll]);
 
   const setTm = useCallback((f: (t: TackMetricsState) => TackMetricsState) => update((p) => ({ ...p, tackMetrics: f(p.tackMetrics) })), [update]);
   const setH0 = useCallback(
@@ -231,16 +261,19 @@ export function useTackMetrics() {
       }),
     [setTm],
   );
+  /** Exclude or re-include one run: the same shared decision as the "In average" box in Data analysis. */
   const excludeRun = useCallback(
     (cycleId: string, on: boolean, reason = '') =>
-      setTm((t) => {
-        const excludedRuns = { ...t.excludedRuns };
-        if (on) excludedRuns[cycleId] = { reason, at: excludedRuns[cycleId]?.at ?? now() };
-        else delete excludedRuns[cycleId];
-        return { ...t, excludedRuns };
+      update((p) => {
+        const r = derived.results.get(cycleId);
+        return r ? withRunInclusion(p, r, !on, reason || (on ? 'Left out after review (Tack metrics)' : 'Kept after review (Tack metrics)')) : p;
       }),
-    [setTm],
+    [update, derived],
   );
+  /** Custom area-under-curve limits (saved in the project). */
+  const setArea = useCallback((area: { fromMm: number | null; toMm: number | null }) => setTm((t) => ({ ...t, area })), [setTm]);
+  /** Edit the reason of a manual run decision. */
+  const setRunReason = useCallback((cycleId: string, reason: string) => update((p) => withOverrideReason(p, cycleId, reason)), [update]);
   const setObservation = useCallback(
     (cycleId: string, patch: Partial<TackObservation>) =>
       setTm((t) => ({ ...t, observations: { ...t.observations, [cycleId]: { ...(t.observations[cycleId] ?? EMPTY_OBSERVATION), ...patch } } })),
@@ -266,5 +299,5 @@ export function useTackMetrics() {
     [update],
   );
 
-  return { ex, tm, diameter, repeats, repeatStats, conditions, setH0, excludeRepeat, excludeSession, excludeRun, setObservation, setObservations, setSubstrate };
+  return { ex, tm, project, diameter, repeats, repeatStats, repeatStatsAll, conditions, setH0, excludeRepeat, excludeSession, excludeRun, setRunReason, setArea, setObservation, setObservations, setSubstrate };
 }

@@ -1,6 +1,6 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.17.2';
+export const APP_VERSION = '1.18.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
 export const ALGORITHM_VERSION = '1.2.0';
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
@@ -211,10 +211,12 @@ export interface TackMetricsState {
   excludedRepeats: Record<string, DatasetExclusion>;
   /** Keyed by session (recording date of the file). */
   excludedSessions: Record<string, DatasetExclusion>;
-  /** Single runs left out by the user (by cycleId); optional, none by default. */
+  /** Before 1.18: single runs left out in Tack metrics. Moved to the shared runOverrides when a project loads; always empty now. */
   excludedRuns: Record<string, DatasetExclusion>;
   /** Failure mode and observations entered by the user for each run (by cycleId); never inferred from the curve. */
   observations: Record<string, TackObservation>;
+  /** Custom area-under-curve limits δ1, δ2 (mm from the tensile onset); null = not set. */
+  area: { fromMm: number | null; toMm: number | null };
 }
 
 /** Failure mode: where the separation runs (ISO 10365 patterns), recorded by the user. */
@@ -326,6 +328,8 @@ export interface RunGraphView {
   /** Axis titles typed by the user ('' = automatic). The y title is cleared when the y quantity changes. */
   xTitle: string;
   yTitle: string;
+  /** Custom area-under-curve limits δ1, δ2 (mm); null = not set. Additional tool, does not change the results. */
+  area: { fromMm: number | null; toMm: number | null };
 }
 
 /** Compare charge ratios tab of Lap Shear and 90° Peel: which data sets and which property. */

@@ -233,6 +233,13 @@ export const PEEL_EQUATIONS: { title: string; tex?: string; text: string; refs: 
     note: 'defined by this analyzer.',
   },
   {
+    title: 'Custom area under the curve (additional tool)',
+    tex: String.raw`W_{\text{selected}} = \int_{\delta_1}^{\delta_2} F\,\mathrm{d}\delta`,
+    text: 'Boundaries δ₁, δ₂ set on the Graph tab (draggable or typed); trapezoidal rule with the force interpolated at the exact boundaries; raw work in mJ only. It is not the peel energy G_peel and does not change any automatic result.',
+    refs: [],
+    note: 'numerical integration (trapezoidal rule), defined by this analyzer; the limits are chosen by you.',
+  },
+  {
     title: 'Peel rate',
     tex: String.raw`v_{\text{peel}} = \frac{\mathrm{d}\delta}{\mathrm{d}t}\ \text{(least-squares slope in the window)}`,
     text: 'Least-squares slope of displacement versus time inside the steady-state window (mm/s).',

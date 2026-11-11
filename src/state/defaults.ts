@@ -63,7 +63,7 @@ export function defaultLapShear(): LapShearState {
     runs: {},
     selected: null,
     fileId: null,
-    view: { x: 'disp', unit: 'kPa', peakLabels: true, shade: 'none', highlight: null, showRaw: false, labels: 'legend', title: '', names: {}, xTitle: '', yTitle: '' },
+    view: { x: 'disp', unit: 'kPa', peakLabels: true, shade: 'none', highlight: null, showRaw: false, labels: 'legend', title: '', names: {}, xTitle: '', yTitle: '', area: { fromMm: null, toMm: null } },
     tab: 'graph',
     compare: { substrates: null, chargeRatios: null, concentrations: null, holdTimes: null, hiddenSets: [], order: 'desc', metric: 'tauKPa' },
     disabledFiles: [],
@@ -84,7 +84,7 @@ export function defaultPeel(): PeelState {
     runs: {},
     selected: null,
     fileId: null,
-    view: { x: 'disp', unit: 'N/m', peakLabels: true, shade: 'none', highlight: null, showRaw: false, labels: 'legend', title: '', names: {}, xTitle: '', yTitle: '' },
+    view: { x: 'disp', unit: 'N/m', peakLabels: true, shade: 'none', highlight: null, showRaw: false, labels: 'legend', title: '', names: {}, xTitle: '', yTitle: '', area: { fromMm: null, toMm: null } },
     tab: 'graph',
     compare: { substrates: null, chargeRatios: null, concentrations: null, holdTimes: null, hiddenSets: [], order: 'desc', metric: 'toughness' },
     disabledFiles: [],
@@ -113,6 +113,6 @@ export function defaultProject(): ProjectState {
     compare: defaultCompare(),
     selection: [],
     groupBy: ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'],
-    tackMetrics: { h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {}, observations: {} },
+    tackMetrics: { h0: {}, excludedRepeats: {}, excludedSessions: {}, excludedRuns: {}, observations: {}, area: { fromMm: null, toMm: null } },
   };
 }

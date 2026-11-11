@@ -20,6 +20,7 @@ export function PeelExportDialog({ onClose }: { onClose: () => void }) {
       const bytes = buildPeelWorkbook({
         projectName: project.name,
         settings: ps.settings,
+        customArea: ps.view.area,
         includeRunData: runData,
         includeChart: chart,
         deselectedFiles: files.filter((l) => off.has(l.parsed.fileId)).map((l) => ({ path: l.parsed.path, sha256: l.parsed.sha256 })),

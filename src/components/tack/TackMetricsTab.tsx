@@ -54,16 +54,19 @@ function MetricTh({ k }: { k: Metric }) {
   );
 }
 
-function Section({ n, title, children, extra }: { n: number; title: string; children: ReactNode; extra?: ReactNode }) {
+/** A numbered section that can be collapsed (click its title), like Advanced / Diagnostics and Methods. */
+function Section({ n, title, children, extra, open = true, id }: { n: number; title: string; children: ReactNode; extra?: ReactNode; open?: boolean; id?: string }) {
   return (
-    <section className="tack-section">
-      <div className="tack-section-head">
-        <h3 className="ls-h">{n}. {title}</h3>
-        {extra}
-      </div>
-      {children}
-    </section>
+    <details className="section tack-section" open={open} id={id}>
+      <summary>{n}. {title}{extra}</summary>
+      <div className="section-body">{children}</div>
+    </details>
   );
+}
+
+/** Open or close every section of the tab. */
+function toggleAll(e: { currentTarget: HTMLElement }, open: boolean) {
+  e.currentTarget.closest('.tack-metrics')?.querySelectorAll<HTMLDetailsElement>(':scope > details.section').forEach((d) => (d.open = open));
 }
 
 /** Short flag; the details show on hover and when clicked. */
@@ -224,8 +227,12 @@ export function TackMetricsTab() {
     <div className="ls-results tack-metrics">
       <p className="note">
         Charge ratio <strong>{t.ex.chargeRatio}</strong>, <strong>{t.ex.concentrationM} M</strong> (chosen on the left): every substrate and dwell time, tensile part of each pull.
-        Flags are warnings only; nothing is excluded unless you choose to.
+        Flags are warnings only. Exclusions are shared with the Data analysis tab (including its automatic QC rule).
       </p>
+      <div className="table-actions section-toggles">
+        <button className="link small" onClick={(e) => toggleAll(e, true)}>Expand all sections</button>
+        <button className="link small" onClick={(e) => toggleAll(e, false)}>Collapse all</button>
+      </div>
 
       <Section n={1} title="Test settings">
         <div className="table-actions">
@@ -423,9 +430,9 @@ export function TackMetricsTab() {
 
       <TackMethods n={8} />
 
-      <section className="tack-section" id="tack-definitions">
-        <ObservationGlossary test="tack" title="9. Definitions & References: failure mode and debonding morphology" />
-      </section>
+      <Section n={9} title="Definitions & References: failure mode and debonding morphology" id="tack-definitions">
+        <ObservationGlossary test="tack" title="Definitions & References: failure mode and debonding morphology" hideTitle />
+      </Section>
 
       <Section n={10} title="Export CSV">
         <div className="table-actions">

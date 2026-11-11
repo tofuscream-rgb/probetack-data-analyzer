@@ -97,13 +97,13 @@ export function BulkAssignBar<M extends string>({ rows, selection, morphologies,
 }
 
 /** Definitions & References for failure modes and debonding morphologies. */
-export function ObservationGlossary({ test, title = 'Definitions & References' }: { test: 'tack' | 'peel' | 'lapShear'; title?: string }) {
+export function ObservationGlossary({ test, title = 'Definitions & References', hideTitle = false }: { test: 'tack' | 'peel' | 'lapShear'; title?: string; hideTitle?: boolean }) {
   const terms = GLOSSARY.filter((g) => g.tests.includes(test));
   const used = REFERENCES.filter((r) => terms.some((g) => g.refs.includes(r.key)));
   const num = (key: string) => used.findIndex((r) => r.key === key) + 1;
   return (
     <section className="glossary" aria-label={title}>
-      <h3 className="ls-h">{title}</h3>
+      {!hideTitle && <h3 className="ls-h">{title}</h3>}
       <p className="note">
         Failure mode (where the separation runs) and debonding morphology (how it proceeds) are recorded separately from observation, never inferred from the force curve.
       </p>

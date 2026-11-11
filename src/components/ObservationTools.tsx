@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  FAILURE_MODES, GLOSSARY, REFERENCES, TERM_KIND_LABEL, bulkPatches,
+  FAILURE_MODES, GLOSSARY, REFERENCES, bulkPatches,
   type BulkRow, type Option,
 } from '../analysis/observations';
 import type { FailureMode } from '../types';
@@ -97,7 +97,7 @@ export function BulkAssignBar<M extends string>({ rows, selection, morphologies,
 }
 
 /** Definitions & References for failure modes and debonding morphologies. */
-export function ObservationGlossary({ test, title = 'Definitions & References', showType = true }: { test: 'tack' | 'peel' | 'lapShear'; title?: string; showType?: boolean }) {
+export function ObservationGlossary({ test, title = 'Definitions & References' }: { test: 'tack' | 'peel' | 'lapShear'; title?: string }) {
   const terms = GLOSSARY.filter((g) => g.tests.includes(test));
   const used = REFERENCES.filter((r) => terms.some((g) => g.refs.includes(r.key)));
   const num = (key: string) => used.findIndex((r) => r.key === key) + 1;
@@ -106,18 +106,16 @@ export function ObservationGlossary({ test, title = 'Definitions & References', 
       <h3 className="ls-h">{title}</h3>
       <p className="note">
         Failure mode (where the separation runs) and debonding morphology (how it proceeds) are recorded separately from observation, never inferred from the force curve.
-        {showType ? 'Each term is marked as a standard term, a literature term, or an operational category defined by this analyzer.' : ''}
       </p>
       <div className="table-scroll">
         <table className="grid glossary-table">
-          <thead><tr><th>Term</th><th>Field</th><th>Definition</th>{showType && <th>Type</th>}<th>Source</th></tr></thead>
+          <thead><tr><th>Term</th><th>Field</th><th>Definition</th><th>Source</th></tr></thead>
           <tbody>
             {terms.map((g) => (
               <tr key={g.term}>
                 <td className="strong">{g.term}</td>
                 <td>{g.field}</td>
                 <td>{g.definition}{g.note && <div className="note">{g.note}</div>}</td>
-                {showType && <td><span className={`kind kind-${g.kind}`}>{TERM_KIND_LABEL[g.kind]}</span></td>}
                 <td>{g.refs.length ? g.refs.map(num).sort((x, y) => x - y).map((n) => `[${n}]`).join(' ') : g.kind === 'analyzer' ? 'This analyzer' : '—'}</td>
               </tr>
             ))}

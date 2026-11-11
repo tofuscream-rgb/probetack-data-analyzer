@@ -27,9 +27,9 @@ function GelDimensions() {
       <h2>4. Gel dimensions</h2>
       <div className="gel-dims">
         <NumberField label="Gel length (mm)" value={d.lengthMm} positive onCommit={(v) => v !== null && setD({ ...d, lengthMm: v })} title="Bonded length of the gel strip" />
-        <NumberField label="Gel width (mm)" value={d.widthMm} positive onCommit={(v) => v !== null && setD({ ...d, widthMm: v })} title="Width w: peel strength and peel energy are force / w" />
+        <NumberField label="Gel width (mm)" value={d.widthMm} positive onCommit={(v) => v !== null && setD({ ...d, widthMm: v })} title="Width w: peel energy G_peel = F̄/w · (1 − cos θ) (Kendall 1975; Creton & Ciccotti 2016)" />
         <NumberField label="Gel thickness (mm)" value={d.thicknessMm} positive onCommit={(v) => v !== null && setD({ ...d, thicknessMm: v })} />
-        <NumberField label="Peel angle (°)" value={d.angleDeg} positive onCommit={(v) => v !== null && setD({ ...d, angleDeg: v })} title="90 for a 90° peel; Γ = F/w · (1 − cos θ)" />
+        <NumberField label="Peel angle (°)" value={d.angleDeg} positive onCommit={(v) => v !== null && setD({ ...d, angleDeg: v })} title="90 for a 90° peel; θ enters G_peel = F̄/w · (1 − cos θ) (Kendall 1975)" />
       </div>
       <p className="hint">
         Bonded area {fmt(d.lengthMm * d.widthMm, 1)} mm². {differ ? 'The selected runs have different dimensions; Apply sets all of them to these values.' : ''}

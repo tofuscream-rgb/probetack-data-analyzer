@@ -364,7 +364,7 @@ export function TackMetricsTab() {
       <TackMethods n={8} />
 
       <section className="tack-section" id="tack-definitions">
-        <ObservationGlossary test="tack" title="9. Definitions & References: failure mode and debonding morphology" showType={false} />
+        <ObservationGlossary test="tack" title="9. Definitions & References: failure mode and debonding morphology" />
       </section>
 
       <Section n={10} title="Export CSV">

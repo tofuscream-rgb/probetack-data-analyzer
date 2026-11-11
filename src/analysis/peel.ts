@@ -195,12 +195,55 @@ export const PEEL_PROPERTIES: { key: string; label: string; unit: string; digits
 ];
 
 /** Definitions of the peel results, shown under the Results table and in the Excel settings sheet. */
-/** Definitions of the peel results, with the source of each equation ('' = defined by this analyzer). */
-export const PEEL_DEFINITIONS: [term: string, definition: string, source: string][] = [
-  ['Steady-state window', 'Region used for the steady peel average. Default 20–80% of peeled length; a custom displacement window can be entered and is preferred when the steady region is known.', `Averaging over the steady part of the peel, leaving out initiation and release: ${sourceText(['astmD6862'])}. The 20–80% default is defined by this analyzer.`],
-  ['Average peel force F̄ (steady state)', 'Mean force inside the selected steady-state window, in N.', sourceText(['astmD6862', 'bartlett2023'])],
-  ['Peel energy G_peel', 'G_peel = F̄/w · (1 − cos θ), in J/m²; at 90°, G_peel = F̄/w. It is reported as measured peel energy, not automatically as intrinsic interfacial toughness.', `Energy balance of a steadily peeled, inextensible strip (elastic term neglected): ${sourceText(['kendall1975', 'creton2016', 'bartlett2023'])}.`],
-  ['Steady-state CV', 'Sample SD divided by mean steady-state force × 100%. It describes force variation but does not by itself prove stick–slip.', 'Standard coefficient of variation; not adhesion-specific.'],
-  ['Pre-steady-state maximum', 'Highest force before the selected steady-state window. It is not automatically interpreted as the true crack-initiation force.', 'Defined by this analyzer.'],
-  ['Peel rate', 'Least-squares slope of displacement versus time inside the steady-state window (mm/s).', 'Defined by this analyzer.'],
+/** Equations of the peel results with their sources (refs empty = defined by this analyzer or not adhesion-specific). */
+export const PEEL_EQUATIONS: { title: string; tex?: string; text: string; refs: string[]; note: string }[] = [
+  {
+    title: 'Average peel force F̄ (steady state)',
+    tex: String.raw`\bar{F}_{ss} = \frac{1}{n}\sum_{i \in \text{window}} F_i`,
+    text: 'Mean force inside the selected steady-state window, in N. Default window 20–80% of the peeled length; a custom displacement window can be entered and is preferred when the steady region is known.',
+    refs: ['astmD6862', 'bartlett2023'],
+    note: 'average peel force over the steady part of the peel, leaving out initiation and release (ASTM D6862; Bartlett et al. 2023). The 20–80% default window is defined by this analyzer.',
+  },
+  {
+    title: 'Peel energy G_peel',
+    tex: String.raw`G_{\text{peel}} = \frac{\bar{F}_{ss}}{w}\left(1 - \cos\theta\right),\qquad \theta = 90^{\circ}:\; G_{\text{peel}} = \frac{\bar{F}_{ss}}{w}`,
+    text: 'w = gel width, θ = peel angle; in J/m² (N/m). Reported as measured peel energy, not automatically as intrinsic interfacial toughness.',
+    refs: ['kendall1975', 'creton2016', 'bartlett2023'],
+    note: 'energy balance of a steadily peeled strip with the elastic (stretching) term neglected (Kendall 1975; Creton & Ciccotti 2016; Bartlett et al. 2023).',
+  },
+  {
+    title: 'Steady-state CV',
+    tex: String.raw`\mathrm{CV} = \frac{s_F}{\bar{F}_{ss}}\times 100\%`,
+    text: 's_F = sample SD of the force in the window. It describes force variation but does not by itself prove stick–slip.',
+    refs: [],
+    note: 'standard coefficient of variation; not adhesion-specific.',
+  },
+  {
+    title: 'Pre-steady-state maximum',
+    tex: String.raw`F_{\text{pre}} = \max_{\delta < \delta_{\text{window start}}} F(\delta)`,
+    text: 'Highest force before the selected steady-state window. It is not automatically interpreted as the true crack-initiation force.',
+    refs: [],
+    note: 'defined by this analyzer.',
+  },
+  {
+    title: 'Detachment and peeled length',
+    tex: String.raw`F < f\,F_{\max}\ \text{for}\ N\ \text{consecutive points}\;\Rightarrow\;\text{detachment}`,
+    text: 'Detachment = first point after the peak where the force stays below f = 5% of the peak for N = 20 points (both adjustable; a typed value overrides it). Peeled length = displacement at detachment (end of data if none); it sets the automatic window.',
+    refs: [],
+    note: 'defined by this analyzer.',
+  },
+  {
+    title: 'Peel rate',
+    tex: String.raw`v_{\text{peel}} = \frac{\mathrm{d}\delta}{\mathrm{d}t}\ \text{(least-squares slope in the window)}`,
+    text: 'Least-squares slope of displacement versus time inside the steady-state window (mm/s).',
+    refs: [],
+    note: 'defined by this analyzer.',
+  },
 ];
+
+/** Plain-text definitions with sources (Excel settings sheet), from PEEL_EQUATIONS. */
+export const PEEL_DEFINITIONS: [term: string, definition: string, source: string][] = PEEL_EQUATIONS.map((e) => [
+  e.title,
+  e.text,
+  e.refs.length ? `${e.note} ${sourceText(e.refs)}` : e.note.charAt(0).toUpperCase() + e.note.slice(1),
+]);

@@ -6,6 +6,55 @@ import { fmt } from '../common';
 import { CURVE_COLORS } from '../../plotting/colors';
 import { NumberField } from './NumberField';
 import { ObservationGlossary } from '../ObservationTools';
+import { EquationList, type EquationItem } from '../EquationList';
+
+/** Lap-shear equations with their sources (refs empty = defined by this analyzer or not adhesion-specific). */
+export function lapEquations(fraction: number, consecutive: number): EquationItem[] {
+  return [
+    {
+      title: 'Bonded overlap area',
+      tex: String.raw`A = L \times W`,
+      text: 'L = overlap length, W = overlap width (mm); A in mm². Gel thickness is recorded but does not enter the strength.',
+      refs: ['astmD1002'],
+      note: 'shear (overlap) area of a single-lap joint (ASTM D1002).',
+    },
+    {
+      title: 'Displacement and loading force',
+      tex: String.raw`\delta = \lvert z - z_0 \rvert,\qquad F = \lvert F_z \rvert\ \text{in the loading direction}`,
+      text: 'z₀ = first valid position of the run. The force sign with the larger magnitude is the loading direction (or set in Settings).',
+      refs: [],
+      note: 'data processing defined by this analyzer.',
+    },
+    {
+      title: 'Apparent nominal lap-shear strength',
+      tex: String.raw`\tau_{\max} = \frac{F_{\max}}{A}`,
+      text: 'In kPa (N/mm² × 1000). Average stress over the original bonded area at peak load, not the maximum local stress in the joint.',
+      refs: ['astmD1002'],
+      note: 'apparent shear strength of a single-lap joint = maximum load / shear area (ASTM D1002), applied by analogy to gel joints.',
+    },
+    {
+      title: 'Failure point',
+      tex: String.raw`F < ${fraction}\,F_{\max}\ \text{for}\ ${consecutive}\ \text{consecutive points}\;\Rightarrow\;\delta_{\text{failure}}`,
+      text: `First point after the peak where the force stays below ${(fraction * 100).toFixed(1)}% of F_max for ${consecutive} consecutive valid points (adjustable in Settings); a typed failure displacement overrides it.`,
+      refs: [],
+      note: 'defined by this analyzer.',
+    },
+    {
+      title: 'Apparent work to failure per bonded area',
+      tex: String.raw`\frac{W_{\text{fail}}}{A} = \frac{1}{A}\int_{0}^{\delta_{\text{failure}}} F\,\mathrm{d}\delta`,
+      text: 'Trapezoidal rule over forward displacement, N·mm / mm² × 1000 = J/m². An apparent quantity that may include elastic, viscoelastic, cohesive, interfacial and frictional contributions; not fracture toughness.',
+      refs: [],
+      note: 'defined by this analyzer (no literature source).',
+    },
+    {
+      title: 'Statistics',
+      tex: String.raw`\bar{x} = \frac{1}{n}\sum x_j,\qquad s = \sqrt{\frac{\sum (x_j - \bar{x})^2}{n - 1}}`,
+      text: 'Per Repeat/file over its runs; per condition over the Repeat/file means (each Repeat counts once).',
+      refs: [],
+      note: 'standard sample statistics; not adhesion-specific.',
+    },
+  ];
+}
 
 const MODES = Object.keys(FAILURE_MODE_LABEL) as FailureMode[];
 const digits = (u: string) => ({ N: 4, kPa: 2, mm: 3, 'J/m²': 2 }[u] ?? 3);
@@ -49,5 +98,6 @@ export function LapShearResults() {
     <h3 className="ls-h">Mean ± SD per condition (over Repeat/file means)</h3><div className="table-scroll"><table className="grid ls-summary"><thead><tr><th>Condition</th><th>Repeats</th><th>Runs</th>{SUMMARY_PROPERTIES.map((p)=><th key={p.key}>{p.label}<br/><small>({p.unit})</small></th>)}</tr></thead><tbody>
       {conditions.map((c)=>{const reps=repeats.filter((r)=>r.condition===c);return <tr key={c}><td>{c}</td><td>{reps.length}</td><td>{reps.reduce((n,r)=>n+r.runs.length,0)}</td>{SUMMARY_PROPERTIES.map((p)=><td key={p.key}>{ms(reps.map((r)=>r.props[p.key]),digits(p.unit))}</td>)}</tr>})}
     </tbody></table></div><p className="note">Each file/Repeat counts once at condition level.</p>
+    <EquationList items={lapEquations(ls.settings.failure.fraction, ls.settings.failure.consecutive)} title="Equations and sources: lap-shear results" />
     <ObservationGlossary test="lapShear" title="Definitions & References: failure mode" /></div>;
 }

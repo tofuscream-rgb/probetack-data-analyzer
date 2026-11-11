@@ -90,7 +90,7 @@ export function TackMethods({ n }: { n?: number }) {
             <Tex tex={it.tex} display />
             <p className="note">{it.text}</p>
             <p className="note source">
-              <strong>Source:</strong> {it.source.refs.length ? <>{it.source.refs.map((k) => `[${num(k)}]`).join(' ')} — </> : null}{it.source.note}
+              <strong>Source:</strong> {it.source.refs.length ? <>{it.source.refs.map(num).sort((x, y) => x - y).map((n) => `[${n}]`).join(' ')} — </> : null}{it.source.note}
             </p>
           </div>
         ))}

@@ -95,3 +95,25 @@ describe('sources of adhesion equations', () => {
     expect(g[2]).toMatch(/doi\.org\/10\.1088\/0022-3727\/8\/13\/005/); // Kendall 1975
   });
 });
+
+describe('sources of lap-shear and peel equations', () => {
+  it('every lap-shear equation states its source, and strength cites ASTM D1002', async () => {
+    const { lapEquations } = await import('../src/components/lapShear/LapShearResults');
+    const items = lapEquations(0.05, 20);
+    for (const it of items) {
+      expect(it.note.length, it.title).toBeGreaterThan(10);
+      if (!it.refs.length) expect(it.note, it.title).toMatch(/defined by this analyzer|not adhesion-specific/);
+    }
+    expect(items.find((it) => it.title.startsWith('Apparent nominal lap-shear strength'))!.refs).toEqual(['astmD1002']);
+    expect(items.find((it) => it.title === 'Failure point')!.tex).toContain('0.05');
+  });
+
+  it('every peel equation states its source, and peel energy cites Kendall 1975', async () => {
+    const { PEEL_EQUATIONS } = await import('../src/analysis/peel');
+    for (const it of PEEL_EQUATIONS) {
+      expect(it.tex, it.title).toBeTruthy();
+      if (!it.refs.length) expect(it.note, it.title).toMatch(/defined by this analyzer|not adhesion-specific/);
+    }
+    expect(PEEL_EQUATIONS.find((it) => it.title === 'Peel energy G_peel')!.refs).toContain('kendall1975');
+  });
+});

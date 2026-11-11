@@ -1,6 +1,7 @@
 import { usePeel, type PeelRun } from '../../state/peel';
 import { describe } from '../../analysis/lapShear';
-import { PEEL_DEFINITIONS, PEEL_PROPERTIES } from '../../analysis/peel';
+import { PEEL_EQUATIONS, PEEL_PROPERTIES } from '../../analysis/peel';
+import { EquationList } from '../EquationList';
 import { FAILURE_MODES, PEEL_MORPHOLOGIES } from '../../analysis/observations';
 import type { FailureMode, PeelMorphology, PeelRunMeta } from '../../types';
 import { CURVE_COLORS } from '../../plotting/colors';
@@ -142,12 +143,7 @@ export function PeelResults() {
       </div>
       <p className="note">Each file/Repeat counts once at condition level.</p>
 
-      <h3 className="ls-h">Definitions: peel results</h3>
-      <dl className="ls-definitions note">
-        {PEEL_DEFINITIONS.map(([a, b, src]) => (
-          <div key={a}><dt>{a}</dt><dd>{b} <span className="source"><strong>Source:</strong> {src}</span></dd></div>
-        ))}
-      </dl>
+      <EquationList items={PEEL_EQUATIONS} title="Equations and sources: peel results" />
       <ObservationGlossary test="peel" title="Definitions & References: failure mode and debonding morphology" />
     </div>
   );

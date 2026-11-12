@@ -12,8 +12,8 @@ const DIGITS: Record<string, number> = { gf: 2, N: 4, kPa: 3, MPa: 6, mm: 3, s: 
 const METRICS = SUMMARY_PROPERTIES.map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: DIGITS[p.unit] ?? 3 }));
 
 function LapShearCompare() {
-  const { ls, selected, set } = useLapShear();
-  const items = selected.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, values: Object.fromEntries(SUMMARY_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
+  const { ls, selectedAll, set } = useLapShear();
+  const items = selectedAll.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, values: Object.fromEntries(SUMMARY_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
   return (
     <RunCompare
       items={items}

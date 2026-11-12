@@ -52,6 +52,7 @@ export function defaultCompare(): CompareSelection {
 
 export function defaultLapShear(): LapShearState {
   return {
+    pick: { chargeRatio: null, concentration: null, substrate: null },
     settings: {
       integration: { mode: 'full', fromMm: 0, toMm: 5 },
       baseline: { enabled: false, points: 30, maxSpreadGf: 2 },

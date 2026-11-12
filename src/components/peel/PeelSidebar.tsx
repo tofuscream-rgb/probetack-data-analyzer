@@ -6,7 +6,7 @@ import { RunPicker } from '../RunPicker';
 import { NumberField } from '../lapShear/NumberField';
 import { fmt } from '../common';
 import { uniqueFileNames } from '../../state/experiment';
-import type { ExperimentPick } from '../../types';
+import { ExperimentPicker } from '../ExperimentPicker';
 
 type Dims = { lengthMm: number; widthMm: number; thicknessMm: number; angleDeg: number };
 
@@ -42,21 +42,6 @@ function GelDimensions() {
   );
 }
 
-const ALL = '__all__';
-
-/** Dropdown with an "All" choice; null = all. */
-function PickSelect({ label, value, options, allLabel, onChange }: { label: string; value: string | null; options: { value: string; label: string }[]; allLabel: string; onChange: (v: string | null) => void }) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      <select value={value ?? ALL} onChange={(e) => onChange(e.target.value === ALL ? null : e.target.value)}>
-        <option value={ALL}>{allLabel}</option>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </label>
-  );
-}
-
 export function PeelSidebar() {
   const { filesByMode, meta } = useApp();
   const { ps, runs, picked, pick, options, setPick, selectedIds, setPickedSelected } = usePeel();
@@ -84,8 +69,6 @@ export function PeelSidebar() {
     const p = parts(l.parsed.fileId);
     return [...varies.map((k) => p[k]), subName.get(p[2].toLowerCase()) ?? p[2]].filter(Boolean).join(' · ');
   };
-  const choose = (patch: Partial<ExperimentPick>) => setPick(patch);
-  const defaultConc = pick.concentration !== null && options.concentrations.find((o) => o.value === pick.concentration)?.label.includes('default');
   return (
     <nav className="sidebar" aria-label="Open 90° peel files and choose runs">
       <ImportStep />
@@ -98,13 +81,10 @@ export function PeelSidebar() {
           </p>
         ) : (
           <>
-            <PickSelect label="Charge ratio" value={pick.chargeRatio} options={options.chargeRatios} allLabel="All charge ratios" onChange={(v) => choose({ chargeRatio: v })} />
-            <PickSelect label="Total monomer concentration" value={pick.concentration} options={options.concentrations} allLabel="All concentrations" onChange={(v) => choose({ concentration: v })} />
-            <PickSelect label="Substrate" value={pick.substrate} options={options.substrates} allLabel="All substrates" onChange={(v) => choose({ substrate: v })} />
+            <ExperimentPicker pick={pick} options={options} setPick={setPick} />
             <p className="hint">
               {files.length} file(s), {picked.length} run(s) in this choice. Choose <em>All</em> to put several charge ratios, concentrations or substrates on one graph.
             </p>
-            {defaultConc && <p className="hint warn">No concentration was found in the folder names, so 2.1 M is assumed.</p>}
           </>
         )}
       </section>

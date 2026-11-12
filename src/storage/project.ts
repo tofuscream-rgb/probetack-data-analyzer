@@ -94,6 +94,14 @@ function migrateView(d: RunGraphView, v: Partial<RunGraphView> | undefined): Run
   return out;
 }
 
+function migrateExperimentPick(pick: Partial<LapShearState['pick']> | undefined): LapShearState['pick'] {
+  return {
+    chargeRatio: typeof pick?.chargeRatio === 'string' ? pick.chargeRatio : null,
+    concentration: typeof pick?.concentration === 'string' ? pick.concentration : null,
+    substrate: typeof pick?.substrate === 'string' ? pick.substrate : null,
+  };
+}
+
 /** Lap-shear state with every field present; unknown or damaged values fall back to defaults. */
 export function migrateLapShear(raw: Partial<LapShearState> | undefined): LapShearState {
   const d = defaultLapShear();
@@ -120,6 +128,7 @@ export function migrateLapShear(raw: Partial<LapShearState> | undefined): LapShe
       gapFactor: pos(s.gapFactor, d.settings.gapFactor),
       defaults: { ...d.settings.defaults, ...(s.defaults ?? {}) },
     },
+    pick: migrateExperimentPick(r.pick),
     runs,
     selected: Array.isArray(r.selected) ? r.selected : null,
     fileId: typeof r.fileId === 'string' ? r.fileId : null,
@@ -163,11 +172,7 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
       defaults: { ...d.settings.defaults, ...(s.defaults ?? {}) },
     },
     runs,
-    pick: {
-      chargeRatio: typeof r.pick?.chargeRatio === 'string' ? r.pick.chargeRatio : null,
-      concentration: typeof r.pick?.concentration === 'string' ? r.pick.concentration : null,
-      substrate: typeof r.pick?.substrate === 'string' ? r.pick.substrate : null,
-    },
+    pick: migrateExperimentPick(r.pick),
     selected: Array.isArray(r.selected) ? r.selected : null,
     fileId: typeof r.fileId === 'string' ? r.fileId : null,
     view: migrateView(d.view, r.view),

@@ -345,6 +345,8 @@ export interface RunCompareSelection {
 }
 
 export interface LapShearState {
+  /** Experiment shown in the sidebar, graph and results. */
+  pick: ExperimentPick;
   settings: LapShearSettings;
   /** Per-run dimensions, failure mode and manual failure point, keyed by cycleId. */
   runs: Record<string, LapShearRunMeta>;

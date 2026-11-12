@@ -91,7 +91,7 @@ function Row({ r, color }: { r: LapShearRun; color: string }) {
 }
 export function LapShearResults() {
   const { ls, selected } = useLapShear(); const ok=selected.filter((r)=>r.result.ok);
-  if(!selected.length)return <p className="note pad">Tick runs in step 2 on the left to see their results.</p>;
+  if(!selected.length)return <p className="note pad">Tick runs in step 3 on the left to see their results.</p>;
   const byFile=new Map<string,typeof ok>(); for(const r of ok)byFile.set(r.file.fileId,[...(byFile.get(r.file.fileId)??[]),r]);
   const repeats=[...byFile.entries()].map(([fileId,runs])=>({fileId,runs,label:runs[0].file.name,condition:runs[0].condition,props:Object.fromEntries(SUMMARY_PROPERTIES.map((p)=>[p.key,describe(runs.map((r)=>p.get(r.result))).mean]))}));
   const conditions=[...new Set(repeats.map((r)=>r.condition))];

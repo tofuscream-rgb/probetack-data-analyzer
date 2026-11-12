@@ -7,7 +7,8 @@ import { useCallback, useMemo } from 'react';
 import { useApp } from './AppContext';
 import { groupValue, type CycleResult } from '../analysis/engine';
 import { bySubstrate } from '../analysis/substrates';
-import type { ExperimentSelection, ParsedFile } from '../types';
+import { matchesPick, normalizePick, numericFirst, pickOptions, pickTitle, type PickItem } from '../analysis/experimentPick';
+import type { ExperimentPick, ExperimentSelection, ParsedFile } from '../types';
 
 export interface ExperimentFile {
   file: ParsedFile;
@@ -22,16 +23,35 @@ export interface Option {
   label: string;
 }
 
-const numericFirst = (a: string, b: string) => {
-  const x = Number(a);
-  const y = Number(b);
-  if (Number.isFinite(x) && Number.isFinite(y)) return x - y;
-  if (Number.isFinite(x)) return -1;
-  if (Number.isFinite(y)) return 1;
-  return a.localeCompare(b, undefined, { numeric: true });
-};
+/** The chooser fields of a run (as used by every test's "Choose your experiment"). */
+export function tackPickItem(r: CycleResult): PickItem {
+  return {
+    chargeRatio: groupValue(r, 'chargeRatio'),
+    concentration: groupValue(r, 'concentrationM'),
+    concentrationDefault: r.meta.concentrationM.source === 'default',
+    substrate: groupValue(r, 'substrate'),
+    gel: groupValue(r, 'gel'),
+    hold: groupValue(r, 'holdTimeS'),
+    fileId: r.file.fileId,
+  };
+}
 
-const pick = (stored: string | null, options: Option[]) => (stored !== null && options.some((o) => o.value === stored) ? stored : options[0]?.value ?? null);
+/** Stored tack selection → shared pick (null = all; substrate and gel compared in lower case). */
+const lower = (v: string | null | undefined) => (v === null || v === undefined ? null : v === '—' ? v : v.trim().toLowerCase());
+const asPick = (s: ExperimentSelection): ExperimentPick => ({
+  chargeRatio: s.chargeRatio ?? null,
+  concentration: s.concentrationM ?? null,
+  substrate: lower(s.substrate),
+  gel: lower(s.gel),
+  hold: s.hold ?? null,
+});
+
+const condOrder = (a: ExperimentFile, b: ExperimentFile) => {
+  const x = tackPickItem(a.runs[0]);
+  const y = tackPickItem(b.runs[0]);
+  return numericFirst(x.chargeRatio, y.chargeRatio) || numericFirst(x.concentration, y.concentration) || bySubstrate(x.substrate, y.substrate)
+    || (x.gel ?? '').localeCompare(y.gel ?? '', undefined, { numeric: true });
+};
 
 export function useExperiment() {
   const { derived, project, update } = useApp();
@@ -46,39 +66,25 @@ export function useExperiment() {
     }
     return [...m.values()];
   }, [derived]);
-
-  const first = (e: ExperimentFile) => e.runs[0];
-  const cr = (e: ExperimentFile) => groupValue(first(e), 'chargeRatio');
-  const conc = (e: ExperimentFile) => groupValue(first(e), 'concentrationM');
-  const sub = (e: ExperimentFile) => groupValue(first(e), 'substrate');
+  const items = useMemo(() => derived.ordered.map(tackPickItem), [derived]);
 
   const result = useMemo(() => {
-    const options = (list: ExperimentFile[], key: (e: ExperimentFile) => string, label: (v: string, l: ExperimentFile[]) => string): Option[] =>
-      [...new Set(list.map(key))].sort(numericFirst).map((v) => ({ value: v, label: label(v, list.filter((e) => key(e) === v)) }));
-
-    const crOptions = options(byFile, cr, (v) => (v === '—' ? 'unknown' : v));
-    const chargeRatio = pick(sel.chargeRatio, crOptions);
-    const inCr = byFile.filter((e) => cr(e) === chargeRatio);
-    const concOptions = options(inCr, conc, (v, l) => `${v} M${l.every((e) => first(e).meta.concentrationM.source === 'default') ? ' (default)' : ''}`);
-    const concentrationM = pick(sel.concentrationM, concOptions);
-    const inConc = inCr.filter((e) => conc(e) === concentrationM);
-    const substrateOptions = options(inConc, sub, (v) => (v === '—' ? 'unknown' : v)).sort((a, b) => bySubstrate(a.label, b.label)); // PET, stainless steel, glass first
-    const substrate = pick(sel.substrate, substrateOptions);
-    const files = inConc
-      .filter((e) => sub(e) === substrate)
-      .sort((a, b) => (a.holdTimeS ?? Infinity) - (b.holdTimeS ?? Infinity) || (a.repeat ?? 0) - (b.repeat ?? 0) || a.file.name.localeCompare(b.file.name, undefined, { numeric: true }));
+    const pick = normalizePick(items, asPick(sel));
+    const options = pickOptions(items, pick);
+    const files = byFile
+      .filter((e) => matchesPick(tackPickItem(e.runs[0]), pick))
+      .sort((a, b) => condOrder(a, b) || (a.holdTimeS ?? Infinity) - (b.holdTimeS ?? Infinity) || (a.repeat ?? 0) - (b.repeat ?? 0) || a.file.name.localeCompare(b.file.name, undefined, { numeric: true }));
     const main = files.find((e) => e.file.fileId === sel.fileId) ?? files[0] ?? null;
     const overlayFiles = sel.overlay ? files.filter((e) => e !== main && sel.overlayFileIds.includes(e.file.fileId)) : [];
     const graphFiles = main ? [main, ...overlayFiles] : [];
     return {
-      crOptions,
-      concOptions,
-      substrateOptions,
-      chargeRatio,
-      concentrationM,
-      substrate,
+      pick,
+      options,
+      chargeRatio: pick.chargeRatio,
+      concentrationM: pick.concentration,
+      substrate: pick.substrate,
       overlay: sel.overlay,
-      /** Every file of the chosen experiment, sorted by holding time and repeat. */
+      /** Every file of the chosen experiment, sorted by condition, holding time and repeat. */
       files,
       main,
       overlayFiles,
@@ -87,13 +93,20 @@ export function useExperiment() {
       graphRuns: graphFiles.flatMap((e) => e.runs),
       /** All runs of the chosen experiment. */
       experimentRuns: files.flatMap((e) => e.runs),
-      title: main ? experimentTitle(main.runs[0]) : '',
+      /** Chosen experiment, naming only what is chosen ("CR 0.25 · 2.5 M · glass"). */
+      title: pickTitle(pick, options),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [byFile, sel]);
+  }, [byFile, items, sel]);
 
   const set = useCallback((patch: Partial<ExperimentSelection>) => update((p) => ({ ...p, experiment: { ...p.experiment, ...patch } })), [update]);
-  return { ...result, set, hasData: byFile.length > 0 };
+  /** Change the chooser (null = all); the file to view is kept when it is still part of the choice. */
+  const setPick = useCallback((patch: Partial<ExperimentPick>) => {
+    const next = normalizePick(items, { ...result.pick, ...patch });
+    set({ chargeRatio: next.chargeRatio, concentrationM: next.concentration, substrate: next.substrate, gel: next.gel, hold: next.hold });
+  }, [items, result.pick, set]);
+  /** Whether a run belongs to the chosen experiment, optionally ignoring some choices (e.g. substrate). */
+  const inPick = useCallback((r: CycleResult, ignore: Partial<ExperimentPick> = {}) => matchesPick(tackPickItem(r), { ...result.pick, ...ignore }), [result.pick]);
+  return { ...result, set, setPick, inPick, hasData: byFile.length > 0 };
 }
 
 /** "Charge ratio 0.25 · 2.5 M · Glass" */

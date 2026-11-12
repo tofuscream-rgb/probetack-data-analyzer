@@ -1,3 +1,4 @@
+import { ContextBar } from '../ContextBar';
 import { useApp } from '../../state/AppContext';
 import { useLapShear } from '../../state/lapShear';
 import type { LapShearState } from '../../types';
@@ -7,7 +8,8 @@ import { LapShearResults } from './LapShearResults';
 import { LapShearSettings } from './LapShearSettings';
 import { RunCompare } from '../RunCompare';
 import { AdhesionDataAnalysis } from '../AdhesionDataAnalysis';
-import { lapShearAnalysisRow } from '../../analysis/adhesionReview';
+import { includedRuns, lapShearAnalysisRow } from '../../analysis/adhesionReview';
+import { useMemo } from 'react';
 import { SUMMARY_PROPERTIES } from '../../analysis/lapShear';
 
 const DIGITS: Record<string, number> = { gf: 2, N: 4, kPa: 3, MPa: 6, mm: 3, s: 2, mJ: 3, 'J/m²': 2 };
@@ -33,8 +35,12 @@ function LapShearAnalysis() {
 }
 
 function LapShearCompare() {
-  const { ls, selectedAll, set } = useLapShear();
-  const items = selectedAll.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, values: Object.fromEntries(SUMMARY_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
+  const { meta, project } = useApp();
+  const { ls, runs, set } = useLapShear();
+  // Every enabled run, with the review decisions of Data analysis; the tab has its own filters.
+  const included = useMemo(() => includedRuns(runs.map((r) => lapShearAnalysisRow(r, meta.get(r.file.fileId)?.gel.value ?? null)), project.settings.cycle, project.settings.runExclusion.excludeClasses, ls.analysisInclusion ?? {}),
+    [runs, meta, project.settings.cycle, project.settings.runExclusion.excludeClasses, ls.analysisInclusion]);
+  const items = runs.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, included: included.has(r.id), values: Object.fromEntries(SUMMARY_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
   return (
     <RunCompare
       items={items}
@@ -63,6 +69,7 @@ export function LapShearWorkspace() {
   const problems = files.filter((f) => f.parsed.status !== 'ok').length;
   return (
     <section className="main-area">
+      <ContextBar />
       <div className="main-tabs" role="tablist" aria-label="Lap-shear views">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={ls.tab === t.id} className={`tab ${ls.tab === t.id ? 'active' : ''} ${t.minor ? 'minor' : ''}`} onClick={() => set({ tab: t.id })}>

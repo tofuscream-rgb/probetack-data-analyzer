@@ -99,6 +99,8 @@ function migrateExperimentPick(pick: Partial<LapShearState['pick']> | undefined)
     chargeRatio: typeof pick?.chargeRatio === 'string' ? pick.chargeRatio : null,
     concentration: typeof pick?.concentration === 'string' ? pick.concentration : null,
     substrate: typeof pick?.substrate === 'string' ? pick.substrate : null,
+    gel: typeof pick?.gel === 'string' ? pick.gel : null,
+    hold: typeof pick?.hold === 'string' ? pick.hold : null,
   };
 }
 

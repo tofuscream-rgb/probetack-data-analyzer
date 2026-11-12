@@ -1,3 +1,4 @@
+import { ContextBar } from './components/ContextBar';
 import { useEffect, useState, type DragEvent } from 'react';
 import { loadPlotly } from './plotting/PlotlyChart';
 import { warmUpWorker } from './parser/workerClient';
@@ -31,6 +32,7 @@ function MainArea() {
   const problems = files.filter((f) => f.parsed.status !== 'ok').length;
   return (
     <section className="main-area">
+      <ContextBar />
       <div className="main-tabs" role="tablist" aria-label="Views">
         {TABS.map((t) => (
           <button

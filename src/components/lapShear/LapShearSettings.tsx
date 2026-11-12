@@ -12,7 +12,7 @@ export function LapShearSettings() {
     <div className="settings-panel">
       <div className="settings-grid">
         <Section title="Work / integration">
-          <p className="note">The Results tab reports apparent work to failure per bonded area. Use the Graph tab to choose an integration interval for shading and Excel diagnostics.</p>
+          <p className="note">The Lap Shear metrics tab reports apparent work to failure per bonded area. Use the Graph tab to choose an integration interval for shading and Excel diagnostics.</p>
           <NumberField label="Treat a time step longer than … × the median step as a gap" value={s.gapFactor} positive onCommit={(v) => v !== null && setSettings({ gapFactor: v })} />
         </Section>
 
@@ -26,7 +26,7 @@ export function LapShearSettings() {
           </div>
           <p className="note">
             Searched only after the peak. If the force never stays below the threshold (for example because of frictional sliding), the failure
-            displacement is left blank. The end of machine travel is never taken as separation. A value typed in the Results tab always wins.
+            displacement is left blank. The end of machine travel is never taken as separation. A value typed in the Lap Shear metrics tab always wins.
           </p>
         </Section>
 
@@ -59,7 +59,7 @@ export function LapShearSettings() {
             <NumberField label="Overlap width (mm)" value={s.defaults.widthMm} positive onCommit={(v) => v !== null && sub('defaults', { widthMm: v })} />
             <NumberField label="Gel thickness (mm)" value={s.defaults.thicknessMm} positive onCommit={(v) => v !== null && sub('defaults', { thicknessMm: v })} />
           </div>
-          <p className="note">Used for runs whose dimensions you have not edited. Each run's own dimensions are set in the Results tab.</p>
+          <p className="note">Used for runs whose dimensions you have not edited. Each run's own dimensions are set in the Lap Shear metrics tab.</p>
         </Section>
       </div>
       <button className="link" onClick={() => set({ settings: defaultLapShear().settings })}>Reset lap-shear settings to defaults</button>

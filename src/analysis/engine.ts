@@ -199,7 +199,7 @@ export function computeDerived(
         conditionKey: '',
         travelFraction: null,
       };
-      r.conditionKey = s.cycle.compareBy.map((k) => groupValue(r, k)).join(' | ');
+      r.conditionKey = conditionKeys(s.cycle.compareBy).map((k) => groupValue(r, k)).join(' | ');
       applyIntrinsicFlags(r, s);
       results.set(cycle.cycleId, r);
       ordered.push(r);
@@ -464,13 +464,21 @@ function summarize(items: { r: CycleResult; peak: number }[]): SummaryStats {
 }
 
 /**
+ * Grouping keys of a condition: the chosen keys plus concentration and gel, which are always
+ * part of it so different concentrations or gels are never merged silently. Runs without a gel
+ * in their folder names share the gel value "—", so data sets without gels group as before.
+ */
+export function conditionKeys(keys: GroupKey[]): GroupKey[] {
+  return [...keys, ...(['concentrationM', 'gel'] as GroupKey[]).filter((k) => !keys.includes(k))];
+}
+
+/**
  * Groups runs and reports raw statistics (every run with a finite raw peak,
  * whatever its status) next to processed statistics (included and manually kept
  * runs, using their processed peaks).
  */
 export function computeGroups(all: CycleResult[], groupBy: GroupKey[]): GroupStats[] {
-  // Concentration is always part of the key so different concentrations are never merged silently.
-  const keys: GroupKey[] = groupBy.includes('concentrationM') ? groupBy : [...groupBy, 'concentrationM'];
+  const keys = conditionKeys(groupBy);
   const map = new Map<string, CycleResult[]>();
   for (const r of all) {
     if (!Number.isFinite(r.peakRaw) && !(isIncluded(r) && Number.isFinite(r.peakProcessed))) continue;

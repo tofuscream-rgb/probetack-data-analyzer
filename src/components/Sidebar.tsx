@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { MODE_LABEL, disabledOf, useApp, withDisabled } from '../state/AppContext';
-import { useExperiment, type ExperimentFile } from '../state/experiment';
+import { uniqueFileNames, useExperiment, type ExperimentFile } from '../state/experiment';
+import { ExperimentPicker } from './ExperimentPicker';
 import { isIncluded, STATUS_LABEL, type CycleResult } from '../analysis/engine';
 import { QC_LABEL } from '../analysis/pointOutliers';
 import { QC_COLORS } from '../plotting/colors';
@@ -47,29 +48,30 @@ function FileSelector() {
     folders.set(dir, [...(folders.get(dir) ?? []), l]);
   }
   const used = files.filter((l) => !off.has(l.parsed.fileId)).length;
+  const common = commonFolder([...folders.keys()]);
   return (
     <>
       <div className="file-select-bar">
-        <span>{used} of {files.length} TXT file(s) used</span>
+        <span>{used} of {files.length} enabled</span>
         <button className="link small" onClick={() => setOff(files.map((l) => l.parsed.fileId), false)}>Select all</button>
         <button className="link small" onClick={() => setOff(files.map((l) => l.parsed.fileId), true)}>None</button>
         <button className="link small danger-link" onClick={() => remove(files.map((l) => l.parsed.fileId), `all ${files.length} file(s)`)} title="Remove every file from this test">Remove all</button>
       </div>
       <div className="file-list" aria-label="Imported files: untick a file to leave it out">
-        {[...folders].sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true })).map(([dir, list]) => {
+        {[...folders].sort(([a], [b]) => naturalPath(a, b)).map(([dir, list]) => {
           const ids = list.map((l) => l.parsed.fileId);
           const n = ids.filter((id) => !off.has(id)).length;
           return (
             <div key={dir} className="fl-folder">
               <label className="fl-folder-head" title={dir}>
                 <TriCheck on={n === ids.length} some={n > 0} onChange={() => setOff(ids, n === ids.length)} label={`Use all files in ${dir}`} />
-                <span className="fl-name">{dir}</span>
+                <span className="fl-name">{dir.slice(common.length) || dir}</span>
                 <small>{n}/{ids.length}</small>
                 <button className="icon fl-remove" title={`Remove the ${ids.length} file(s) of this folder from ${MODE_LABEL[mode]}`} onClick={(e) => { e.preventDefault(); remove(ids, `the ${ids.length} file(s) in “${dir}”`); }}>×</button>
               </label>
               {list
                 .slice()
-                .sort((a, b) => a.parsed.name.localeCompare(b.parsed.name, undefined, { numeric: true }))
+                .sort((a, b) => naturalPath(a.parsed.name, b.parsed.name))
                 .map((l) => (
                   <label key={l.parsed.fileId} className={`fl-file ${off.has(l.parsed.fileId) ? 'off' : ''}`} title={l.parsed.path}>
                     <input type="checkbox" checked={!off.has(l.parsed.fileId)} onChange={(e) => setOff([l.parsed.fileId], !e.target.checked)} />
@@ -82,152 +84,226 @@ function FileSelector() {
           );
         })}
       </div>
-      <p className="hint">These files belong to {MODE_LABEL[mode]} only. Untick a file to leave it out of the graphs, results and Excel export, or × to remove it. Subfolders are preserved; files are read on this computer only.</p>
+      <p className="hint">{common ? <>Folders inside <em>{common.replace(/\/$/, '')}</em>. </> : null}Untick a file to leave it out of every graph, result and export ({MODE_LABEL[mode]} only); × removes it from the page. Your original files are never changed.</p>
     </>
   );
 }
 
-const sizeLabel = (bytes: number) => (bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} kB`);
-const holdLabel = (e: ExperimentFile) => (e.holdTimeS !== null ? `${e.holdTimeS} s` : '');
+/** Natural order of paths: numbers by value in each folder name (0.25 before 0.5, 2 s before 10 s). */
+export function naturalPath(a: string, b: string): number {
+  const x = a.split('/');
+  const y = b.split('/');
+  for (let i = 0; i < Math.min(x.length, y.length); i++) {
+    const nx = /^\d+(?:[.,]\d+)?/.exec(x[i]);
+    const ny = /^\d+(?:[.,]\d+)?/.exec(y[i]);
+    if (nx && ny) {
+      const d = parseFloat(nx[0].replace(',', '.')) - parseFloat(ny[0].replace(',', '.'));
+      if (d) return d;
+    }
+    const c = x[i].localeCompare(y[i], undefined, { numeric: true, sensitivity: 'base' });
+    if (c) return c;
+  }
+  return x.length - y.length;
+}
 
-/** Step 1, shared by both experiment modes: import a folder, TXT files or a ZIP, and tick the files to use. */
+/** Folder prefix shared by every folder ("Probe tack/Tack Nov/"), shown once instead of on every row. */
+function commonFolder(dirs: string[]): string {
+  if (dirs.length < 2) return '';
+  const parts = dirs.map((d) => d.split('/'));
+  let n = 0;
+  while (parts.every((p) => p.length > n + 1 && p[n] === parts[0][n])) n++;
+  return n ? parts[0].slice(0, n).join('/') + '/' : '';
+}
+
+const sizeLabel = (bytes: number) => (bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} kB`);
+
+/** What the import gave: usable files and runs of the enabled files, and anything skipped. */
+function ImportSummary() {
+  const { files, skipped, project, update } = useApp();
+  const off = new Set(disabledOf(project, project.mode));
+  const enabled = files.filter((l) => !off.has(l.parsed.fileId));
+  const usable = enabled.filter((l) => l.parsed.status !== 'error' && l.cycles.length > 0);
+  const runs = usable.reduce((n, l) => n + l.cycles.length, 0);
+  const unusable = files.filter((l) => l.parsed.status === 'error' || l.cycles.length === 0).length;
+  const warnings = files.filter((l) => l.parsed.status === 'warning').length;
+  const openFiles = () => update((p) => project.mode === 'tack' ? { ...p, mainTab: 'files' } : project.mode === 'lapShear' ? { ...p, lapShear: { ...p.lapShear, tab: 'files' } } : { ...p, peel: { ...p.peel, tab: 'files' } });
+  const problems = unusable + skipped.length + warnings;
+  return (
+    <div className="import-summary" role="status">
+      <strong>{usable.length} usable file{usable.length === 1 ? '' : 's'} · {runs} run{runs === 1 ? '' : 's'}</strong>
+      <span className="note">{files.length} imported{off.size ? `, ${files.length - off.size} enabled` : ', all enabled'}</span>
+      {problems > 0 && (
+        <span className="note warn">
+          {[unusable && `${unusable} without usable data`, warnings && `${warnings} with warnings`, skipped.length && `${skipped.length} non-TXT skipped`].filter(Boolean).join(' · ')}{' '}
+          <button className="link small" onClick={openFiles}>Details</button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Step 1, shared by every test: import a folder, TXT files or a ZIP, and enable the files to use. */
 export function ImportStep() {
   const { files, pending, importFiles, loadExample, project } = useApp();
   const [mode, setMode] = useState<ImportMode>('folder');
   const folderInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const zipInput = useRef<HTMLInputElement>(null);
-  const browse = () => (mode === 'folder' ? folderInput : mode === 'files' ? fileInput : zipInput).current?.click();
+  const inputOf = (m: ImportMode) => (m === 'folder' ? folderInput : m === 'files' ? fileInput : zipInput);
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) importFiles(e.target.files);
     e.target.value = '';
   };
+  const testName = project.mode === 'tack' ? 'probe-tack' : project.mode === 'lapShear' ? 'lap-shear' : '90° peel';
   return (
-      <section className="step">
-        <h2>1. Open your {project.mode === 'tack' ? 'probe-tack' : project.mode === 'lapShear' ? 'lap-shear' : '90° peel'} files</h2>
-        <fieldset className="radio-group">
-          <legend>Import</legend>
-          {([
-            ['folder', 'Choose folder'],
-            ['files', 'Choose TXT file(s)'],
-            ['zip', 'ZIP file'],
-          ] as [ImportMode, string][]).map(([m, label]) => (
-            <label key={m} className="radio">
-              <input type="radio" name="import-mode" checked={mode === m} onChange={() => setMode(m)} /> {label}
-            </label>
-          ))}
-        </fieldset>
-        <button className="primary browse" onClick={browse}>
-          {mode === 'folder' ? 'Browse for experiment folder' : mode === 'files' ? 'Browse for TXT files' : 'Browse for ZIP file'}
-        </button>
-        <input ref={folderInput} type="file" hidden multiple {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} onChange={onPick} />
-        <input ref={fileInput} type="file" hidden multiple accept=".txt,text/plain" onChange={onPick} />
-        <input ref={zipInput} type="file" hidden accept=".zip,application/zip" onChange={onPick} />
-        {files.length > 0 ? (
-          <FileSelector />
-        ) : (
-          <p className="hint">Files opened here are used for {MODE_LABEL[project.mode]} only. You can also drag a folder onto the page. Files are read on this computer only.</p>
-        )}
-        {pending.length > 0 && (
-          <div className="banner warn">
-            <strong>{pending.length} project file(s) not connected.</strong> Select the original folder or files; they are matched by content, so moved files are found too.
+    <section className="step">
+      <h2>1. Open {files.length ? 'files' : `your ${testName} files`}</h2>
+      <input ref={folderInput} type="file" hidden multiple {...({ webkitdirectory: '', directory: '' } as Record<string, string>)} onChange={onPick} />
+      <input ref={fileInput} type="file" hidden multiple accept=".txt,text/plain" onChange={onPick} />
+      <input ref={zipInput} type="file" hidden accept=".zip,application/zip" onChange={onPick} />
+      {files.length > 0 ? (
+        <>
+          <ImportSummary />
+          <div className="add-files" role="group" aria-label="Add more files">
+            <span>Add:</span>
+            <button className="small" onClick={() => folderInput.current?.click()}>Folder</button>
+            <button className="small" onClick={() => fileInput.current?.click()}>TXT files</button>
+            <button className="small" onClick={() => zipInput.current?.click()}>ZIP</button>
           </div>
-        )}
-        {!files.length && project.mode === 'tack' && (
-          <button className="link" onClick={loadExample}>
-            Try it with example data
+          <details className="enabled-files">
+            <summary>Imported files — enable or disable</summary>
+            <FileSelector />
+          </details>
+        </>
+      ) : (
+        <>
+          <fieldset className="radio-group">
+            <legend>Import</legend>
+            {([
+              ['folder', 'Folder (with sub-folders)'],
+              ['files', 'TXT file(s)'],
+              ['zip', 'ZIP file'],
+            ] as [ImportMode, string][]).map(([m, label]) => (
+              <label key={m} className="radio">
+                <input type="radio" name="import-mode" checked={mode === m} onChange={() => setMode(m)} /> {label}
+              </label>
+            ))}
+          </fieldset>
+          <button className="primary browse" onClick={() => inputOf(mode).current?.click()}>
+            {mode === 'folder' ? 'Browse for experiment folder' : mode === 'files' ? 'Browse for TXT files' : 'Browse for ZIP file'}
           </button>
-        )}
-      </section>
+          <p className="hint">Files opened here are used for {MODE_LABEL[project.mode]} only. You can also drag a folder onto the page. Files are read on this computer and never uploaded.</p>
+        </>
+      )}
+      {pending.length > 0 && (
+        <div className="banner warn">
+          <strong>{pending.length} project file(s) not connected.</strong> Select the original folder or files; they are matched by content, so moved files are found too.
+        </div>
+      )}
+      {!files.length && project.mode === 'tack' && (
+        <button className="link" onClick={loadExample}>
+          Try it with example data
+        </button>
+      )}
+    </section>
   );
+}
+
+/**
+ * Probe Tack step 3: tick the files to draw. Files are grouped by condition when the choice spans
+ * several; the name is the file name, with its folder path when two files share a name.
+ */
+function TackFilePicker() {
+  const ex = useExperiment();
+  const [query, setQuery] = useState('');
+  const graphIds = ex.graphFiles.map((e) => e.file.fileId);
+  const names = uniqueFileNames(ex.files.map((e) => e.file));
+  const setGraph = (ids: string[]) => {
+    const ordered = ex.files.map((e) => e.file.fileId).filter((id) => ids.includes(id));
+    if (!ordered.length) return; // at least one file stays on the graph
+    ex.set({ fileId: ordered[0], overlayFileIds: ordered.slice(1), overlay: ordered.length > 1 });
+  };
+  const groupKey = (e: ExperimentFile) => conditionLabel(e.runs[0]);
+  const groups = new Map<string, ExperimentFile[]>();
+  const q = query.trim().toLowerCase();
+  for (const e of ex.files) {
+    if (q && !e.file.path.toLowerCase().includes(q)) continue;
+    groups.set(groupKey(e), [...(groups.get(groupKey(e)) ?? []), e]);
+  }
+  const nRuns = ex.graphRuns.length;
+  return (
+    <>
+      {ex.files.length > 6 && <input type="search" className="run-search" placeholder="Find a file by name or folder" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Find a file" />}
+      <div className="file-select-bar">
+        <span>{graphIds.length} file{graphIds.length === 1 ? '' : 's'} · {nRuns} run{nRuns === 1 ? '' : 's'} on the graph</span>
+        <button className="link small" onClick={() => setGraph(ex.files.map((e) => e.file.fileId))}>All</button>
+        <button className="link small" onClick={() => ex.main && setGraph([ex.main.file.fileId])}>Only first</button>
+      </div>
+      <div className="file-list run-picker" aria-label="Files of the chosen experiment: tick the files to draw">
+        {groups.size === 0 && <p className="hint pad-s">No file matches “{query}”.</p>}
+        {[...groups].map(([g, list]) => (
+          <div key={g} className="fl-group">
+            {groups.size > 1 || ex.files.length !== list.length ? <div className="fl-group-title">{g}</div> : null}
+            {list.map((e) => {
+              const on = graphIds.includes(e.file.fileId);
+              const name = e.file.name;
+              const full = names.get(e.file.fileId) ?? name;
+              const context = full !== name ? full.slice(0, -name.length).replace(/\/$/, '') : '';
+              return (
+                <div key={e.file.fileId} className={`fl-file tack-file ${on ? 'on' : ''}`} title={e.file.path}>
+                  <input type="checkbox" checked={on} onChange={(ev) => setGraph(ev.target.checked ? [...graphIds, e.file.fileId] : graphIds.filter((x) => x !== e.file.fileId))} aria-label={`Draw ${name}`} />
+                  <button className="link file-only" onClick={() => setGraph([e.file.fileId])} title={`Show only ${e.file.path}`}>
+                    {name}{e.holdTimeS !== null ? <small> · {e.holdTimeS} s</small> : null}{context && <small className="fl-context"> · {context}</small>}
+                  </button>
+                  <QcRibbon cycles={e.runs} />
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <p className="hint">Click a name to show only that file; tick to add files. Hide single curves with the run buttons below the graph — hiding a curve does not change the averages. To leave a run out of the analysis, untick <em>In average</em> in Data analysis.</p>
+      <p className="hint ribbon-legend">
+        <span className="ribbon"><i style={{ background: QC_COLORS.green, borderColor: QC_COLORS.green }} /><i style={{ background: 'transparent', borderColor: QC_COLORS.red }} /></span>
+        One tick per run, coloured by flag. Hollow = left out of the average.
+      </p>
+    </>
+  );
+}
+
+/** "CR 0.25 · 2.5 M · glass · Gel A" (dwell time is shown per file). */
+function conditionLabel(r: CycleResult): string {
+  const m = r.meta;
+  return [
+    m.chargeRatio.value !== null ? `CR ${m.chargeRatio.value}` : 'CR unknown',
+    `${m.concentrationM.value} M${m.concentrationM.source === 'default' ? ' (assumed)' : ''}`,
+    m.substrate.value ?? 'substrate unknown',
+    m.gel.value ?? 'gel unspecified',
+  ].join(' · ');
 }
 
 export function Sidebar() {
-  const { update } = useApp();
   const ex = useExperiment();
-  const others = ex.files.filter((e) => e !== ex.main);
-  const overlayIds = ex.overlayFiles.map((e) => e.file.fileId);
-  const setOverlay = (ids: string[]) => ex.set({ overlayFileIds: ids });
-
   return (
     <nav className="sidebar" aria-label="Open and choose experiments">
       <ImportStep />
-
       <section className="step">
         <h2>2. Choose your experiment</h2>
         {!ex.hasData ? (
-          <p className="hint">Open a folder first. Sub-folders such as <em>0.25 (2.5M)/Glass/</em> are read as charge ratio, concentration and substrate.</p>
+          <p className="hint">Open a folder first. Folder names such as <em>Gel A/0.25 2.5M/glass/</em> are read as gel, charge ratio, concentration and substrate; file names such as <em>10s.txt</em> as the dwell time.</p>
         ) : (
           <>
-            <label className="field">
-              <span>Charge ratio</span>
-              <select value={ex.chargeRatio ?? ''} onChange={(e) => ex.set({ chargeRatio: e.target.value, fileId: null })}>
-                {ex.crOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span>Total monomer concentration</span>
-              <select value={ex.concentrationM ?? ''} onChange={(e) => ex.set({ concentrationM: e.target.value, fileId: null })}>
-                {ex.concOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span>Substrate</span>
-              <select value={ex.substrate ?? ''} onChange={(e) => ex.set({ substrate: e.target.value, fileId: null })}>
-                {ex.substrateOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span>TXT file to view</span>
-              <select value={ex.main?.file.fileId ?? ''} onChange={(e) => ex.set({ fileId: e.target.value })}>
-                {ex.files.map((e) => (
-                  <option key={e.file.fileId} value={e.file.fileId}>
-                    {e.file.name}{holdLabel(e) ? ` (${holdLabel(e)} hold)` : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {ex.main && (
-              <p className="file-summary">
-                {ex.main.runs.length} run(s) <QcRibbon cycles={ex.main.runs} />
-              </p>
-            )}
-            <label className="check-row">
-              <input type="checkbox" checked={ex.overlay} disabled={!others.length} onChange={(e) => ex.set({ overlay: e.target.checked })} /> Overlay additional TXT files
-            </label>
-            {ex.overlay && others.length > 0 && (
-              <div className="overlay-list">
-                <div className="overlay-actions">
-                  <button className="link small" onClick={() => setOverlay(others.map((e) => e.file.fileId))}>Select all</button>
-                  <button className="link small" onClick={() => setOverlay([])}>None</button>
-                </div>
-                {others.map((e) => (
-                  <label key={e.file.fileId} className="check-row">
-                    <input
-                      type="checkbox"
-                      checked={overlayIds.includes(e.file.fileId)}
-                      onChange={(ev) => setOverlay(ev.target.checked ? [...overlayIds, e.file.fileId] : overlayIds.filter((x) => x !== e.file.fileId))}
-                    />
-                    <span className="ol-name">{e.file.name}</span>
-                    <QcRibbon cycles={e.runs} />
-                  </label>
-                ))}
-              </div>
-            )}
-            <p className="hint ribbon-legend">
-              <span className="ribbon"><i style={{ background: QC_COLORS.green, borderColor: QC_COLORS.green }} /><i style={{ background: 'transparent', borderColor: QC_COLORS.red }} /></span>
-              One tick per run, coloured by flag. Hollow = outlier left out of averages.
-            </p>
-            {ex.concOptions.find((o) => o.value === ex.concentrationM)?.label.includes('default') && (
-              <p className="hint warn">
-                No concentration was found in the folder names, so 2.1 M is assumed. Correct it in a run’s details (Data analysis tab).{' '}
-                <button className="link small" onClick={() => update((p) => ({ ...p, mainTab: 'analysis' }))}>Open</button>
-              </p>
-            )}
+            <ExperimentPicker pick={ex.pick} options={ex.options} setPick={ex.setPick} />
+            <p className="hint">{ex.files.length} file{ex.files.length === 1 ? '' : 's'}, {ex.experimentRuns.length} run{ex.experimentRuns.length === 1 ? '' : 's'} in this choice.</p>
           </>
         )}
       </section>
+      {ex.files.length > 0 && (
+        <section className="step">
+          <h2>3. Runs on the graph</h2>
+          <TackFilePicker />
+        </section>
+      )}
     </nav>
   );
 }
-

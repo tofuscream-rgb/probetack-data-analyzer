@@ -36,7 +36,7 @@ function GelDimensions() {
       <button className="primary browse" disabled={!ids.length} onClick={() => setMeta(ids, d)}>
         Apply to {ids.length} selected run(s)
       </button>
-      <p className="hint">Each run keeps its own dimensions; change a single run in the Results tab. The force curve never changes.</p>
+      <p className="hint">Each run keeps its own dimensions; change a single run in the Peel metrics tab. The force curve never changes.</p>
     </section>
   );
 }
@@ -59,14 +59,14 @@ export function PeelSidebar() {
           <>
             <ExperimentPicker pick={pick} options={options} setPick={setPick} />
             <p className="hint">
-              {files.length} file(s), {picked.length} run(s) in this choice. Choose <em>All</em> to put several charge ratios, concentrations or substrates on one graph.
+              {files.length} file(s), {picked.length} run(s) in this choice. Choose <em>All</em> to put several conditions on one graph.
             </p>
           </>
         )}
       </section>
       {runs.length > 0 && (
         <section className="step">
-          <h2>3. Files and runs</h2>
+          <h2>3. Runs on the graph</h2>
           <RunPicker
             files={files}
             runs={picked.map((r) => ({ id: r.id, fileId: r.file.fileId, cycleNumber: r.cycle.cycleNumber, ok: r.result.ok, error: r.result.error, peakGf: r.result.peak?.forceGf ?? null }))}
@@ -74,7 +74,7 @@ export function PeelSidebar() {
             setSelected={setPickedSelected}
             nameOf={(l) => names.get(l.parsed.fileId) ?? l.parsed.name}
             groupOf={groupOf}
-            hint="Files of the same substrate are grouped (PET, PETv2, PET v3 → PET). Tick a group to use all its files, or open it (▾) to tick files one by one, and open a file to tick single runs. Results summarise each group. Compare charge ratios uses the ticked runs of every experiment."
+            hint="Repeat files of one condition are grouped (PET, PETv2, PET v3 → PET). Tick a group or open it (▾) to tick files, and open a file to tick single runs. Unticking only removes a run from the graph; to leave it out of the averages, untick In average in Data analysis."
           />
         </section>
       )}

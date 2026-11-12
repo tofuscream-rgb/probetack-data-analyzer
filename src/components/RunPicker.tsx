@@ -38,6 +38,11 @@ export function RunPicker({ files, runs, selectedIds, setSelected, hint, nameOf,
   const shownIds = shown.flatMap((l) => okIds(byFile(l.parsed.fileId)));
   const toggle = (ids: string[], on: boolean) => setSelected(on ? [...new Set([...selectedIds, ...ids])] : selectedIds.filter((x) => !ids.includes(x)));
   const nFiles = files.filter((l) => byFile(l.parsed.fileId).some((r) => selectedIds.includes(r.id))).length;
+  /** Folder context for files that share a name ("Gel A/0.25 2.5M/ss"). */
+  const context = (l: LoadedFile) => {
+    const full = nameOf ? nameOf(l) : l.parsed.name;
+    return full !== l.parsed.name ? full.slice(0, -l.parsed.name.length).replace(/\/$/, '') : '';
+  };
   const fileBlock = (l: LoadedFile, inGroup: boolean) => {
     const list = byFile(l.parsed.fileId);
     const ids = okIds(list);
@@ -55,7 +60,7 @@ export function RunPicker({ files, runs, selectedIds, setSelected, hint, nameOf,
             aria-label={`Analyse ${l.parsed.name}`}
           />
           <button className="disclose" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [l.parsed.fileId]: !isOpen }))}>
-            <span className="caret">{isOpen ? '▾' : '▸'}</span> <span className="fl-name">{nameOf ? nameOf(l) : l.parsed.path}</span>
+            <span className="caret">{isOpen ? '▾' : '▸'}</span> <span className="fl-name">{l.parsed.name}{context(l) && <small className="fl-context"> {context(l)}</small>}</span>
           </button>
           <small>{n}/{ids.length} run{ids.length === 1 ? '' : 's'}</small>
         </div>
@@ -131,16 +136,17 @@ export function groupedRunFiles(loadedFiles: LoadedFile[], picked: { file: { fil
   const condOf = new Map(picked.map((r) => [r.file.fileId, r.cond]));
   const parts = (fileId: string) => {
     const c = condOf.get(fileId);
-    if (!c) return ['', '', 'unknown'];
-    return [c.chargeRatio === '—' ? 'CR unknown' : `CR ${c.chargeRatio}`, c.concentration === '—' ? '' : `${c.concentration} M`, c.substrate === '—' ? 'substrate unknown' : c.substrate.trim()];
+    if (!c) return ['', '', 'unknown', ''];
+    return [c.chargeRatio === '—' ? 'CR unknown' : `CR ${c.chargeRatio}`, c.concentration === '—' ? '' : `${c.concentration} M`, c.substrate === '—' ? 'substrate unknown' : c.substrate.trim(), !c.gel || c.gel === '—' ? 'gel unspecified' : c.gel];
   };
   const allParts = files.map((l) => parts(l.parsed.fileId));
   const varies = [0, 1].filter((k) => new Set(allParts.map((p) => p[k])).size > 1);
+  const gelVaries = new Set(allParts.map((p) => p[3])).size > 1;
   const subName = new Map<string, string>();
   for (const p of allParts) if (!subName.has(p[2].toLowerCase())) subName.set(p[2].toLowerCase(), p[2]);
   const groupOf = (l: { parsed: { fileId: string } }) => {
     const p = parts(l.parsed.fileId);
-    return [...varies.map((k) => p[k]), subName.get(p[2].toLowerCase()) ?? p[2]].filter(Boolean).join(' · ');
+    return [...varies.map((k) => p[k]), subName.get(p[2].toLowerCase()) ?? p[2], gelVaries ? p[3] : ''].filter(Boolean).join(' · ');
   };
   return { files, names, groupOf };
 }

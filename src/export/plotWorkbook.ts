@@ -43,12 +43,12 @@ export function plotSheet(fallbackTitle: string, { data, layout }: PlotExport): 
   }
   if (!series.length) return null;
   return {
-    name: 'Current graph', rows, wrap: true, colWidths: [35, 27, 27],
+    name: 'Current Graph', rows, wrap: true, colWidths: [35, 27, 27],
     charts: [{ title, xTitle, yTitle, series, showLegend: layout.showlegend !== false && series.length <= 15, from: { col: 0, row: 0 }, to: { col: 3, row: chartRows - 1 } }],
   };
 }
 
 export function buildPlotWorkbook(title: string, data: Data[], layout: Partial<Layout>): Uint8Array {
   const sheet = plotSheet(title, { data, layout });
-  return buildXlsx(sheet ? [sheet] : [{ name: 'Current graph', rows: [['No plottable data']] }], { title, creator: `Mach-1 Analyzer ${APP_VERSION}` });
+  return buildXlsx(sheet ? [sheet] : [{ name: 'Current Graph', rows: [['No plottable data']] }], { title, creator: `Mach-1 Analyzer ${APP_VERSION}` });
 }

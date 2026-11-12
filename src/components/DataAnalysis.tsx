@@ -7,15 +7,15 @@ import { displayFactor, peakLabel, type Metrics } from '../analysis/cycleMetrics
 import { QC_LABEL, QC_ORDER } from '../analysis/pointOutliers';
 import { axisLabel, axisValues } from '../plotting/axes';
 import { PlotlyChart } from '../plotting/PlotlyChart';
-import type { AnalysisSettings, GroupKey, MetaOverride } from '../types';
+import { GF_TO_N, type AnalysisSettings, type GroupKey, type MetaOverride } from '../types';
 import { QcLegend, compareConditionKeys, fmt, forceDigits, meanSd, useSetRunChoice, type RunChoice } from './common';
 import { useExperiment } from '../state/experiment';
 import { metricsOf } from '../state/tackMetrics';
 import { WorkMethods } from './AdhesionMethods';
 import { mean, sampleSD } from '../analysis/stats';
 
-/** Runs are listed per experimental condition. Concentration is always part of the key. */
-export const CONDITION_KEYS: GroupKey[] = ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'];
+/** Runs are listed per experimental condition: substrate × charge ratio × concentration × gel × holding time. */
+export const CONDITION_KEYS: GroupKey[] = ['chargeRatio', 'concentrationM', 'substrate', 'gel', 'holdTimeS'];
 
 const conditionKey = (r: CycleResult) => CONDITION_KEYS.map((k) => groupValue(r, k)).join(' | ');
 
@@ -28,6 +28,18 @@ export function conditionTitle(r: CycleResult, withHold = true): string {
   ];
   if (withHold) parts.push(r.holdTimeS !== null ? `${r.holdTimeS} s hold` : 'hold unknown');
   return parts.join(', ');
+}
+
+/** "glass · CR 0.25 · 2.5 M · Gel A · 1 s dwell" */
+function groupTitle(r: CycleResult): string {
+  const m = r.meta;
+  return [
+    m.substrate.value ?? 'Substrate unknown',
+    m.chargeRatio.value !== null ? `CR ${m.chargeRatio.value}` : 'Charge ratio unknown',
+    `${m.concentrationM.value} M${m.concentrationM.source === 'default' ? ' (assumed)' : ''}`,
+    m.gel.value ?? 'Gel unspecified',
+    r.holdTimeS !== null ? `${r.holdTimeS} s dwell` : 'Dwell unknown',
+  ].join(' · ');
 }
 
 const byRepeatAndRun = (a: CycleResult, b: CycleResult) =>
@@ -65,15 +77,22 @@ function InAverage({ r }: { r: CycleResult }) {
   const { update } = useApp();
   // Shared with Tack metrics: the override is relative to the automatic rule and any whole-Repeat/session exclusion.
   const toggle = (want: boolean) => update((p) => withRunInclusion(p, r, want, want ? 'Kept after review (Data analysis)' : 'Left out after review (Data analysis)'));
+  const reset = () => update((p) => {
+    const runOverrides = { ...p.runOverrides };
+    delete runOverrides[r.cycle.cycleId];
+    return { ...p, runOverrides };
+  });
   return (
-    <input
-      type="checkbox"
-      checked={isIncluded(r)}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => toggle(e.target.checked)}
-      aria-label={`Use run ${r.cycle.cycleNumber} of ${r.file.name} in the average`}
-      title={r.override ? `Your choice: ${r.override.reason}. Untick/tick again to go back to automatic.` : isIncluded(r) ? 'Used in the average' : `${r.statusReason}. Tick to keep it anyway.`}
-    />
+    <span className="in-average" onClick={(e) => e.stopPropagation()}>
+      <input
+        type="checkbox"
+        checked={isIncluded(r)}
+        onChange={(e) => toggle(e.target.checked)}
+        aria-label={`Use run ${r.cycle.cycleNumber} of ${r.file.name} in the average`}
+        title={r.override ? `Your choice: ${r.override.reason}.` : isIncluded(r) ? 'Included in the average (automatic)' : `${r.statusReason}. Tick to keep it anyway.`}
+      />
+      {r.override && <button className="link small" onClick={reset} aria-label={`Reset run ${r.cycle.cycleNumber} of ${r.file.name} to the automatic decision`} title="Back to the automatic decision">Reset</button>}
+    </span>
   );
 }
 
@@ -108,8 +127,10 @@ export function DataAnalysis() {
   const focus = ui.focusId ? derived.results.get(ui.focusId) ?? null : null;
   const excl = project.settings.runExclusion.excludeClasses;
   const nOutliers = runs.filter((r) => r.qc !== 'green').length;
+  const dupNames = useMemo(() => new Set(runs.map((r) => r.file).filter((file, _i, all) => all.findIndex((x) => x.name === file.name && x.fileId !== file.fileId) >= 0).map((file) => file.name)), [runs]);
 
-  if (!ex.main) return <p className="note pad">Open your experiment folder in step 1 on the left, then choose an experiment in step 2.</p>;
+  if (!ex.hasData) return <p className="note pad">No data yet. Open a folder in step 1 on the left, then choose an experiment in step 2.</p>;
+  if (!ex.main) return <p className="note pad">No files match the chosen experiment. Set one of the dropdowns in step 2 back to <em>All</em>.</p>;
 
   return (
     <div className={`analysis-layout ${focus ? 'with-detail' : ''}`}>
@@ -117,18 +138,20 @@ export function DataAnalysis() {
         <div className="analysis-intro">
           <div className="table-actions">
             <h3 className="exp-title">{ex.title}</h3>
-            <div className="segmented small" role="group" aria-label="Which files">
-              <button className={scope === 'experiment' ? 'on' : ''} onClick={() => setScope('experiment')}>All {ex.files.length} TXT files</button>
-              <button className={scope === 'graph' ? 'on' : ''} onClick={() => setScope('graph')}>Only files on the graph ({ex.graphFiles.length})</button>
+            <div className="segmented small" role="group" aria-label="Which runs">
+              <button className={scope === 'experiment' ? 'on' : ''} aria-pressed={scope === 'experiment'} onClick={() => setScope('experiment')}>Chosen experiment ({ex.experimentRuns.length} runs)</button>
+              <button className={scope === 'graph' ? 'on' : ''} aria-pressed={scope === 'graph'} onClick={() => setScope('graph')}>Runs on the graph ({ex.graphRuns.length})</button>
             </div>
           </div>
           <p className="note">
-            Each run (one pull inside a TXT file) is one value. Its <strong>Z-score</strong> (modified, based on the median) shows how far it lies from the
-            other runs with the same charge ratio, concentration, substrate and holding time; |Z| ≥ {project.settings.cycle.modZOrange} is suspicious.
+            One summary per condition (substrate × charge ratio × concentration × gel × dwell time); repeat files of the same condition, such as
+            1s.txt and 1s-v2.txt, are combined. Each run (one pull inside a TXT file) is one value. Its <strong>modified Z-score</strong> (based on the median)
+            shows how far its peak adhesion force lies from the other runs of the condition; |Z| ≥ {project.settings.cycle.modZOrange} is suspicious.
+            With fewer than {project.settings.cycle.minGroupSize} valid runs a condition is <em>not scored</em>.
             Runs are also checked for no negative force, no peak, weak response, probe start position and incomplete movement.{' '}
             {nOutliers ? `${nOutliers} run(s) are highlighted. ` : 'No runs are highlighted. '}
             {excl.length ? `${excl.join(' and ').replace(/^./, (c) => c.toUpperCase())} runs are left out of the average without outliers.` : 'No runs are left out automatically.'}{' '}
-            Untick or tick <em>In average</em> to decide yourself. Click a row for its curve and details.
+            Untick or tick <em>In average</em> to decide yourself; <em>Reset</em> returns a run to the automatic decision. Click a row for its curve and details.
           </p>
           <p className="note">W<sub>adh</sub> is tensile work. An asterisk marks a pull that ended before detachment was detected.</p>
           <QcLegend />
@@ -142,25 +165,29 @@ export function DataAnalysis() {
             return meanSd(mean(values), sampleSD(values), values.filter(Number.isFinite).length, 3);
           };
           const included = g.runs.filter(isIncluded);
+          const sources = [...new Set(g.runs.map((r) => r.file.fileId))].map((id) => g.runs.find((r) => r.file.fileId === id)!.file);
+          // Peak force in both units (1 gf = 0.00980665 N); the unit set in Settings comes first.
+          const other = u === 'gf' ? 'N' : 'gf';
+          const k = u === 'gf' ? GF_TO_N : 1 / GF_TO_N;
+          const peak = (st: typeof raw, scale: number, digits: number) => meanSd((st?.mean ?? NaN) * f * scale, (st?.sd ?? NaN) * fa * scale, st?.n ?? 0, digits);
           return (
             <section key={g.key} className="run-group">
               <header className="run-group-head">
-                <h3>{g.hold !== null ? `${g.hold} s holding time` : 'Holding time unknown'}</h3>
-                <span className="group-stat">
-                  Average (all runs): <strong>{meanSd((raw?.mean ?? NaN) * f, (raw?.sd ?? NaN) * fa, raw?.n ?? 0, d)}</strong> {u}
-                </span>
-                <span className="group-stat">
-                  Without outliers: <strong>{meanSd((pr?.mean ?? NaN) * f, (pr?.sd ?? NaN) * fa, pr?.n ?? 0, d)}</strong> {u}
-                </span>
+                <h3>{groupTitle(g.runs[0])}</h3>
+                <span>{sources.length} file{sources.length === 1 ? '' : 's'} · {g.runs.length} run{g.runs.length === 1 ? '' : 's'}</span>
               </header>
-              <div className="run-group-head">
-                <span className="group-stat">W<sub>adh</sub> (mJ), all / included: <strong>{workStats(g.runs, 'workMJ')} / {workStats(included, 'workMJ')}</strong></span>
-                {diameter > 0 && <span className="group-stat">W<sub>adh</sub>/A (J/m²), all / included: <strong>{workStats(g.runs, 'wJm2')} / {workStats(included, 'wJm2')}</strong></span>}
-              </div>
+              <table className="grid group-summary">
+                <thead><tr><th>Mean ± sample SD (n)</th><th className="num">{valueLabel} ({u})</th><th className="num">{valueLabel} ({other})</th><th className="num">W<sub>adh</sub> (mJ)</th>{diameter > 0 && <th className="num">W<sub>adh</sub>/A (J/m²)</th>}</tr></thead>
+                <tbody>
+                  <tr><th>All valid runs</th><td className="num">{peak(raw, 1, d)}</td><td className="num">{peak(raw, k, forceDigits(other))}</td><td className="num">{workStats(g.runs, 'workMJ')}</td>{diameter > 0 && <td className="num">{workStats(g.runs, 'wJm2')}</td>}</tr>
+                  <tr><th>Included runs after review</th><td className="num strong">{peak(pr, 1, d)}</td><td className="num strong">{peak(pr, k, forceDigits(other))}</td><td className="num strong">{workStats(included, 'workMJ')}</td>{diameter > 0 && <td className="num strong">{workStats(included, 'wJm2')}</td>}</tr>
+                </tbody>
+              </table>
+              <p className="note sources">Source files: {sources.map((file) => <span key={file.fileId} title={file.path} className="source-file">{file.name}</span>)}</p>
               <table className="grid run-table">
                 <thead>
                   <tr>
-                    <th>File</th><th>Run</th><th className="num">{`${valueLabel} (${u})`}</th><th className="num">W<sub>adh</sub> (mJ)</th>{diameter > 0 && <th className="num">W<sub>adh</sub>/A (J/m²)</th>}<th className="num" title="Modified Z-score within the same condition; needs at least 4 runs">Z-score</th><th>Flag</th><th>Why</th><th title="Used in the average without outliers">In average</th>
+                    <th>File</th><th>Run</th><th className="num">{`${valueLabel} (${u})`}</th><th className="num">W<sub>adh</sub> (mJ)</th>{diameter > 0 && <th className="num">W<sub>adh</sub>/A (J/m²)</th>}<th className="num" title="Modified Z-score within the same condition; needs at least 4 valid runs">Modified Z</th><th>Flag</th><th>Why</th><th title="Included in the condition average after review">In average</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -173,7 +200,7 @@ export function DataAnalysis() {
                         className={`hl-${r.qc} ${isIncluded(r) ? '' : 'excluded'} ${ui.focusId === r.cycle.cycleId ? 'focus' : ''}`}
                         onClick={() => setUi({ focusId: r.cycle.cycleId })}
                       >
-                        <td title={r.file.path}>{r.file.name}</td>
+                        <td title={r.file.path}>{r.file.name}{dupNames.has(r.file.name) && <div className="cond">{r.file.path.split('/').slice(-3, -1).join('/')}</div>}</td>
                         <td className="num">{r.cycle.cycleNumber}</td>
                         <td className="num value">{fmt(r.peakRaw * f, d)}</td>
                         <td className="num" title={w?.error ?? undefined}>{fmt(w?.workMJ, 3)}{w?.incomplete && ' *'}</td>
@@ -181,7 +208,7 @@ export function DataAnalysis() {
                         <td className={`num z ${r.modZ !== null && Math.abs(r.modZ) >= project.settings.cycle.modZOrange ? 'big' : ''}`} title={r.modZ === null ? 'Fewer than the minimum number of runs in this condition' : ''}>
                           {r.modZ === null ? '—' : Math.abs(r.modZ) >= 99 ? (r.modZ * zSign > 0 ? '≫' : '≪') : (r.modZ * zSign).toFixed(2)}
                         </td>
-                        <td><span className={`qc-pill ${r.qc}`} title={QC_LABEL[r.qc]}>{r.qc === 'green' ? 'ok' : QC_LABEL[r.qc].split(' —')[0].toLowerCase()}</span></td>
+                        <td>{r.modZ === null && r.qc === 'green' ? <span className="muted" title="Too few valid runs in this condition for a modified Z-score">Not scored</span> : <span className={`qc-pill ${r.qc}`} title={QC_LABEL[r.qc]}>{r.qc === 'green' ? 'ok' : QC_LABEL[r.qc].split(' —')[0].toLowerCase()}</span>}</td>
                         <td className="reason" title={msgs.join('\n')}><div className="clamp">{shorten(msgs, 90) || <span className="muted">—</span>}</div></td>
                         <td className="center"><InAverage r={r} /></td>
                       </tr>

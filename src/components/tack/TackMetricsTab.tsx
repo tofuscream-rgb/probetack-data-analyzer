@@ -189,7 +189,7 @@ export function TackMetricsTab() {
   const excludedSessions = sessions.filter((s) => t.tm.excludedSessions[s]);
   // Runs excluded on their own (runs of an excluded Repeat/session are covered by that entry).
   const excludedRuns = t.repeats.flatMap((rp) => rp.runs.filter((r) => r.excluded && r.excluded.kind !== 'dataset').map((r) => ({ rp, r })));
-  const base = `${project.name || 'tack'}_CR${t.ex.chargeRatio}_${t.ex.concentrationM}M`.replace(/[^\w.-]+/g, '_');
+  const base = `${project.name || 'tack'}_${t.ex.title}`.replace(/[^\w.-]+/g, '_');
 
   const runCsv = () => [
     ['Repeat (file)', 'Path', 'Session', 'Substrate', 'Dwell (s)', 'h0 (mm)', 'Probe d (mm)', 'Repeat excluded', 'Run', 'Run excluded', 'Exclusion reason',
@@ -226,7 +226,7 @@ export function TackMetricsTab() {
   return (
     <div className="ls-results tack-metrics">
       <p className="note">
-        Charge ratio <strong>{t.ex.chargeRatio}</strong>, <strong>{t.ex.concentrationM} M</strong> (chosen on the left): every substrate and dwell time, tensile part of each pull.
+        <strong>{t.ex.title}</strong> (chosen on the left), with every substrate and dwell time of that choice; tensile part of each pull.
         Flags are warnings only. Exclusions are shared with the Data analysis tab (including its automatic QC rule).
       </p>
       <div className="table-actions section-toggles">

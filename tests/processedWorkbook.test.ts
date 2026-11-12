@@ -12,7 +12,7 @@ const row = (fileId: string, number: number, gf: number): ProcessedRow => ({
 describe('processed adhesion report', () => {
   it('averages repeat means equally and writes only the requested sheet', () => {
     const [sheet] = processedSheets('lapShear', [row('1s', 1, 10), row('1s', 2, 10), row('1s-v2', 1, 30)], ['condition']);
-    expect(sheet.name).toBe('Per condition');
+    expect(sheet.name).toBe('Per Condition');
     expect(sheet.rows[0]).toEqual(['Condition', 'Metric', 'Mean', 'SD', 'Work note']);
     expect(sheet.rows[1][2]).toBeCloseTo(20);
     expect(sheet.rows[1][3]).toBeCloseTo(Math.sqrt(200));

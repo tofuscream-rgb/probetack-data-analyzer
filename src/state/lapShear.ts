@@ -6,7 +6,7 @@
 import { useCallback, useMemo } from 'react';
 import { useApp } from './AppContext';
 import { uniqueFileNames } from './experiment';
-import { runCondition, runLabels, type RunCondition } from '../analysis/runCompare';
+import { runCondition, runLabels, withRecordedHold, type RunCondition } from '../analysis/runCompare';
 import { analyzeLapShearCycle, type LapShearResult } from '../analysis/lapShear';
 import { matchesPick, normalizePick, pickOptions } from '../analysis/experimentPick';
 import type { Cycle, ExperimentPick, LapShearRunMeta, LapShearSettings, LapShearState, ParsedFile } from '../types';
@@ -60,7 +60,7 @@ export function useLapShear() {
       runCounts.set(l.parsed.fileId, l.cycles.length);
       for (const c of l.cycles) {
         const rm = runMeta({ runs: savedRuns, settings }, c.cycleId);
-        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: '', condition, cond: runCondition(m), meta: rm, result: cachedResult(c, rm, settings) });
+        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: '', condition, cond: withRecordedHold(runCondition(m), c.holdTimeS), meta: rm, result: cachedResult(c, rm, settings) });
       }
     }
     const labels = runLabels(out.map((r) => ({ fileId: r.file.fileId, fileName: r.file.name, uniqueName: names.get(r.file.fileId) ?? r.file.name, cycleNumber: r.cycle.cycleNumber, runsInFile: runCounts.get(r.file.fileId) ?? 1, cond: r.cond })));
@@ -69,7 +69,7 @@ export function useLapShear() {
   }, [files, meta, disabledFiles, savedRuns, settings]);
 
   const valid = useMemo(() => runs.filter((r) => r.result.ok), [runs]);
-  const conditions = useMemo(() => runs.map((r) => r.cond), [runs]);
+  const conditions = useMemo(() => runs.map((r) => ({ ...r.cond, fileId: r.file.fileId })), [runs]);
   const pick = useMemo(() => normalizePick(conditions, ls.pick), [conditions, ls.pick]);
   const options = useMemo(() => pickOptions(conditions, pick), [conditions, pick]);
   const picked = useMemo(() => runs.filter((r) => matchesPick(r.cond, pick)), [runs, pick]);

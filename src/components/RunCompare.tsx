@@ -15,7 +15,7 @@ export interface CompareMetric {
   digits: number;
 }
 
-type ListKey = 'substrates' | 'chargeRatios' | 'concentrations' | 'holdTimes';
+type ListKey = 'substrates' | 'gels' | 'chargeRatios' | 'concentrations' | 'holdTimes';
 
 /** Compare charge ratios tab of Lap Shear and 90° Peel. */
 export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
@@ -36,10 +36,15 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
   const visible = cmp.sets.filter((s) => !s.hidden);
   const holds = cmp.selected.holdTimes;
   const noHold = holds.length === 1 && holds[0] === '—';
-  const holdName = (h: string) => (h === '—' ? (noHold ? 'All runs' : 'hold not in file name') : `${h} s`);
+  const holdName = (h: string) => (h === '—' ? (noHold ? 'All runs' : 'dwell unknown') : `${h} s`);
   const manyConc = new Set(visible.map((s) => s.concentration)).size > 1;
   const conc = (s: RunDataSet) => `${s.concentration} M${s.concentrationDefault ? '*' : ''}`;
-  const tick = (s: RunDataSet) => (manyConc ? `${s.chargeRatio}<br>${conc(s)}` : s.chargeRatio);
+  const manyGels = new Set(visible.map((s) => s.gel)).size > 1;
+  const byCr = sel.panelBy === 'chargeRatio' && manyGels;
+  const tickMain = (s: RunDataSet) => (byCr ? s.gelLabel : s.chargeRatio);
+  const tick = (s: RunDataSet) => (manyConc ? `${tickMain(s)}<br>${conc(s)}` : tickMain(s));
+  const panelOf = (s: RunDataSet) => (byCr ? `${s.substrateLabel} · CR ${s.chargeRatio}` : manyGels ? `${s.substrateLabel} · ${s.gelLabel}` : s.substrateLabel);
+  const setName = (s: RunDataSet) => [s.substrateLabel, manyGels || s.gel !== '—' ? s.gelLabel : null, `CR ${s.chargeRatio}`, conc(s)].filter(Boolean).join(' · ');
   const yTitle = `${metric.label} (${metric.unit})`;
 
   const bars = useMemo(() => {
@@ -55,16 +60,16 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
         x,
         y: vals.map((v) => (v.n ? v.mean : null)),
         error_y: { type: 'data', array: vals.map((v) => (v.n > 1 ? v.sd : null)), visible: true, color: '#18263A', thickness: 1.2, width: 4 }, // no bar when n = 1
-        customdata: visible.map((s, i) => [s.substrateLabel, s.chargeRatio, conc(s), vals[i].n]),
+        customdata: visible.map((s, i) => [setName(s), vals[i].n]),
         marker: { color: PASTEL_COLORS[k % PASTEL_COLORS.length], line: { color: '#18263A', width: 1 } },
-        hovertemplate: `%{customdata[0]}, charge ratio %{customdata[1]}, %{customdata[2]}<br>${holdName(h)}: %{y:.${metric.digits}f} ± %{error_y.array:.${metric.digits}f} ${metric.unit} (SD), n = %{customdata[3]}<extra></extra>`,
+        hovertemplate: `%{customdata[0]}<br>${holdName(h)}: %{y:.${metric.digits}f} ± %{error_y.array:.${metric.digits}f} ${metric.unit} (SD), n = %{customdata[1]}<extra></extra>`,
       } as unknown as Data;
     });
     const panels: { label: string; from: number; to: number }[] = [];
     visible.forEach((s, i) => {
       const last = panels[panels.length - 1];
-      if (last && last.label === s.substrateLabel) last.to = i;
-      else panels.push({ label: s.substrateLabel, from: i, to: i });
+      if (last && last.label === panelOf(s)) last.to = i;
+      else panels.push({ label: panelOf(s), from: i, to: i });
     });
     const shapes: Partial<Shape>[] = panels.slice(1).map((p) => ({ type: 'line', xref: 'x', yref: 'paper', x0: p.from - 0.5, x1: p.from - 0.5, y0: 0, y1: 1, line: { color: '#4A5A70', width: 1.2, dash: 'dash' } }));
     const layout: Partial<Layout> = {
@@ -76,7 +81,7 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
       bargap: 0.22,
       bargroupgap: 0.04,
       showlegend: !noHold,
-      xaxis: { ...AXIS, type: 'category', tickvals: x, ticktext: visible.map(tick), title: { text: '<b>Gel charge ratio</b>', font: { size: 20 } } },
+      xaxis: { ...AXIS, type: 'category', tickvals: x, ticktext: visible.map(tick), title: { text: byCr ? '<b>Gel</b>' : '<b>Gel charge ratio</b>', font: { size: 20 } } },
       yaxis: { ...AXIS, rangemode: 'tozero', ...(bottom >= 0 && top > 0 ? { range: [0, top * 1.22] } : {}), title: { text: `<b>${yTitle}</b>`, font: { size: 20 } } },
       legend: { x: 0.995, y: 0.99, xanchor: 'right', yanchor: 'top', bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#000', borderwidth: 1.5, font: { size: 16 } },
       shapes,
@@ -85,7 +90,7 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
     };
     return { data, layout };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cmp, metric.key, manyConc, noHold]);
+  }, [cmp, metric.key, manyConc, noHold, byCr, manyGels]);
 
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
@@ -93,15 +98,16 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
     await Plotly.downloadImage(plotEl.current, { format, filename: fileName, ...EXPORT_SIZE, scale: format === 'png' ? 4 : 1 } as never);
   };
 
-  if (!items.length) return <p className="note pad">Tick runs in step 2 on the left; their folder names give the substrate, charge ratio and concentration to compare.</p>;
+  if (!items.length) return <p className="note pad">No runs to compare yet. Open files in step 1 on the left; their folder names give the substrate, gel, charge ratio and concentration.</p>;
 
   return (
     <div className="compare-tab">
       <div className="compare-picker">
         <ChipGroup title="Substrate" items={cmp.substrates} selected={cmp.selected.substrates} onToggle={(v) => toggle('substrates', v)} onAll={() => setSel({ substrates: null })} onNone={() => setSel({ substrates: [] })} />
+        <ChipGroup title="Gel" items={cmp.gels} selected={cmp.selected.gels} onToggle={(v) => toggle('gels', v)} onAll={() => setSel({ gels: null })} onNone={() => setSel({ gels: [] })} />
         <ChipGroup title="Charge ratio" items={cmp.chargeRatios.map((v) => ({ value: v, label: v === '—' ? 'unknown' : v }))} selected={cmp.selected.chargeRatios} onToggle={(v) => toggle('chargeRatios', v)} onAll={() => setSel({ chargeRatios: null })} onNone={() => setSel({ chargeRatios: [] })} />
-        <ChipGroup title="Concentration" items={cmp.concentrations.map((v) => ({ value: v, label: `${v} M` }))} selected={cmp.selected.concentrations} onToggle={(v) => toggle('concentrations', v)} onAll={() => setSel({ concentrations: null })} onNone={() => setSel({ concentrations: [] })} />
-        <ChipGroup title="Holding time" items={cmp.holdTimes.map((v) => ({ value: v, label: holdName(v) }))} selected={cmp.selected.holdTimes} onToggle={(v) => toggle('holdTimes', v)} onAll={() => setSel({ holdTimes: null })} onNone={() => setSel({ holdTimes: [] })} />
+        <ChipGroup title="Concentration" items={cmp.concentrations.map((v) => ({ value: v, label: v === '—' ? 'unknown' : `${v} M` }))} selected={cmp.selected.concentrations} onToggle={(v) => toggle('concentrations', v)} onAll={() => setSel({ concentrations: null })} onNone={() => setSel({ concentrations: [] })} />
+        <ChipGroup title="Dwell time" items={cmp.holdTimes.map((v) => ({ value: v, label: holdName(v) }))} selected={cmp.selected.holdTimes} onToggle={(v) => toggle('holdTimes', v)} onAll={() => setSel({ holdTimes: null })} onNone={() => setSel({ holdTimes: [] })} />
       </div>
 
       <details className="section sets-list" open={cmp.sets.length <= 16}>
@@ -110,19 +116,29 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
           {cmp.sets.map((s) => (
             <label key={s.key} className={`chip check-chip ${s.hidden ? '' : 'on'}`}>
               <input type="checkbox" checked={!s.hidden} onChange={() => setSel({ hiddenSets: s.hidden ? sel.hiddenSets.filter((k) => k !== s.key) : [...sel.hiddenSets, s.key] })} />
-              {s.substrateLabel} · {s.chargeRatio} · {conc(s)}
+              {setName(s)}
             </label>
           ))}
         </div>
       </details>
 
       <div className="table-actions compare-controls">
+        <div className="segmented small" role="group" aria-label="Which runs">
+          <button className={sel.which !== 'raw' ? 'on' : ''} onClick={() => setSel({ which: 'processed' })}>Included runs after review</button>
+          <button className={sel.which === 'raw' ? 'on' : ''} onClick={() => setSel({ which: 'raw' })}>All valid runs</button>
+        </div>
         <label className="field inline">
           <span>Compare</span>
           <select value={metric.key} onChange={(e) => setSel({ metric: e.target.value })}>
             {metrics.map((m) => <option key={m.key} value={m.key}>{m.label} ({m.unit})</option>)}
           </select>
         </label>
+        {cmp.gels.length > 1 && (
+          <div className="segmented small" role="group" aria-label="Bar groups">
+            <button className={!byCr ? 'on' : ''} onClick={() => setSel({ panelBy: 'gel' })}>Charge ratios within each gel</button>
+            <button className={byCr ? 'on' : ''} onClick={() => setSel({ panelBy: 'chargeRatio' })}>Gels side by side</button>
+          </div>
+        )}
         <div className="segmented small" role="group" aria-label="Order of charge ratios">
           <button className={sel.order === 'desc' ? 'on' : ''} onClick={() => setSel({ order: 'desc' })}>Charge ratio high → low</button>
           <button className={sel.order === 'asc' ? 'on' : ''} onClick={() => setSel({ order: 'asc' })}>low → high</button>
@@ -134,12 +150,12 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
         </div>
       </div>
       <p className="note">
-        {note} Each data set is one substrate, charge ratio and concentration from the folder names; bars show mean ± SD over its ticked runs
-        {noHold ? '' : ', one bar per holding time (from the file name)'}. Concentrations are never averaged together.
+        {note} Each data set is one substrate, gel, charge ratio and concentration from the folder names; bars show mean ± sample SD over its runs
+        {noHold ? '' : ', one bar per dwell time'}. Concentrations and gels are never averaged together; a missing bar or “—” means no runs for that combination.
         {visible.some((s) => s.concentrationDefault) ? ' * No concentration in the folder name, so 2.1 M is assumed.' : ''}
       </p>
       {visible.length === 0 || holds.length === 0 ? (
-        <p className="note">Tick at least one substrate, charge ratio, concentration and holding time with data.</p>
+        <p className="note">Nothing to compare: {cmp.sets.length === 0 ? 'no runs match the ticked substrate, gel, charge ratio and concentration' : visible.length === 0 ? 'every data set is unticked in the list above' : 'no dwell time is ticked'}. Tick at least one value in each group.</p>
       ) : (
         <>
           <PlotlyChart data={bars.data} layout={bars.layout} className="plot compare-bars" onReady={(el) => (plotEl.current = el)} config={{ toImageButtonOptions: { format: 'png', filename: fileName, scale: 4 } }} />
@@ -147,7 +163,7 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
             <table className="grid compare-table">
               <thead>
                 <tr>
-                  <th>Substrate</th><th>Charge ratio</th><th>Concentration</th>
+                  <th>Substrate</th><th>Gel</th><th>Charge ratio</th><th>Concentration</th>
                   {holds.map((h) => <th key={h} className="num">{noHold ? `${metric.label} (${metric.unit})` : `${holdName(h)} (${metric.unit})`}</th>)}
                 </tr>
               </thead>
@@ -155,6 +171,7 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
                 {visible.map((s) => (
                   <tr key={s.key}>
                     <td>{s.substrateLabel}</td>
+                    <td>{s.gelLabel}</td>
                     <td className="strong">{s.chargeRatio}</td>
                     <td>{conc(s)}</td>
                     {holds.map((h) => {

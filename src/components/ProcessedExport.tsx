@@ -18,10 +18,10 @@ import { plotSheet, type PlotExport } from '../export/plotWorkbook';
 type Scope = 'experiment' | 'graph' | 'all';
 
 const SHEETS: { key: SummarySheet; label: string; description: string }[] = [
-  { key: 'run', label: 'Per run', description: 'Measurements for each included run' },
-  { key: 'repeat', label: 'Per repeat', description: 'Mean and sample SD across runs in each file and condition' },
-  { key: 'condition', label: 'Per condition', description: 'Mean and sample SD across repeat means. Each repeat counts once.' },
-  { key: 'gel', label: 'Compare gels', description: 'Filter condition means by gel or compare all gels in this scope' },
+  { key: 'run', label: 'Per Run', description: 'Each included run’s values, with where the work integral ended' },
+  { key: 'repeat', label: 'Per Repeat', description: 'Mean and sample SD across the included runs of each file' },
+  { key: 'condition', label: 'Per Condition', description: 'Mean and sample SD across repeat means; each repeat file counts once' },
+  { key: 'gel', label: 'Compare Gels', description: 'Filterable table of condition means by gel, with charts' },
 ];
 
 function ReportDialog({ mode, counts, getRows, plot, onClose }: {
@@ -34,7 +34,7 @@ function ReportDialog({ mode, counts, getRows, plot, onClose }: {
   const { project, notify } = useApp();
   const [scope, setScope] = useState<Scope>(() => counts.experiment ? 'experiment' : counts.all ? 'all' : 'experiment');
   const [sheets, setSheets] = useState<SummarySheet[]>(SHEETS.map((s) => s.key));
-  const graph = useMemo(() => plotSheet('Current graph', plot), [plot.data, plot.layout]);
+  const graph = useMemo(() => plotSheet('Current Graph', plot), [plot.data, plot.layout]);
   const [includeGraph, setIncludeGraph] = useState(Boolean(graph));
   const hasGraph = includeGraph && Boolean(graph);
   const canDownload = (counts[scope] > 0 && sheets.length > 0) || hasGraph;
@@ -59,7 +59,7 @@ function ReportDialog({ mode, counts, getRows, plot, onClose }: {
   return (
     <Dialog title="Export processed results to Excel" onClose={onClose}>
       <fieldset>
-        <legend>Which runs</legend>
+        <legend>Which runs (summary sheets)</legend>
         {scopes.map(({ key, label }) => <label className="radio" key={key}>
           <input type="radio" name="processed-scope" checked={scope === key} disabled={!counts[key]} onChange={() => setScope(key)} />
           {label} ({counts[key]} included)
@@ -76,10 +76,10 @@ function ReportDialog({ mode, counts, getRows, plot, onClose }: {
         </label>)}
         <label className="radio">
           <input type="checkbox" disabled={!graph} checked={hasGraph} onChange={(e) => setIncludeGraph(e.target.checked)} />
-          <span><strong>Current graph</strong> <small>Editable Excel chart with the plotted data and units. Uses the Graph tab’s selection independently of the summary scope.</small></span>
+          <span><strong>Current Graph</strong> <small>Native, editable Excel chart of the Graph tab with its data below. Always the runs on the graph, whatever is chosen above.</small></span>
         </label>
       </fieldset>
-      <p className="note">Uses the inclusion decisions in Data analysis. Work through the recorded end is marked when the separation endpoint is unavailable.</p>
+      <p className="note">Only runs <em>Included in average</em> after review in Data analysis are exported. Work integrated to the end of the recording (no separation detected) is marked. Unticked sheets are left out of the workbook.</p>
       {!counts.all && <p className="note">No included runs to export. Review the files and inclusion decisions in Data analysis.</p>}
       <div className="dialog-actions">
         <button onClick={onClose}>Cancel</button>

@@ -173,28 +173,67 @@ describe('peel work in the steady-state window', () => {
   });
 });
 
-describe('90° peel: choose your experiment', () => {
-  it('cascades charge ratio → concentration → substrate, with "all" for each', async () => {
-    const { pickOptions, matchesPick, normalizePick } = await import('../src/analysis/experimentPick');
-    const c = (chargeRatio: string, concentration: string, substrate: string, concentrationDefault = false) => ({ chargeRatio, concentration, concentrationDefault, substrate, hold: '—' });
+describe('choose your experiment (all tests)', () => {
+  it('cascades charge ratio → concentration → substrate → gel → dwell, with "all" for each', async () => {
+    const { pickOptions, matchesPick, normalizePick, pickTitle } = await import('../src/analysis/experimentPick');
+    const c = (chargeRatio: string, concentration: string, substrate: string, concentrationDefault = false, gel = '—', hold = '—', fileId?: string) => ({ chargeRatio, concentration, concentrationDefault, substrate, hold, gel, fileId });
     const conds = [c('0.25', '2.5', 'glass'), c('0.25', '2.98', 'PET'), c('0.25', '2.98', 'Glass'), c('1.05', '2.1', 'ss', true), c('—', '2.1', 'ss', true)];
-    const all = { chargeRatio: null, concentration: null, substrate: null };
+    const all = { chargeRatio: null, concentration: null, substrate: null, gel: null, hold: null };
     const o = pickOptions(conds, all);
     expect(o.chargeRatios.map((x) => x.label)).toEqual(['0.25', '1.05', 'unknown']);
-    expect(o.substrates.map((x) => x.value)).toEqual(['pet', 'ss', 'glass']); // PET, stainless steel, glass order // "glass" and "Glass" are one substrate
+    expect(o.substrates.map((x) => x.value)).toEqual(['pet', 'ss', 'glass']); // PET, stainless steel, glass order; "glass" and "Glass" are one substrate
     const cr = pickOptions(conds, { ...all, chargeRatio: '0.25' });
     expect(cr.concentrations.map((x) => x.label)).toEqual(['2.5 M', '2.98 M']);
-    expect(pickOptions(conds, { ...all, chargeRatio: '1.05' }).concentrations.map((x) => x.label)).toEqual(['2.1 M (default)']);
-    expect(pickOptions(conds, { chargeRatio: '0.25', concentration: '2.5', substrate: null }).substrates.map((x) => x.label)).toEqual(['glass']);
-    const p = { chargeRatio: '0.25', concentration: '2.98', substrate: 'glass' };
+    expect(pickOptions(conds, { ...all, chargeRatio: '1.05' }).concentrations.map((x) => x.label)).toEqual(['2.1 M (assumed)']);
+    expect(pickOptions(conds, { ...all, chargeRatio: '0.25', concentration: '2.5' }).substrates.map((x) => x.label)).toEqual(['glass']);
+    const p = { ...all, chargeRatio: '0.25', concentration: '2.98', substrate: 'glass' };
     expect(conds.map((x) => matchesPick(x, p))).toEqual([false, false, true, false, false]);
     // Choosing another charge ratio drops a concentration and substrate not measured there.
-    expect(normalizePick(conds, { ...p, chargeRatio: '1.05' })).toEqual({ chargeRatio: '1.05', concentration: null, substrate: null });
+    expect(normalizePick(conds, { ...p, chargeRatio: '1.05' })).toEqual({ ...all, chargeRatio: '1.05' });
+    expect(pickTitle(p, pickOptions(conds, p))).toBe('CR 0.25 · 2.98 M · Glass');
+    expect(pickTitle(all, o)).toBe('All experiments');
+  });
+
+  it('gels and dwell times: numeric order, counts, unspecified gel', async () => {
+    const { pickOptions, matchesPick } = await import('../src/analysis/experimentPick');
+    const c = (gel: string, hold: string, fileId: string) => ({ chargeRatio: '0.25', concentration: '2.5', concentrationDefault: false, substrate: 'glass', gel, hold, fileId });
+    const conds = [c('Gel B', '10', 'a'), c('Gel A', '2', 'b'), c('Gel A', '2', 'b'), c('Gel A', '10', 'c'), c('—', '1', 'd')];
+    const all = { chargeRatio: null, concentration: null, substrate: null, gel: null, hold: null };
+    const o = pickOptions(conds, all);
+    expect(o.gels.map((x) => `${x.label}:${x.files}/${x.runs}`)).toEqual(['Gel A:2/3', 'Gel B:1/1', 'unspecified:1/1']);
+    expect(o.holds.map((x) => x.label)).toEqual(['1 s', '2 s', '10 s']); // 2 s before 10 s
+    expect(pickOptions(conds, { ...all, gel: 'gel a' }).holds.map((x) => x.label)).toEqual(['2 s', '10 s']);
+    expect(conds.filter((x) => matchesPick(x, { ...all, gel: 'gel a', hold: '2' }))).toHaveLength(2);
   });
 
   it('older projects show every experiment', async () => {
     const { migrateState } = await import('../src/storage/project');
-    expect(migrateState({}).peel.pick).toEqual({ chargeRatio: null, concentration: null, substrate: null });
-    expect(migrateState({ peel: { pick: { chargeRatio: '0.25', concentration: 3, substrate: 'glass' } } as never }).peel.pick).toEqual({ chargeRatio: '0.25', concentration: null, substrate: 'glass' });
+    expect(migrateState({}).peel.pick).toEqual({ chargeRatio: null, concentration: null, substrate: null, gel: null, hold: null });
+    expect(migrateState({ peel: { pick: { chargeRatio: '0.25', concentration: 3, substrate: 'glass' } } as never }).peel.pick).toEqual({ chargeRatio: '0.25', concentration: null, substrate: 'glass', gel: null, hold: null });
+  });
+});
+
+describe('gels are part of every condition', () => {
+  it('Compare keeps gels apart, filters them and labels a missing gel "unspecified"', async () => {
+    const { buildRunComparison } = await import('../src/analysis/runCompare');
+    const it = (id: string, gel: string, v: number, included = true) => ({ id, included, cond: { substrate: 'glass', chargeRatio: '0.25', concentration: '2.5', concentrationDefault: false, hold: '1', gel }, values: { s: v } });
+    const items = [it('a', 'Gel A', 10), it('b', 'Gel A', 12), it('c', 'Gel B', 20), it('d', '—', 30), it('e', 'Gel B', 99, false)];
+    const sel = { substrates: null, chargeRatios: null, concentrations: null, holdTimes: null, hiddenSets: [], order: 'desc' as const, metric: 's' };
+    const c = buildRunComparison(items, sel);
+    expect(c.gels.map((g) => g.label)).toEqual(['Gel A', 'Gel B', 'unspecified']);
+    expect(c.sets.map((s) => [s.gelLabel, c.stat(s, '1', 's').mean])).toEqual([['Gel A', 11], ['Gel B', 20], ['unspecified', 30]]);
+    // A run left out after review counts only under "All valid runs".
+    expect(c.stat(c.sets[1], '1', 's').n).toBe(1);
+    const raw = buildRunComparison(items, { ...sel, which: 'raw' });
+    expect(raw.stat(raw.sets[1], '1', 's').n).toBe(2);
+    expect(buildRunComparison(items, { ...sel, gels: ['gel b'] }).sets.map((s) => s.gelLabel)).toEqual(['Gel B']);
+    // Without a gel the data-set key is unchanged, so saved choices still apply.
+    expect(c.sets[2].key).toBe('glass|0.25|2.5');
+  });
+
+  it('condition keys always include concentration and gel', async () => {
+    const { conditionKeys } = await import('../src/analysis/engine');
+    expect(conditionKeys(['chargeRatio', 'substrate', 'holdTimeS'])).toEqual(['chargeRatio', 'substrate', 'holdTimeS', 'concentrationM', 'gel']);
+    expect(conditionKeys(['gel', 'concentrationM'])).toEqual(['gel', 'concentrationM']);
   });
 });

@@ -52,6 +52,8 @@ export interface TackRepeat {
   substrateLabel: string;
   /** Dwell time (s) from the Wait section. */
   dwellS: number | null;
+  /** Charge ratio · concentration · gel of the Repeat (part of its condition). */
+  group: string;
   session: string;
   h0: number | null;
   runs: TackRun[];
@@ -163,7 +165,8 @@ export function useTackMetrics() {
   const diameter = project.settings.probe.diameterMm;
 
   const repeats = useMemo<TackRepeat[]>(() => {
-    const inScope = derived.ordered.filter((r) => groupValue(r, 'chargeRatio') === ex.chargeRatio && groupValue(r, 'concentrationM') === ex.concentrationM);
+    // The chosen experiment, with every substrate and dwell time (this tab compares them).
+    const inScope = derived.ordered.filter((r) => ex.inPick(r, { substrate: null, hold: null }));
     const byFile = new Map<string, CycleResult[]>();
     for (const r of inScope) byFile.set(r.file.fileId, [...(byFile.get(r.file.fileId) ?? []), r]);
     const names = uniqueFileNames([...byFile.values()].map((l) => l[0].file));
@@ -181,6 +184,7 @@ export function useTackMetrics() {
         substrate,
         substrateLabel: canonicalSubstrate(substrate) ?? substrate,
         dwellS: first.holdTimeS,
+        group: [`CR ${groupValue(first, 'chargeRatio') === '—' ? 'unknown' : groupValue(first, 'chargeRatio')}`, `${groupValue(first, 'concentrationM')} M`, groupValue(first, 'gel') === '—' ? 'gel unspecified' : groupValue(first, 'gel')].join(' · '),
         session,
         h0,
         runs: rs.map((r) => ({ id: r.cycle.cycleId, cycle: r.cycle, result: r, m: metricsOf(r.cycle, diameter, h0), excluded: runExclusion(r), obs: tm.observations[r.cycle.cycleId] ?? EMPTY_OBSERVATION })),
@@ -197,7 +201,7 @@ export function useTackMetrics() {
         (derived.results.get(a.runs[0].id)?.meta.repeat.value ?? 1) - (derived.results.get(b.runs[0].id)?.meta.repeat.value ?? 1) ||
         a.name.localeCompare(b.name, undefined, { numeric: true }),
     );
-  }, [derived, ex.chargeRatio, ex.concentrationM, tm, diameter]);
+  }, [derived, ex.inPick, tm, diameter]);
 
   const statsOf = (runs: TackRun[]) => Object.fromEntries(TACK_METRICS.map((k) => [k.key, meanSd(runs.map((r) => k.get(r.m)))])) as Record<string, MS>;
   /** Mean ± SD over the runs of each Repeat: after exclusion (shared with Data analysis). */
@@ -209,14 +213,15 @@ export function useTackMetrics() {
   const conditions = useMemo<GroupStat[]>(() => {
     const groups = new Map<string, TackRepeat[]>();
     for (const rp of repeats.filter((x) => allOkRuns(x).length > 0)) {
-      const key = `${rp.substrateLabel.toLowerCase()}|${rp.dwellS ?? '—'}`;
+      const key = `${rp.group.toLowerCase()}|${rp.substrateLabel.toLowerCase()}|${rp.dwellS ?? '—'}`;
       groups.set(key, [...(groups.get(key) ?? []), rp]);
     }
+    const severalGroups = new Set(repeats.map((rp) => rp.group)).size > 1;
     return [...groups.entries()].map(([key, all]) => {
       const used = all.filter((rp) => usedRuns(rp).length > 0);
       return {
         key,
-        label: `${all[0].substrateLabel} · ${all[0].dwellS !== null ? `${all[0].dwellS} s` : 'dwell unknown'}`,
+        label: `${severalGroups ? `${all[0].group} · ` : ''}${all[0].substrateLabel} · ${all[0].dwellS !== null ? `${all[0].dwellS} s` : 'dwell unknown'}`,
         substrate: all[0].substrateLabel,
         dwellS: all[0].dwellS,
         nRepeats: used.length,

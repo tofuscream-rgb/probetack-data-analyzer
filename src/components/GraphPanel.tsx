@@ -148,7 +148,7 @@ export function GraphPanel() {
     return (
       <div className="empty-plot">
         <p>No experiment to show yet.</p>
-        <p>Open your experiment folder in step 1 on the left, then choose the experiment and TXT file in step 2.</p>
+        <p>{ex.hasData ? 'No files match the chosen experiment. Set a dropdown in step 2 back to “All”.' : 'Open your experiment folder in step 1 on the left, then choose the experiment in step 2 and the files to draw in step 3.'}</p>
       </div>
     );
   }
@@ -181,7 +181,7 @@ export function GraphPanel() {
           <input type="checkbox" checked={graph.showMarkers} onChange={(e) => setGraph({ showMarkers: e.target.checked })} /> {pos ? 'Peak marker' : 'Min marker'}
         </label>
         <label className="check" title="Draw runs that are left out of the averages as thin grey dashed lines">
-          <input type="checkbox" checked={graph.showExcluded} onChange={(e) => setGraph({ showExcluded: e.target.checked })} /> Show outlier runs
+          <input type="checkbox" checked={graph.showExcluded} onChange={(e) => setGraph({ showExcluded: e.target.checked })} /> Show runs left out of the average
         </label>
         <button className="link" onClick={resetZoom} title="Drag on the graph to zoom, scroll to zoom; double-click also resets">Reset zoom</button>
         <div className="export-group" role="group" aria-label="Export graph">
@@ -203,7 +203,7 @@ export function GraphPanel() {
       <p className="view-help">
         Drag to zoom.{' '}
         {nExcluded > 0 ? `${nExcluded} of ${curves.length} run(s) are outliers left out of the averages${graph.showExcluded ? ' (grey dashed)' : ' and hidden'}.` : ''}
-        {!multi && ex.files.length > 1 ? ' Tick “Overlay additional TXT files” on the left to compare files.' : ''}
+        {!multi && ex.files.length > 1 ? ' Tick more files under “Runs on the graph” on the left to compare them.' : ''}
       </p>
 
       <PlotlyChart
@@ -214,7 +214,8 @@ export function GraphPanel() {
         config={{ toImageButtonOptions: { format: 'png', filename: fileName, scale: 3 } }}
       />
 
-      <div className="curve-list" aria-label="Runs on this graph">
+      <p className="view-help curve-help">Show or hide curves below. Hiding a curve only changes this graph; to leave a run out of the averages, untick <em>In average</em> in Data analysis (click a run name).</p>
+      <div className="curve-list" aria-label="Show or hide curves on this graph">
         {ex.graphFiles.map((e) => {
           const ids = e.runs.map((r) => r.cycle.cycleId);
           const shown = ids.filter((id) => !graph.hidden.includes(id)).length;
@@ -228,7 +229,7 @@ export function GraphPanel() {
                   onChange={() => setHidden(ids, shown === ids.length)}
                 />
                 {multi && <span className="swatch" style={{ background: colorOf(e.runs[0]) }} />}
-                <strong>{e.file.name}</strong>
+                <strong title={e.file.path}>{e.file.name}</strong>
               </label>
               {e.runs.map((r) => {
                 const hidden = graph.hidden.includes(r.cycle.cycleId);

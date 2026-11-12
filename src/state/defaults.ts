@@ -52,7 +52,7 @@ export function defaultCompare(): CompareSelection {
 
 export function defaultLapShear(): LapShearState {
   return {
-    pick: { chargeRatio: null, concentration: null, substrate: null },
+    pick: { chargeRatio: null, concentration: null, substrate: null, gel: null, hold: null },
     settings: {
       integration: { mode: 'full', fromMm: 0, toMm: 5 },
       baseline: { enabled: false, points: 30, maxSpreadGf: 2 },
@@ -89,7 +89,7 @@ export function defaultPeel(): PeelState {
     tab: 'graph',
     compare: { substrates: null, chargeRatios: null, concentrations: null, holdTimes: null, hiddenSets: [], order: 'desc', metric: 'toughness' },
     disabledFiles: [],
-    pick: { chargeRatio: null, concentration: null, substrate: null },
+    pick: { chargeRatio: null, concentration: null, substrate: null, gel: null, hold: null },
   };
 }
 

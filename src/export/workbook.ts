@@ -2,7 +2,7 @@
 import type { GraphConfig, ProjectState } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, GF_TO_N } from '../types';
 import type { CycleResult, Derived } from '../analysis/engine';
-import { GROUP_LABEL, STATUS_LABEL, isIncluded, type SummaryStats } from '../analysis/engine';
+import { GROUP_LABEL, conditionKeys, STATUS_LABEL, isIncluded, type SummaryStats } from '../analysis/engine';
 import { DISPLACEMENT_LABEL, FORCE_SIGN_LABEL, displacement, displayFactor, peakLabel } from '../analysis/cycleMetrics';
 import { QC_ORDER, explainPoint } from '../analysis/pointOutliers';
 import { axisLabel, axisValues, curveLabel } from '../plotting/axes';
@@ -161,7 +161,7 @@ export function buildWorkbookSheets(derived: Derived, project: ProjectState, opt
     ['Repeat-level statistics first average the runs of each file (repeat), then summarize across repeats.'],
     [],
   ];
-  const keys = project.groupBy.includes('concentrationM') ? project.groupBy : [...project.groupBy, 'concentrationM' as const];
+  const keys = conditionKeys(project.groupBy);
   const runCols = (t: string) => [`${t} runs (n)`, `${t} run mean (${u})`, `${t} run SD (${u})`, `${t} run median (${u})`, `${t} run CV`];
   const repeatCols = (t: string) => [`${t} repeats (n)`, `${t} repeat mean (${u})`, `${t} repeat SD (${u})`, `${t} repeat CV`];
   const runVals = (st: SummaryStats) => [st.n, num(st.mean * uf), num(st.sd * ufa), num(st.median * uf), num(st.cv)];

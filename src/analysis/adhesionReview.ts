@@ -29,8 +29,8 @@ export function conditionTitle({ cond: c, gel }: AnalysisRow) {
     c.substrate === '—' ? 'Substrate unknown' : c.substrate.trim(),
     c.chargeRatio === '—' ? 'Charge ratio unknown' : `CR ${c.chargeRatio}`,
     c.concentration === '—' ? 'Concentration unknown' : `${c.concentration} M${c.concentrationDefault ? ' (assumed)' : ''}`,
-    gel,
-    c.hold === '—' ? 'Holding time unknown' : `${c.hold} s holding time`,
+    gel?.trim() || 'Gel unspecified',
+    c.hold === '—' ? 'Dwell unknown' : `${c.hold} s dwell`,
   ].filter(Boolean).join(' · ');
 }
 

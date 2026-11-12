@@ -17,6 +17,8 @@ export interface RunCondition {
   concentrationDefault: boolean;
   /** Holding time from the file name ("60s.txt"), or "—". */
   hold: string;
+  /** Gel from the folder names, or "—" (unspecified). Optional for callers that do not track gels. */
+  gel?: string;
 }
 
 export function runCondition(m: ExperimentMeta | undefined): RunCondition {
@@ -26,14 +28,21 @@ export function runCondition(m: ExperimentMeta | undefined): RunCondition {
     concentration: m?.concentrationM.value === null || m?.concentrationM.value === undefined ? '—' : String(m.concentrationM.value),
     concentrationDefault: m?.concentrationM.source === 'default',
     hold: m?.nominalHoldS.value === null || m?.nominalHoldS.value === undefined ? '—' : String(m.nominalHoldS.value),
+    gel: m?.gel.value?.trim() || '—',
   };
 }
+
+/** The holding time from the Wait block when the file name gives none. */
+export const withRecordedHold = (c: RunCondition, holdTimeS: number | null): RunCondition =>
+  c.hold === '—' && holdTimeS !== null ? { ...c, hold: String(holdTimeS) } : c;
 
 export interface CompareItem {
   id: string;
   cond: RunCondition;
   /** Property values of the run (e.g. strength, work per area), keyed like the mode's property list. */
   values: Record<string, number>;
+  /** Included in the average after review (Data analysis); undefined = included. */
+  included?: boolean;
 }
 
 export interface RunDataSet {
@@ -43,35 +52,47 @@ export interface RunDataSet {
   chargeRatio: string;
   concentration: string;
   concentrationDefault: boolean;
+  /** Gel key (lower case) or "—", and its label ("unspecified" when no gel is in the folder names). */
+  gel: string;
+  gelLabel: string;
   hidden: boolean;
 }
 
 export interface RunComparison {
   substrates: Choice[];
+  gels: Choice[];
   chargeRatios: string[];
   concentrations: string[];
   holdTimes: string[];
-  selected: { substrates: string[]; chargeRatios: string[]; concentrations: string[]; holdTimes: string[] };
+  selected: { substrates: string[]; gels: string[]; chargeRatios: string[]; concentrations: string[]; holdTimes: string[] };
   sets: RunDataSet[];
   /** mean ± SD (n) of a property for one data set and holding time. */
   stat: (set: RunDataSet, hold: string, metric: string) => { mean: number; sd: number; n: number };
 }
 
 const sub = (c: RunCondition) => c.substrate.trim().toLowerCase();
+const gelOf = (c: RunCondition) => (!c.gel || c.gel === '—' ? '—' : c.gel.trim().toLowerCase());
 const uniq = (v: string[]) => [...new Set(v)].sort(byNumber);
 const keep = (sel: string[] | null, avail: string[], fallback: string[]) => (sel === null ? fallback : sel.filter((v) => avail.includes(v)));
 
-export function buildRunComparison(items: CompareItem[], sel: RunCompareSelection): RunComparison {
+export function buildRunComparison(allItems: CompareItem[], sel: RunCompareSelection): RunComparison {
+  const items = sel.which === 'raw' ? allItems : allItems.filter((it) => it.included !== false);
   const spell = new Map<string, Map<string, number>>();
   for (const it of items) {
     const m = spell.get(sub(it.cond)) ?? new Map<string, number>();
     m.set(it.cond.substrate, (m.get(it.cond.substrate) ?? 0) + 1);
     spell.set(sub(it.cond), m);
   }
-  const substrates = [...spell].map(([value, m]) => ({ value, label: [...m].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => bySubstrate(a.label, b.label));
+  const substrates = [...spell].map(([value, m]) => ({ value, label: value === '—' ? 'unknown' : [...m].sort((a, b) => b[1] - a[1])[0][0] })).sort((a, b) => bySubstrate(a.label, b.label));
   const subValues = substrates.map((s) => s.value);
   const selSubs = keep(sel.substrates, subValues, subValues);
-  const onSubs = items.filter((it) => selSubs.includes(sub(it.cond)));
+  const onSubsAll = items.filter((it) => selSubs.includes(sub(it.cond)));
+  const gelSpell = new Map<string, string>();
+  for (const it of onSubsAll) if (!gelSpell.has(gelOf(it.cond))) gelSpell.set(gelOf(it.cond), (it.cond.gel ?? '—').trim());
+  const gels = [...gelSpell].map(([value, label]) => ({ value, label: value === '—' ? 'unspecified' : label }))
+    .sort((a, b) => (a.value === '—' ? 1 : b.value === '—' ? -1 : a.label.localeCompare(b.label, undefined, { numeric: true })));
+  const selGels = keep(sel.gels ?? null, gels.map((g) => g.value), gels.map((g) => g.value));
+  const onSubs = onSubsAll.filter((it) => selGels.includes(gelOf(it.cond)));
   const chargeRatios = uniq(onSubs.map((it) => it.cond.chargeRatio));
   const selCr = keep(sel.chargeRatios, chargeRatios, chargeRatios);
   const onCr = onSubs.filter((it) => selCr.includes(it.cond.chargeRatio));
@@ -84,7 +105,9 @@ export function buildRunComparison(items: CompareItem[], sel: RunCompareSelectio
   const groups = new Map<string, CompareItem[]>();
   const sets = new Map<string, RunDataSet>();
   for (const it of inSets) {
-    const key = `${sub(it.cond)}|${it.cond.chargeRatio}|${it.cond.concentration}`;
+    const gel = gelOf(it.cond);
+    // Without a gel the key is the same as before gels were compared, so saved choices still apply.
+    const key = `${sub(it.cond)}|${it.cond.chargeRatio}|${it.cond.concentration}${gel === '—' ? '' : `|gel:${gel}`}`;
     groups.set(`${key}|${it.cond.hold}`, [...(groups.get(`${key}|${it.cond.hold}`) ?? []), it]);
     const prev = sets.get(key);
     if (prev) prev.concentrationDefault = prev.concentrationDefault && it.cond.concentrationDefault;
@@ -96,19 +119,26 @@ export function buildRunComparison(items: CompareItem[], sel: RunCompareSelectio
         chargeRatio: it.cond.chargeRatio,
         concentration: it.cond.concentration,
         concentrationDefault: it.cond.concentrationDefault,
+        gel,
+        gelLabel: gels.find((g) => g.value === gel)?.label ?? gel,
         hidden: sel.hiddenSets.includes(key),
       });
   }
   const dir = sel.order === 'asc' ? 1 : -1;
+  const gelOrder = (x: RunDataSet, y: RunDataSet) => gels.findIndex((g) => g.value === x.gel) - gels.findIndex((g) => g.value === y.gel);
   const ordered = [...sets.values()].sort(
-    (a, b) => bySubstrate(a.substrateLabel, b.substrateLabel) || selSubs.indexOf(a.substrate) - selSubs.indexOf(b.substrate) || dir * byNumber(a.chargeRatio, b.chargeRatio) || byNumber(a.concentration, b.concentration),
+    (a, b) => bySubstrate(a.substrateLabel, b.substrateLabel) || selSubs.indexOf(a.substrate) - selSubs.indexOf(b.substrate)
+      || (sel.panelBy === 'chargeRatio'
+        ? dir * byNumber(a.chargeRatio, b.chargeRatio) || byNumber(a.concentration, b.concentration) || gelOrder(a, b)
+        : gelOrder(a, b) || dir * byNumber(a.chargeRatio, b.chargeRatio) || byNumber(a.concentration, b.concentration)),
   );
   return {
     substrates,
+    gels,
     chargeRatios,
     concentrations,
     holdTimes,
-    selected: { substrates: selSubs, chargeRatios: selCr, concentrations: selConc, holdTimes: selHold },
+    selected: { substrates: selSubs, gels: selGels, chargeRatios: selCr, concentrations: selConc, holdTimes: selHold },
     sets: ordered,
     stat: (set, hold, metric) => describe((groups.get(`${set.key}|${hold}`) ?? []).map((it) => it.values[metric])),
   };

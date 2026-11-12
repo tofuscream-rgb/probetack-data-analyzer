@@ -1,3 +1,4 @@
+import { ContextBar } from '../ContextBar';
 import { useApp } from '../../state/AppContext';
 import { usePeel } from '../../state/peel';
 import type { PeelState } from '../../types';
@@ -7,7 +8,8 @@ import { PeelResults } from './PeelResults';
 import { PeelSettings } from './PeelSettings';
 import { RunCompare } from '../RunCompare';
 import { AdhesionDataAnalysis } from '../AdhesionDataAnalysis';
-import { peelAnalysisRow } from '../../analysis/adhesionReview';
+import { includedRuns, peelAnalysisRow } from '../../analysis/adhesionReview';
+import { useMemo } from 'react';
 import { PEEL_PROPERTIES } from '../../analysis/peel';
 
 const METRICS = PEEL_PROPERTIES.map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: p.digits }));
@@ -32,9 +34,12 @@ function PeelAnalysis() {
 }
 
 function PeelCompare() {
-  const { ps, selectedAll, set } = usePeel();
-  // Compare uses the ticked runs of every experiment; it has its own substrate / charge ratio choices.
-  const items = selectedAll.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, values: Object.fromEntries(PEEL_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
+  const { meta, project } = useApp();
+  const { ps, runs, set } = usePeel();
+  // Every enabled run, with the review decisions of Data analysis; the tab has its own filters.
+  const included = useMemo(() => includedRuns(runs.map((r) => peelAnalysisRow(r, meta.get(r.file.fileId)?.gel.value ?? null)), project.settings.cycle, project.settings.runExclusion.excludeClasses, ps.analysisInclusion ?? {}),
+    [runs, meta, project.settings.cycle, project.settings.runExclusion.excludeClasses, ps.analysisInclusion]);
+  const items = runs.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, included: included.has(r.id), values: Object.fromEntries(PEEL_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
   return (
     <RunCompare
       items={items}
@@ -63,6 +68,7 @@ export function PeelWorkspace() {
   const problems = files.filter((f) => f.parsed.status !== 'ok').length;
   return (
     <section className="main-area">
+      <ContextBar />
       <div className="main-tabs" role="tablist" aria-label="90° peel views">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={ps.tab === t.id} className={`tab ${ps.tab === t.id ? 'active' : ''} ${t.minor ? 'minor' : ''}`} onClick={() => set({ tab: t.id })}>

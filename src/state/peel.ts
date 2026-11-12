@@ -5,7 +5,7 @@
 import { useCallback, useMemo } from 'react';
 import { useApp } from './AppContext';
 import { uniqueFileNames } from './experiment';
-import { runCondition, runLabels, type RunCondition } from '../analysis/runCompare';
+import { runCondition, runLabels, withRecordedHold, type RunCondition } from '../analysis/runCompare';
 import { analyzePeelCycle, type PeelResult } from '../analysis/peel';
 import { matchesPick, normalizePick, pickOptions } from '../analysis/experimentPick';
 import type { Cycle, ExperimentPick, ParsedFile, PeelRunMeta, PeelSettings, PeelState } from '../types';
@@ -54,7 +54,7 @@ export function usePeel() {
         : '';
       for (const c of l.cycles) {
         const rm = peelMeta(ps, c.cycleId);
-        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: '', condition, cond: runCondition(m), meta: rm, result: cachedResult(c, rm, ps.settings) });
+        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: '', condition, cond: withRecordedHold(runCondition(m), c.holdTimeS), meta: rm, result: cachedResult(c, rm, ps.settings) });
       }
     }
     // Group by conditions, then version order (PET, PETv2, PET v3), so legend and tables list a group together.
@@ -67,7 +67,7 @@ export function usePeel() {
 
   const valid = runs.filter((r) => r.result.ok);
   // "Choose your experiment": only runs of the chosen charge ratio, concentration and substrate are shown.
-  const conds = useMemo(() => runs.map((r) => r.cond), [runs]);
+  const conds = useMemo(() => runs.map((r) => ({ ...r.cond, fileId: r.file.fileId })), [runs]);
   const pick = useMemo(() => normalizePick(conds, ps.pick), [conds, ps.pick]);
   const options = useMemo(() => pickOptions(conds, pick), [conds, pick]);
   const picked = useMemo(() => runs.filter((r) => matchesPick(r.cond, pick)), [runs, pick]);

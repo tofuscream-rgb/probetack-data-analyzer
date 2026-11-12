@@ -555,3 +555,44 @@ table.grid tr.excluded-row td .excl-chip, table.grid tr.excluded-row td .flags {
 .note.before { font-size: 11px; }
 .area-tool { border: 1px solid var(--rule); border-radius: 8px; padding: 6px 10px; margin: 6px 0; }
 table.area-table td.note { font-size: 11px; }
+
+/* ---- Selection context, import summary and experiment chooser ---------------------- */
+.context-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 7px 12px; border-bottom: 1px solid var(--rule-2); background: var(--surface-2); font-size: 12px; color: var(--ink-2); flex: none; }
+.context-bar strong { color: var(--ink); font-weight: 600; }
+.context-bar .ctx-title { font-weight: 600; color: var(--ink); font-size: 13px; margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mode-badge { font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 2px 8px; border-radius: 999px; color: var(--accent-ink); background: var(--accent); }
+.mode-badge.mode-lapShear { background: #6a3d9a; }
+.mode-badge.mode-peel { background: #1b7a6e; }
+.import-summary { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface-2); margin-bottom: 8px; }
+.import-summary .note { margin: 0; }
+.import-summary .warn { color: var(--orange); }
+.add-files { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; color: var(--ink-2); }
+.add-files button.small { padding: 2px 9px; font-size: 12px; }
+.enabled-files > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 4px 0; }
+.enabled-files[open] > summary { margin-bottom: 6px; }
+.experiment-picker { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.experiment-picker .field { margin: 0; }
+.fl-group-title { font-size: 11px; font-weight: 600; color: var(--ink-2); padding: 6px 6px 2px; text-transform: none; }
+.fl-file.tack-file { grid-template-columns: 16px minmax(0, 1fr) auto; cursor: default; }
+.fl-file.tack-file .file-only { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; font-size: 12px; color: var(--ink); text-decoration: none; }
+.fl-file.tack-file .file-only:hover { text-decoration: underline; }
+.fl-file.tack-file.on { background: var(--accent-weak); }
+.fl-context { color: var(--ink-3); font-weight: 400; }
+.diag-more { color: var(--ink-3); }
+.diag-more > summary { cursor: pointer; font-size: 11px; }
+.grid.group-summary { width: auto; margin: 4px 0 2px; font-size: 12px; }
+.group-summary th { text-align: left; font-weight: 500; color: var(--ink-2); white-space: nowrap; padding-right: 14px; }
+.group-summary td.num { white-space: nowrap; padding-left: 14px; }
+.group-summary td.strong { font-weight: 600; color: var(--ink); }
+.note.sources { margin: 2px 0 8px; }
+.source-file { display: inline-block; margin: 0 6px 0 2px; padding: 0 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--rule-2); font-size: 11px; }
+.in-average { display: inline-flex; gap: 6px; align-items: center; }
+/* Run and file pickers: names read left to right and wrap instead of being cut from the left. */
+.run-picker .fl-folder-head .fl-name { direction: ltr; white-space: normal; overflow-wrap: anywhere; }
+.run-picker .group-head .fl-name { font-weight: 600; }
+.run-picker .disclose { text-align: left; min-width: 0; }
+.fl-file.tack-file .fl-context { font-size: 11px; }
+.graph-format { padding: 0 12px; flex: none; }
+.graph-format > summary { cursor: pointer; font-size: 12px; color: var(--ink-2); padding: 3px 0; }
+.graph-format[open] > summary { margin-bottom: 2px; }
+.graph-format > .graph-toolbar { padding-left: 0; padding-right: 0; }

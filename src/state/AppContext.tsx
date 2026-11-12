@@ -127,7 +127,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const notify = useCallback((kind: Notice['kind'], text: string) => {
     const id = noticeId.current++;
     setNotices((n) => [...n.slice(-3), { id, kind, text }]);
-    if (kind === 'success' || kind === 'info') setTimeout(() => setNotices((n) => n.filter((x) => x.id !== id)), 6000);
+    // Errors stay until dismissed; the import summary in the sidebar keeps the counts after a notice goes.
+    if (kind !== 'error') setTimeout(() => setNotices((n) => n.filter((x) => x.id !== id)), kind === 'warning' ? 12000 : 6000);
   }, []);
   const dismiss = useCallback((id: number) => setNotices((n) => n.filter((x) => x.id !== id)), []);
   const setUi = useCallback(
@@ -259,13 +260,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         `Imported ${out.length} file(s) with ${nCycles} run(s) for ${MODE_LABEL[mode]}.` +
           (bad ? ` ${bad} file(s) had no usable data.` : '') +
           (warn ? ` ${warn} file(s) have warnings.` : '') +
-          ' See the Files tab.',
+          (bad || warn ? ' Details are in the Files tab.' : ''),
       );
-      if (bad || warn) {
-        setProject((p) =>
-          mode === 'tack' ? { ...p, mainTab: 'files' } : mode === 'lapShear' ? { ...p, lapShear: { ...p.lapShear, tab: 'files' } } : { ...p, peel: { ...p.peel, tab: 'files' } },
-        );
-      }
       setBusy(null);
     },
     [notify, pendingAll, storeFiles],

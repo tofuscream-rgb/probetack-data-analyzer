@@ -9,10 +9,10 @@ export interface ProcessedRow extends AnalysisRow {
   workPerArea?: number;
 }
 
-const sheetName: Record<SummarySheet, string> = { run: 'Per run', repeat: 'Per repeat', condition: 'Per condition', gel: 'Compare gels' };
+const sheetName: Record<SummarySheet, string> = { run: 'Per Run', repeat: 'Per Repeat', condition: 'Per Condition', gel: 'Compare Gels' };
 
 function columnsFor(mode: ExperimentMode): { label: string; value: (row: ProcessedRow) => number }[] {
-  const peak = mode === 'tack' ? 'Peak tensile force' : 'Peak load';
+  const peak = mode === 'tack' ? 'Peak adhesion force' : 'Peak load';
   const columns = [
     { label: peak + ' (gf)', value: (r: ProcessedRow) => r.peakN / GF_TO_N },
     { label: peak + ' (N)', value: (r: ProcessedRow) => r.peakN },

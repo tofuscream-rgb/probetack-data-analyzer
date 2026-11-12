@@ -16,7 +16,7 @@ export function LapShearSidebar() {
         <h2>2. Choose your experiment</h2>
         {!runs.length ? (
           <p className="hint">
-            Open your lap-shear TXT files first. Folder names such as <em>0.25 2.98M/glass/</em> give the charge ratio, concentration and substrate.
+            Open your lap-shear TXT files first. Folder names such as <em>Gel A/0.25 2.98M/glass/</em> give the gel, charge ratio, concentration and substrate.
           </p>
         ) : (
           <>
@@ -27,7 +27,7 @@ export function LapShearSidebar() {
       </section>
       {runs.length > 0 && (
         <section className="step">
-          <h2>3. Files and runs</h2>
+          <h2>3. Runs on the graph</h2>
           <RunPicker
             files={pickedFiles}
             runs={picked.map((r) => ({ id: r.id, fileId: r.file.fileId, cycleNumber: r.cycle.cycleNumber, ok: r.result.ok, error: r.result.error, peakGf: r.result.peak?.forceGf ?? null }))}
@@ -35,7 +35,7 @@ export function LapShearSidebar() {
             setSelected={setSelected}
             nameOf={(l) => names.get(l.parsed.fileId) ?? l.parsed.name}
             groupOf={groupOf}
-            hint="Tick any number of files (all their runs) or open a file (▸) to tick single runs. Compare charge ratios uses the ticked runs of every experiment. Each run keeps its own dimensions and failure mode (Results tab)."
+            hint="Tick files (all their runs) or open a file (▸) to tick single runs. Unticking only removes a run from the graph; to leave it out of the averages, untick In average in Data analysis. Each run keeps its own dimensions and failure mode (Lap Shear metrics tab)."
           />
         </section>
       )}

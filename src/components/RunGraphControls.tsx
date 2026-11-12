@@ -162,7 +162,10 @@ export function GraphLabelControls({ view, set, runs, suggestion, autoX, autoY }
   autoX: string;
   autoY: string;
 }) {
+  const edited = [view.title && 'title', (view.xTitle || view.yTitle) && 'axis titles', Object.keys(view.names).length && 'curve names', view.labels !== 'legend' && 'curve labels'].filter(Boolean);
   return (
+    <details className="graph-format">
+      <summary>Labels and titles{edited.length ? ` (edited: ${edited.join(', ')})` : ''}</summary>
     <div className="graph-toolbar label-bar">
       <label title="How curves are identified">
         Curve labels
@@ -215,6 +218,7 @@ export function GraphLabelControls({ view, set, runs, suggestion, autoX, autoY }
         </div>
       </details>
     </div>
+    </details>
   );
 }
 

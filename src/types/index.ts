@@ -243,9 +243,13 @@ export interface TackObservation {
 export interface CompareSelection {
   /** Substrate names in lower case ("ss" and "SS" are the same). */
   substrates: string[] | null;
+  /** Gel keys in lower case, "—" = unspecified; absent or null = all. */
+  gels?: string[] | null;
   chargeRatios: string[] | null;
   concentrations: string[] | null;
   holdTimes: string[] | null;
+  /** Bar-chart panels: one gel with its charge ratios (default), or one charge ratio with its gels side by side. */
+  panelBy?: 'gel' | 'chargeRatio';
   /** Data set keys unticked in the list of matched sets. */
   hiddenSets: string[];
   /** Order of charge ratios inside each substrate panel. */
@@ -254,10 +258,13 @@ export interface CompareSelection {
 }
 
 export interface ExperimentSelection {
-  /** Values as shown in the dropdowns (null = first available). */
+  /** "Choose your experiment" choices (null = all). */
   chargeRatio: string | null;
   concentrationM: string | null;
   substrate: string | null;
+  gel?: string | null;
+  /** Dwell (holding) time in s. */
+  hold?: string | null;
   /** The main TXT file to view. */
   fileId: string | null;
   /** Overlay additional TXT files of the same experiment. */
@@ -336,6 +343,12 @@ export interface RunGraphView {
 /** Compare charge ratios tab of Lap Shear and 90° Peel: which data sets and which property. */
 export interface RunCompareSelection {
   substrates: string[] | null;
+  /** Gel keys in lower case, "—" = unspecified; absent or null = all. */
+  gels?: string[] | null;
+  /** Bar-chart panels: one gel with its charge ratios (default), or one charge ratio with its gels side by side. */
+  panelBy?: 'gel' | 'chargeRatio';
+  /** 'processed' (default): runs included after review; 'raw': all valid runs. */
+  which?: 'processed' | 'raw';
   chargeRatios: string[] | null;
   concentrations: string[] | null;
   holdTimes: string[] | null;
@@ -410,10 +423,14 @@ export interface PeelState {
 }
 
 /** Dropdown choice of an experiment (values as in RunCondition; substrate in lower case; null = all). */
+/** "Choose your experiment" choices; null = all. Values are those of RunCondition (substrate and gel in lower case). */
 export interface ExperimentPick {
   chargeRatio: string | null;
   concentration: string | null;
   substrate: string | null;
+  gel: string | null;
+  /** Dwell (holding) time in s. */
+  hold: string | null;
 }
 
 export interface ProjectState {

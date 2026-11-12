@@ -9,6 +9,8 @@ export interface Reference {
 }
 
 export const REFERENCES: Reference[] = [
+  { key: 'nistOutliers', short: 'NIST/SEMATECH', citation: 'NIST/SEMATECH e-Handbook of Statistical Methods, §1.3.5.17, Detection of Outliers.', url: 'https://www.itl.nist.gov/div898/handbook/eda/section3/eda35h.htm', linkText: 'NIST handbook' },
+  { key: 'wang2020', short: 'Wang et al. (2020)', citation: 'Y. Wang, X. Yang, G. Nian, Z. Suo, Strength and toughness of adhesion of soft materials measured in lap shear, J. Mech. Phys. Solids 143, 103988 (2020).', url: 'https://doi.org/10.1016/j.jmps.2020.103988', linkText: 'doi:10.1016/j.jmps.2020.103988' },
   { key: 'iso10365', short: 'ISO 10365', citation: 'ISO 10365, Adhesives — Designation of main failure patterns.', url: 'https://www.iso.org/search.html?q=ISO%2010365', linkText: 'iso.org' },
   {
     key: 'lakrout1999', short: 'Lakrout et al. (1999)',

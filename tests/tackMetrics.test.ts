@@ -26,6 +26,13 @@ function triangle(step = 0.001) {
 }
 
 describe('probe-tack metrics', () => {
+  it('reports absolute tensile work for Data analysis without a probe diameter', () => {
+    const m = analyzeTack(run(triangle()), { diameterMm: 0, h0Mm: null, allowMissingArea: true });
+    expect(m.ok).toBe(true);
+    expect(m.workMJ).toBeCloseTo(1.4998, 4);
+    expect(m.wJm2).toBeNaN();
+  });
+
   it('peak, stress, work, displacements and strains of a known curve', () => {
     const m = analyzeTack(run(triangle()), { diameterMm: D, h0Mm: 2 });
     expect(m.ok).toBe(true);

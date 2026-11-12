@@ -145,6 +145,12 @@ The **Tack metrics** tab analyses the tensile part of each pull for every file (
 - *Incomplete detachment*: F never fell to ≤ 2% F_max before the file ended; W_adh is underestimated.
 - *Load tared after dwell*: a Zero Load step between the Wait and the pull reset the load cell; the pull force is referenced to the new zero.
 
+## Condition summaries across adhesion tests
+
+Open **Data analysis** to see all runs for the chosen experiments or just the runs plotted. Files sharing substrate, charge ratio, concentration and holding time appear under one condition, with the source filename shown on every row. Lap Shear and 90° Peel also retain gel identity when available. The modified Z-score uses the Probe Tack screening settings. For Lap Shear it uses peak load; for 90° Peel it uses steady-state force. The included mean and sample SD use the run checkboxes in the table. In Lap Shear and 90° Peel these review choices are saved with the project and apply to the condition summaries.
+
+All three modes report measured work Wadh in mJ from the force–displacement integral. Probe Tack integrates the tensile pull and can normalize by initial probe area. Lap Shear integrates to complete failure; 90° Peel integrates to detachment. An asterisk identifies work up to the recorded endpoint where no separation point was found. Each Data analysis tab includes its equations and sources. Use **Tack metrics**, **Lap Shear metrics**, or **Peel metrics** for the detailed results.
+
 ## Lap Shear analysis
 
 Choose **Experiment type → Lap Shear** at the top and open your lap-shear files there (they are separate from the Probe Tack and 90° Peel files). Probe Tack's settings and results are not changed.

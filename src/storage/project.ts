@@ -130,6 +130,7 @@ export function migrateLapShear(raw: Partial<LapShearState> | undefined): LapShe
       defaults: { ...d.settings.defaults, ...(s.defaults ?? {}) },
     },
     pick: migrateExperimentPick(r.pick),
+    analysisInclusion: Object.fromEntries(Object.entries(r.analysisInclusion ?? {}).filter(([, value]) => typeof value === 'boolean')),
     runs,
     selected: Array.isArray(r.selected) ? r.selected : null,
     fileId: typeof r.fileId === 'string' ? r.fileId : null,
@@ -174,6 +175,7 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
     },
     runs,
     pick: migrateExperimentPick(r.pick),
+    analysisInclusion: Object.fromEntries(Object.entries(r.analysisInclusion ?? {}).filter(([, value]) => typeof value === 'boolean')),
     selected: Array.isArray(r.selected) ? r.selected : null,
     fileId: typeof r.fileId === 'string' ? r.fileId : null,
     view: migrateView(d.view, r.view),
@@ -349,6 +351,7 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
     lapShear: {
       ...state.lapShear,
       runs: remapKeys(state.lapShear.runs, mapCycle),
+      analysisInclusion: remapKeys(state.lapShear.analysisInclusion ?? {}, mapCycle),
       view: { ...state.lapShear.view, names: remapKeys(state.lapShear.view.names, mapCycle) },
       selected: state.lapShear.selected ? state.lapShear.selected.map(mapCycle) : null,
       fileId: state.lapShear.fileId ? idMap.get(state.lapShear.fileId) ?? state.lapShear.fileId : null,
@@ -357,6 +360,7 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
     peel: {
       ...state.peel,
       runs: remapKeys(state.peel.runs, mapCycle),
+      analysisInclusion: remapKeys(state.peel.analysisInclusion ?? {}, mapCycle),
       view: { ...state.peel.view, names: remapKeys(state.peel.view.names, mapCycle) },
       selected: state.peel.selected ? state.peel.selected.map(mapCycle) : null,
       fileId: state.peel.fileId ? idMap.get(state.peel.fileId) ?? state.peel.fileId : null,

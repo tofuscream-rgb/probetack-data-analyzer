@@ -10,6 +10,9 @@ import { PlotlyChart } from '../plotting/PlotlyChart';
 import type { AnalysisSettings, GroupKey, MetaOverride } from '../types';
 import { QcLegend, compareConditionKeys, fmt, forceDigits, meanSd, useSetRunChoice, type RunChoice } from './common';
 import { useExperiment } from '../state/experiment';
+import { metricsOf } from '../state/tackMetrics';
+import { WorkMethods } from './AdhesionMethods';
+import { mean, sampleSD } from '../analysis/stats';
 
 /** Runs are listed per experimental condition. Concentration is always part of the key. */
 export const CONDITION_KEYS: GroupKey[] = ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'];
@@ -96,6 +99,12 @@ export function DataAnalysis() {
       .map(([key, list]) => ({ key, hold: list[0].holdTimeS, runs: [...list].sort(byRepeatAndRun), stats: stats.get(key) ?? null }));
   }, [runs]);
 
+  const diameter = project.settings.probe.diameterMm;
+  const thickness = project.tackMetrics.h0;
+  const work = useMemo(() => new Map(runs.map((r) => [
+    r.cycle.cycleId, metricsOf(r.cycle, diameter, thickness[r.file.fileId] ?? null, true),
+  ])), [runs, diameter, thickness]);
+
   const focus = ui.focusId ? derived.results.get(ui.focusId) ?? null : null;
   const excl = project.settings.runExclusion.excludeClasses;
   const nOutliers = runs.filter((r) => r.qc !== 'green').length;
@@ -121,11 +130,18 @@ export function DataAnalysis() {
             {excl.length ? `${excl.join(' and ').replace(/^./, (c) => c.toUpperCase())} runs are left out of the average without outliers.` : 'No runs are left out automatically.'}{' '}
             Untick or tick <em>In average</em> to decide yourself. Click a row for its curve and details.
           </p>
+          <p className="note">W<sub>adh</sub> is tensile work. An asterisk marks a pull that ended before detachment was detected.</p>
           <QcLegend />
         </div>
+        <WorkMethods mode="tack" />
         {groups.map((g) => {
           const raw = g.stats?.raw;
           const pr = g.stats?.processed;
+          const workStats = (list: CycleResult[], metric: 'workMJ' | 'wJm2') => {
+            const values = list.map((r) => work.get(r.cycle.cycleId)?.[metric] ?? NaN);
+            return meanSd(mean(values), sampleSD(values), values.filter(Number.isFinite).length, 3);
+          };
+          const included = g.runs.filter(isIncluded);
           return (
             <section key={g.key} className="run-group">
               <header className="run-group-head">
@@ -137,15 +153,20 @@ export function DataAnalysis() {
                   Without outliers: <strong>{meanSd((pr?.mean ?? NaN) * f, (pr?.sd ?? NaN) * fa, pr?.n ?? 0, d)}</strong> {u}
                 </span>
               </header>
+              <div className="run-group-head">
+                <span className="group-stat">W<sub>adh</sub> (mJ), all / included: <strong>{workStats(g.runs, 'workMJ')} / {workStats(included, 'workMJ')}</strong></span>
+                {diameter > 0 && <span className="group-stat">W<sub>adh</sub>/A (J/m²), all / included: <strong>{workStats(g.runs, 'wJm2')} / {workStats(included, 'wJm2')}</strong></span>}
+              </div>
               <table className="grid run-table">
                 <thead>
                   <tr>
-                    <th>File</th><th>Run</th><th className="num">{`${valueLabel} (${u})`}</th><th className="num" title="Modified Z-score within the same condition; needs at least 4 runs">Z-score</th><th>Flag</th><th>Why</th><th title="Used in the average without outliers">In average</th>
+                    <th>File</th><th>Run</th><th className="num">{`${valueLabel} (${u})`}</th><th className="num">W<sub>adh</sub> (mJ)</th>{diameter > 0 && <th className="num">W<sub>adh</sub>/A (J/m²)</th>}<th className="num" title="Modified Z-score within the same condition; needs at least 4 runs">Z-score</th><th>Flag</th><th>Why</th><th title="Used in the average without outliers">In average</th>
                   </tr>
                 </thead>
                 <tbody>
                   {g.runs.map((r) => {
                     const msgs = flagMessages(r);
+                    const w = work.get(r.cycle.cycleId);
                     return (
                       <tr
                         key={r.cycle.cycleId}
@@ -155,6 +176,8 @@ export function DataAnalysis() {
                         <td title={r.file.path}>{r.file.name}</td>
                         <td className="num">{r.cycle.cycleNumber}</td>
                         <td className="num value">{fmt(r.peakRaw * f, d)}</td>
+                        <td className="num" title={w?.error ?? undefined}>{fmt(w?.workMJ, 3)}{w?.incomplete && ' *'}</td>
+                        {diameter > 0 && <td className="num">{fmt(w?.wJm2, 3)}{w?.incomplete && ' *'}</td>}
                         <td className={`num z ${r.modZ !== null && Math.abs(r.modZ) >= project.settings.cycle.modZOrange ? 'big' : ''}`} title={r.modZ === null ? 'Fewer than the minimum number of runs in this condition' : ''}>
                           {r.modZ === null ? '—' : Math.abs(r.modZ) >= 99 ? (r.modZ * zSign > 0 ? '≫' : '≪') : (r.modZ * zSign).toFixed(2)}
                         </td>

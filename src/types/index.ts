@@ -305,8 +305,8 @@ export interface LapShearSettings {
   defaults: LapShearDims;
 }
 
-export type RunTab = 'graph' | 'results' | 'compare' | 'settings' | 'files';
-export const RUN_TABS: RunTab[] = ['graph', 'results', 'compare', 'settings', 'files'];
+export type RunTab = 'graph' | 'analysis' | 'results' | 'compare' | 'settings' | 'files';
+export const RUN_TABS: RunTab[] = ['graph', 'analysis', 'results', 'compare', 'settings', 'files'];
 
 /** Graph options of the Lap Shear and 90° Peel graphs. */
 export interface RunGraphView {
@@ -346,6 +346,8 @@ export interface RunCompareSelection {
 }
 
 export interface LapShearState {
+  /** Manual inclusion choices for condition summaries, keyed by run ID. */
+  analysisInclusion?: Record<string, boolean>;
   /** Experiment shown in the sidebar, graph and results. */
   pick: ExperimentPick;
   settings: LapShearSettings;
@@ -393,6 +395,8 @@ export interface PeelSettings {
 }
 
 export interface PeelState {
+  /** Manual inclusion choices for condition summaries, keyed by run ID. */
+  analysisInclusion?: Record<string, boolean>;
   settings: PeelSettings;
   runs: Record<string, PeelRunMeta>;
   selected: string[] | null;

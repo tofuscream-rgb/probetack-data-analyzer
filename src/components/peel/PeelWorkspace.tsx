@@ -6,9 +6,39 @@ import { PeelGraph } from './PeelGraph';
 import { PeelResults } from './PeelResults';
 import { PeelSettings } from './PeelSettings';
 import { RunCompare } from '../RunCompare';
+import { AdhesionDataAnalysis } from '../AdhesionDataAnalysis';
 import { PEEL_PROPERTIES } from '../../analysis/peel';
 
 const METRICS = PEEL_PROPERTIES.map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: p.digits }));
+
+function PeelAnalysis() {
+  const { meta, update } = useApp();
+  const { ps, picked, selected } = usePeel();
+  return (
+    <AdhesionDataAnalysis
+      mode="peel"
+      rows={picked.map((r) => ({
+        id: r.id, fileId: r.file.fileId, path: r.file.path, name: r.file.name, number: r.cycle.cycleNumber,
+        cond: r.cond.hold === '—' && r.cycle.holdTimeS !== null ? { ...r.cond, hold: String(r.cycle.holdTimeS) } : r.cond,
+        gel: meta.get(r.file.fileId)?.gel.value ?? null,
+        primary: r.result.plateau.meanN,
+        peakN: r.result.peak?.forceN ?? NaN,
+        normalized: r.result.toughnessJm2,
+        workMJ: r.result.work.toDetachMJ ?? r.result.work.fullMJ,
+        incomplete: r.result.ok && r.result.work.toDetachMJ === null,
+        note: [r.result.error, ...r.result.warnings].filter(Boolean).join(' · '),
+      }))}
+      graphed={selected.filter((r) => r.result.ok).map((r) => r.id)}
+      inclusion={ps.analysisInclusion ?? {}}
+      setInclusion={(id, value) => update((p) => {
+        const analysisInclusion = { ...p.peel.analysisInclusion };
+        if (value === null) delete analysisInclusion[id];
+        else analysisInclusion[id] = value;
+        return { ...p, peel: { ...p.peel, analysisInclusion } };
+      })}
+    />
+  );
+}
 
 function PeelCompare() {
   const { ps, selectedAll, set } = usePeel();
@@ -28,7 +58,8 @@ function PeelCompare() {
 
 const TABS: { id: PeelState['tab']; label: string; minor?: boolean }[] = [
   { id: 'graph', label: 'Graph' },
-  { id: 'results', label: 'Results' },
+  { id: 'analysis', label: 'Data analysis' },
+  { id: 'results', label: 'Peel metrics' },
   { id: 'compare', label: 'Compare charge ratios' },
   { id: 'settings', label: 'Settings' },
   { id: 'files', label: 'Files', minor: true },
@@ -52,6 +83,7 @@ export function PeelWorkspace() {
       </div>
       <div className={`main-body tab-${ps.tab === 'graph' ? 'graph' : ps.tab === 'files' ? 'files' : 'summary'}`} role="tabpanel">
         {ps.tab === 'graph' && <PeelGraph />}
+        {ps.tab === 'analysis' && <PeelAnalysis />}
         {ps.tab === 'results' && <PeelResults />}
         {ps.tab === 'compare' && <PeelCompare />}
         {ps.tab === 'settings' && <PeelSettings />}

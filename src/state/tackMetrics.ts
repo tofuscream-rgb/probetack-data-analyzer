@@ -128,11 +128,11 @@ export function morphologyCounts(runs: TackRun[]): string {
 }
 
 const cache = new WeakMap<Cycle, { key: string; m: TackMetrics }>();
-function metricsOf(c: Cycle, diameterMm: number, h0: number | null): TackMetrics {
-  const key = `${diameterMm}|${h0}`;
+export function metricsOf(c: Cycle, diameterMm: number, h0: number | null, allowMissingArea = false): TackMetrics {
+  const key = `${diameterMm}|${h0}|${allowMissingArea && !(diameterMm > 0)}`;
   const hit = cache.get(c);
   if (hit && hit.key === key) return hit.m;
-  const m = analyzeTack(c, { diameterMm, h0Mm: h0 });
+  const m = analyzeTack(c, { diameterMm, h0Mm: h0, allowMissingArea });
   cache.set(c, { key, m });
   return m;
 }

@@ -35,6 +35,8 @@ export interface TackMetricOptions {
   diameterMm: number;
   /** Gel thickness h₀ (mm); null = the strains are skipped. */
   h0Mm: number | null;
+  /** Allow the absolute force–displacement work to be computed without a probe diameter. */
+  allowMissingArea?: boolean;
   /** End of detachment, fraction of F_max (default 0.02). */
   endFraction?: number;
   /** Plateau: ± tolerance around the level (default 0.20) and minimum length in mm (default 0.3). */
@@ -57,6 +59,7 @@ export interface TackMetrics {
   deltaMaxMm: number;
   /** True failure displacement; null when detachment was not recorded. */
   failureDispMm: number | null;
+  workMJ: number;
   wJm2: number;
   /** True failure strain; null without h₀ or when detachment was not recorded. */
   epsMax: number | null;
@@ -101,12 +104,12 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
   }
   const dwell = dwellOf(run.holdForce_gf);
   const base: TackMetrics = {
-    ok: false, error: null, areaMm2: area, fmaxN: nan, sigmaMaxKPa: nan, deltaPeakMm: nan, deltaMaxMm: nan, failureDispMm: null, wJm2: nan,
+    ok: false, error: null, areaMm2: area, fmaxN: nan, sigmaMaxKPa: nan, deltaPeakMm: nan, deltaMaxMm: nan, failureDispMm: null, workMJ: nan, wJm2: nan,
     epsMax: null, epsPeak: null, plateau: null,
     dwell, incomplete: false, resolutionN: null, peakSteps: null, zeroedN: run.zeroedGf !== null && run.zeroedGf !== undefined ? run.zeroedGf * GF_TO_N : null,
     notes, curve: { deltaMm: new Float64Array(), tN: new Float64Array() },
   };
-  if (!(area > 0)) return { ...base, error: 'Enter the probe diameter.' };
+  if (!(area > 0) && !o.allowMissingArea) return { ...base, error: 'Enter the probe diameter.' };
   if (d.length < 3) return { ...base, error: 'Fewer than 3 valid points with position and force.' };
 
   let ip = 0;
@@ -200,6 +203,7 @@ export function analyzeTack(run: TackMetricInput, o: TackMetricOptions): TackMet
     deltaPeakMm: delta[ip],
     deltaMaxMm: deltaMax,
     failureDispMm: incomplete ? null : deltaMax,
+    workMJ: work,
     wJm2,
     epsMax: !incomplete && h0 !== null ? deltaMax / h0 : null,
     epsPeak: h0 !== null ? delta[ip] / h0 : null,

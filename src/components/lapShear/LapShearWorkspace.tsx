@@ -6,10 +6,40 @@ import { LapShearGraph } from './LapShearGraph';
 import { LapShearResults } from './LapShearResults';
 import { LapShearSettings } from './LapShearSettings';
 import { RunCompare } from '../RunCompare';
+import { AdhesionDataAnalysis } from '../AdhesionDataAnalysis';
 import { SUMMARY_PROPERTIES } from '../../analysis/lapShear';
 
 const DIGITS: Record<string, number> = { gf: 2, N: 4, kPa: 3, MPa: 6, mm: 3, s: 2, mJ: 3, 'J/m²': 2 };
 const METRICS = SUMMARY_PROPERTIES.map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: DIGITS[p.unit] ?? 3 }));
+
+function LapShearAnalysis() {
+  const { meta, update } = useApp();
+  const { ls, picked, selected } = useLapShear();
+  return (
+    <AdhesionDataAnalysis
+      mode="lapShear"
+      rows={picked.map((r) => ({
+        id: r.id, fileId: r.file.fileId, path: r.file.path, name: r.file.name, number: r.cycle.cycleNumber,
+        cond: r.cond.hold === '—' && r.cycle.holdTimeS !== null ? { ...r.cond, hold: String(r.cycle.holdTimeS) } : r.cond,
+        gel: meta.get(r.file.fileId)?.gel.value ?? null,
+        primary: r.result.peak?.forceN ?? NaN,
+        peakN: r.result.peak?.forceN ?? NaN,
+        normalized: r.result.strengthKPa,
+        workMJ: r.result.work.toFailureMJ ?? r.result.work.fullMJ,
+        incomplete: r.result.ok && r.result.work.toFailureMJ === null,
+        note: [r.result.error, ...r.result.warnings].filter(Boolean).join(' · '),
+      }))}
+      graphed={selected.filter((r) => r.result.ok).map((r) => r.id)}
+      inclusion={ls.analysisInclusion ?? {}}
+      setInclusion={(id, value) => update((p) => {
+        const analysisInclusion = { ...p.lapShear.analysisInclusion };
+        if (value === null) delete analysisInclusion[id];
+        else analysisInclusion[id] = value;
+        return { ...p, lapShear: { ...p.lapShear, analysisInclusion } };
+      })}
+    />
+  );
+}
 
 function LapShearCompare() {
   const { ls, selectedAll, set } = useLapShear();
@@ -28,7 +58,8 @@ function LapShearCompare() {
 
 const TABS: { id: LapShearState['tab']; label: string; minor?: boolean }[] = [
   { id: 'graph', label: 'Graph' },
-  { id: 'results', label: 'Results' },
+  { id: 'analysis', label: 'Data analysis' },
+  { id: 'results', label: 'Lap Shear metrics' },
   { id: 'compare', label: 'Compare charge ratios' },
   { id: 'settings', label: 'Settings' },
   { id: 'files', label: 'Files', minor: true },
@@ -52,6 +83,7 @@ export function LapShearWorkspace() {
       </div>
       <div className={`main-body tab-${ls.tab === 'graph' ? 'graph' : ls.tab === 'files' ? 'files' : 'summary'}`} role="tabpanel">
         {ls.tab === 'graph' && <LapShearGraph />}
+        {ls.tab === 'analysis' && <LapShearAnalysis />}
         {ls.tab === 'results' && <LapShearResults />}
         {ls.tab === 'compare' && <LapShearCompare />}
         {ls.tab === 'settings' && <LapShearSettings />}

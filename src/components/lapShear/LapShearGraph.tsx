@@ -11,7 +11,7 @@ import { CURVE_COLORS } from '../../plotting/colors';
 import type { IntegrationMode } from '../../types';
 import { AreaTool, areaFillTrace, areaShapes } from '../AreaTool';
 import { areaFromRelayout, areaLimits, integrateRange } from '../../analysis/customArea';
-import { GF_TO_N } from '../../types';
+import { APP_VERSION, GF_TO_N } from '../../types';
 import { NumberField } from './NumberField';
 import { GraphLabelControls, RunGraphControls, Y_OPTIONS, commonTitle, curveLabelAnnotations, shortLabels, type LabelSeries, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
 
@@ -227,7 +227,7 @@ export function LapShearGraph() {
           xValues: r.x, yValues: r.y,
         };
       });
-      const bytes = buildXlsx([{ name: 'Graph', rows, charts: [{ title: v.title.trim() || 'Lap shear', xTitle, yTitle, series, from: { col: 0, row: 1 }, to: { col: 11, row: 26 } }] }], { title: 'Lap-shear graph' });
+      const bytes = buildXlsx([{ name: 'Graph', rows, charts: [{ title: v.title.trim() || 'Lap shear', xTitle, yTitle, series, from: { col: 0, row: 1 }, to: { col: 11, row: 26 } }] }], { title: 'Lap-shear graph', creator: `Mach-1 Analyzer ${APP_VERSION}` });
       download(bytes, 'lap_shear_graph.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     } catch (error) {
       notify('error', `Graph export failed: ${(error as Error).message}`);

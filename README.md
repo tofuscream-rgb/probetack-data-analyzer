@@ -71,7 +71,7 @@ Each Mach-1 operation is a block: `<INFO>` (date, time, instrument, load cell, c
 
 ### Per-run values
 
-Minimum, maximum and absolute peak force; mean; SD (n − 1); number of points; time, z position and displacement at the minimum and maximum; optional baseline and baseline-corrected minimum. Maximum force and time at maximum are written to the Excel export but are not shown on screen.
+Minimum, maximum and absolute peak force; mean; SD (n − 1); number of points; time, z position and displacement at the minimum and maximum; optional baseline and baseline-corrected minimum. The main Excel export contains processed peak tensile force and work rather than point-level metrics.
 
 - **Peak metric** (Settings): minimum (default; adhesion appears as negative force), maximum, maximum absolute, or baseline-corrected minimum.
 - **Units:** gf or N, with 1 gf = 0.00980665 N. Calculations are always done in gf and converted for display. The load-cell calibration factor is applied by the instrument and is unrelated.
@@ -163,7 +163,7 @@ Choose **Experiment type → Lap Shear** at the top and open your lap-shear file
 4. **Results**: one row per run with editable **overlap length, overlap width and gel thickness** (defaults 25 × 10 × 1 mm, bonded area 250 mm²), a **failure mode** (Not specified, Adhesive, Cohesive, Mixed) and an optional **failure displacement**. All results update immediately, and the curve itself never changes. Use *Set dimensions for all selected runs* for a whole batch. Select rows in Results to bulk assign failure modes and record an observation for each run. Below the table: mean ± sample SD (n) of every property, also per condition when the runs come from different folders.
 5. **Compare charge ratios**: like the Probe Tack comparison. Tick substrates, charge ratios, concentrations and holding times (from the folder and file names); every combination with ticked runs is one data set (substrate × charge ratio × concentration). Choose the property to compare (for example apparent lap-shear strength or work per bonded area) and get pastel bars per substrate panel with mean ± SD error bars, a table, and PNG/SVG export.
 6. **Settings**: integration interval, gap handling, complete-failure criterion, baseline correction, loading direction and the default dimensions.
-7. **Export Excel**: a summary sheet (run results, dimensions, bonded area, failure mode, observations, and mean ± SD per file and over file means), an editable Excel chart, one sheet per run (time, original position, relative displacement, original signed force, corrected force, peak, integration interval, cumulative work) and the analysis settings.
+7. **Export Excel**: select **Per run**, **Per repeat**, or **Per condition** for the chosen experiment, graphed runs, or all enabled files. The report uses the processed inclusion decisions from Data analysis. Each file contributes one repeat mean to its condition. Force is shown in gf and N, measured work in mJ, nominal strength in kPa, and area-normalized work or steady-state peel energy in J/m² as applicable.
 
 Dimensions, failure modes, manual failure points and settings are saved with the project and in the browser's autosave.
 

@@ -7,6 +7,7 @@ import { PeelResults } from './PeelResults';
 import { PeelSettings } from './PeelSettings';
 import { RunCompare } from '../RunCompare';
 import { AdhesionDataAnalysis } from '../AdhesionDataAnalysis';
+import { peelAnalysisRow } from '../../analysis/adhesionReview';
 import { PEEL_PROPERTIES } from '../../analysis/peel';
 
 const METRICS = PEEL_PROPERTIES.map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: p.digits }));
@@ -17,17 +18,7 @@ function PeelAnalysis() {
   return (
     <AdhesionDataAnalysis
       mode="peel"
-      rows={picked.map((r) => ({
-        id: r.id, fileId: r.file.fileId, path: r.file.path, name: r.file.name, number: r.cycle.cycleNumber,
-        cond: r.cond.hold === '—' && r.cycle.holdTimeS !== null ? { ...r.cond, hold: String(r.cycle.holdTimeS) } : r.cond,
-        gel: meta.get(r.file.fileId)?.gel.value ?? null,
-        primary: r.result.plateau.meanN,
-        peakN: r.result.peak?.forceN ?? NaN,
-        normalized: r.result.toughnessJm2,
-        workMJ: r.result.work.toDetachMJ ?? r.result.work.fullMJ,
-        incomplete: r.result.ok && r.result.work.toDetachMJ === null,
-        note: [r.result.error, ...r.result.warnings].filter(Boolean).join(' · '),
-      }))}
+      rows={picked.map((r) => peelAnalysisRow(r, meta.get(r.file.fileId)?.gel.value ?? null))}
       graphed={selected.filter((r) => r.result.ok).map((r) => r.id)}
       inclusion={ps.analysisInclusion ?? {}}
       setInclusion={(id, value) => update((p) => {

@@ -7,6 +7,7 @@ import { LapShearResults } from './LapShearResults';
 import { LapShearSettings } from './LapShearSettings';
 import { RunCompare } from '../RunCompare';
 import { AdhesionDataAnalysis } from '../AdhesionDataAnalysis';
+import { lapShearAnalysisRow } from '../../analysis/adhesionReview';
 import { SUMMARY_PROPERTIES } from '../../analysis/lapShear';
 
 const DIGITS: Record<string, number> = { gf: 2, N: 4, kPa: 3, MPa: 6, mm: 3, s: 2, mJ: 3, 'J/m²': 2 };
@@ -18,17 +19,7 @@ function LapShearAnalysis() {
   return (
     <AdhesionDataAnalysis
       mode="lapShear"
-      rows={picked.map((r) => ({
-        id: r.id, fileId: r.file.fileId, path: r.file.path, name: r.file.name, number: r.cycle.cycleNumber,
-        cond: r.cond.hold === '—' && r.cycle.holdTimeS !== null ? { ...r.cond, hold: String(r.cycle.holdTimeS) } : r.cond,
-        gel: meta.get(r.file.fileId)?.gel.value ?? null,
-        primary: r.result.peak?.forceN ?? NaN,
-        peakN: r.result.peak?.forceN ?? NaN,
-        normalized: r.result.strengthKPa,
-        workMJ: r.result.work.toFailureMJ ?? r.result.work.fullMJ,
-        incomplete: r.result.ok && r.result.work.toFailureMJ === null,
-        note: [r.result.error, ...r.result.warnings].filter(Boolean).join(' · '),
-      }))}
+      rows={picked.map((r) => lapShearAnalysisRow(r, meta.get(r.file.fileId)?.gel.value ?? null))}
       graphed={selected.filter((r) => r.result.ok).map((r) => r.id)}
       inclusion={ls.analysisInclusion ?? {}}
       setInclusion={(id, value) => update((p) => {

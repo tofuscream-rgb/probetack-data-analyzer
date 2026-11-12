@@ -8,7 +8,8 @@ import { useApp } from './AppContext';
 import { uniqueFileNames } from './experiment';
 import { runCondition, runLabels, type RunCondition } from '../analysis/runCompare';
 import { analyzeLapShearCycle, type LapShearResult } from '../analysis/lapShear';
-import type { Cycle, LapShearRunMeta, LapShearSettings, LapShearState, ParsedFile } from '../types';
+import { matchesPick, normalizePick, pickOptions } from '../analysis/experimentPick';
+import type { Cycle, ExperimentPick, LapShearRunMeta, LapShearSettings, LapShearState, ParsedFile } from '../types';
 
 export interface LapShearRun {
   id: string;
@@ -65,8 +66,14 @@ export function useLapShear() {
   }, [files, meta, ls]);
 
   const valid = runs.filter((r) => r.result.ok);
-  const selectedIds = ls.selected === null ? valid.map((r) => r.id) : ls.selected.filter((id) => runs.some((r) => r.id === id));
-  const selected = runs.filter((r) => selectedIds.includes(r.id));
+  const conditions = runs.map((r) => r.cond);
+  const pick = normalizePick(conditions, ls.pick);
+  const options = pickOptions(conditions, pick);
+  const picked = runs.filter((r) => matchesPick(r.cond, pick));
+  const selectedAllIds = new Set(ls.selected ?? valid.map((r) => r.id));
+  const selectedAll = runs.filter((r) => selectedAllIds.has(r.id));
+  const selected = picked.filter((r) => selectedAllIds.has(r.id));
+  const selectedIds = selected.map((r) => r.id);
 
   const set = useCallback((patch: Partial<LapShearState>) => update((p) => ({ ...p, lapShear: { ...p.lapShear, ...patch } })), [update]);
   const setSettings = useCallback(
@@ -83,7 +90,11 @@ export function useLapShear() {
       }),
     [update],
   );
-  const setSelected = useCallback((ids: string[]) => set({ selected: ids }), [set]);
+  const setPick = (patch: Partial<ExperimentPick>) => set({ pick: normalizePick(conditions, { ...pick, ...patch }) });
+  const setSelected = (ids: string[]) => {
+    const inPick = new Set(picked.map((r) => r.id));
+    set({ selected: [...selectedAll.filter((r) => !inPick.has(r.id)).map((r) => r.id), ...ids] });
+  };
 
-  return { ls, runs, valid, selected, selectedIds, set, setSettings, setMeta, setSelected };
+  return { ls, runs, valid, picked, pick, options, setPick, selected, selectedAll, selectedIds, set, setSettings, setMeta, setSelected };
 }

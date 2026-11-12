@@ -1,6 +1,8 @@
 import { useMemo, useRef } from 'react';
+import { download } from '../../state/AppContext';
 import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { usePeel, type PeelRun } from '../../state/peel';
+import { buildPlotWorkbook } from '../../export/plotWorkbook';
 import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
 import { lttbIndices } from '../../plotting/downsample';
 import { EXPORT_SIZE, figAxis, figLayout, peakLabelFont } from '../../plotting/figureStyle';
@@ -27,11 +29,10 @@ function displayIndices(r: PeelRun, xs: ArrayLike<number>): number[] {
   return [...keep].sort((a, b) => a - b);
 }
 
-export function PeelGraph() {
+export function usePeelPlot() {
   const { ps, selected, set, setSettings } = usePeel();
   const v = ps.view;
   const s = ps.settings;
-  const plotEl = useRef<PlotlyHTMLElement | null>(null);
   const unit = v.unit;
   const dg = yDigits(unit);
   const autoY = unit === 'kPa' || unit === 'MPa' ? `Nominal stress F/A (${unit})` : unit === 'N/m' ? 'Peel energy (J/m²)' : `Peel force (${unit})`;
@@ -122,6 +123,12 @@ export function PeelGraph() {
     return { data: traces, layout: lay };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runs, v, unit, xTitle, yTitle]);
+  return { v, s, unit, runs, autoX, autoY, areaRange, data, layout, set, setSettings };
+}
+
+export function PeelGraph() {
+  const plotEl = useRef<PlotlyHTMLElement | null>(null);
+  const { v, s, unit, runs, autoX, autoY, areaRange, data, layout, set, setSettings } = usePeelPlot();
 
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
@@ -152,6 +159,7 @@ export function PeelGraph() {
           <span>Save graph</span>
           <button className="small" onClick={() => save('png')}>PNG</button>
           <button className="small" onClick={() => save('svg')}>SVG</button>
+          <button className="small" disabled={!data.length} onClick={() => download(buildPlotWorkbook('90° Peel', data, layout), '90_peel_graph.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}>XLSX</button>
         </div>
       </div>
       <GraphLabelControls view={v} set={(view) => set({ view })} runs={runs} suggestion={commonTitle(runs.map((r) => r.cond))} autoX={autoX} autoY={autoY} />

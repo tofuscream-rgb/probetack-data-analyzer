@@ -1,9 +1,9 @@
 import { useMemo, useRef } from 'react';
-import { download, useApp } from '../../state/AppContext';
-import { buildXlsx, cellRef, type CellValue, type ChartSpec } from '../../export/xlsxWriter';
+import { download } from '../../state/AppContext';
 import type { Config, Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { useLapShear, type LapShearRun } from '../../state/lapShear';
 import { INTEGRATION_LABEL, LAP_INTEGRATION_MODES } from '../../analysis/lapShear';
+import { buildPlotWorkbook } from '../../export/plotWorkbook';
 import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
 import { lttbIndices } from '../../plotting/downsample';
 import { EXPORT_SIZE, figAxis, figLayout, peakLabelFont } from '../../plotting/figureStyle';
@@ -11,7 +11,7 @@ import { CURVE_COLORS } from '../../plotting/colors';
 import type { IntegrationMode } from '../../types';
 import { AreaTool, areaFillTrace, areaShapes } from '../AreaTool';
 import { areaFromRelayout, areaLimits, integrateRange } from '../../analysis/customArea';
-import { APP_VERSION, GF_TO_N } from '../../types';
+import { GF_TO_N } from '../../types';
 import { NumberField } from './NumberField';
 import { GraphLabelControls, RunGraphControls, Y_OPTIONS, commonTitle, curveLabelAnnotations, shortLabels, type LabelSeries, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
 
@@ -38,12 +38,10 @@ function displayIndices(r: LapShearRun, xs: Float64Array): number[] {
   return [...keep].sort((a, b) => a - b);
 }
 
-export function LapShearGraph() {
+export function useLapShearPlot() {
   const { ls, selected, set, setSettings } = useLapShear();
-  const { notify } = useApp();
   const v = ls.view;
   const s = ls.settings;
-  const plotEl = useRef<PlotlyHTMLElement | null>(null);
   const unit = v.unit === 'N/m' ? 'gf' : v.unit; // N/m is a peel-only choice
   const stress = unit === 'kPa' || unit === 'MPa';
   const dg = yDigits(unit);
@@ -59,7 +57,7 @@ export function LapShearGraph() {
     return Number.isFinite(a) && b > a ? [a, b] : null;
   }, [runs]);
 
-  const { data, layout, labelSeries } = useMemo(() => {
+  const { data, layout } = useMemo(() => {
     const traces: Data[] = [];
     const annotations: Partial<Layout>['annotations'] = [];
     const labelSeries: LabelSeries[] = [];
@@ -183,9 +181,15 @@ export function LapShearGraph() {
       uirevision: JSON.stringify([unit, runKey]),
       shapes: areaShapes(v.area),
     };
-    return { data: traces, layout: lay, labelSeries };
+    return { data: traces, layout: lay };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runs, v, unit, xTitle, yTitle, runKey]);
+  return { v, s, unit, runs, autoX, autoY, areaRange, data, layout, set, setSettings };
+}
+
+export function LapShearGraph() {
+  const plotEl = useRef<PlotlyHTMLElement | null>(null);
+  const { v, s, unit, runs, autoX, autoY, areaRange, data, layout, set, setSettings } = useLapShearPlot();
 
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
@@ -207,32 +211,7 @@ export function LapShearGraph() {
     });
   }, [runs, v.area, v.names]);
 
-  const exportGraph = () => {
-    try {
-      const rows: CellValue[][] = [];
-      const series: ChartSpec['series'] = labelSeries.filter((r) => r.x.length > 0).map((r, i) => {
-        const col = 12 + i * 2;
-        (rows[0] ??= [])[col] = r.name;
-        (rows[1] ??= [])[col] = xTitle;
-        rows[1][col + 1] = yTitle;
-        r.x.forEach((x, j) => {
-          const row = rows[j + 2] ??= [];
-          row[col] = x;
-          row[col + 1] = r.y[j];
-        });
-        return {
-          name: r.name, nameCell: cellRef(col, 0),
-          xRange: [cellRef(col, 2), cellRef(col, r.x.length + 1)],
-          yRange: [cellRef(col + 1, 2), cellRef(col + 1, r.y.length + 1)],
-          xValues: r.x, yValues: r.y,
-        };
-      });
-      const bytes = buildXlsx([{ name: 'Graph', rows, charts: [{ title: v.title.trim() || 'Lap shear', xTitle, yTitle, series, from: { col: 0, row: 1 }, to: { col: 11, row: 26 } }] }], { title: 'Lap-shear graph', creator: `Mach-1 Analyzer ${APP_VERSION}` });
-      download(bytes, 'lap_shear_graph.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    } catch (error) {
-      notify('error', `Graph export failed: ${(error as Error).message}`);
-    }
-  };
+  const exportGraph = () => download(buildPlotWorkbook('Lap shear', data, layout), 'lap_shear_graph.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
   return (
     <section className="graph-panel" aria-label="Lap-shear graph">
@@ -252,7 +231,7 @@ export function LapShearGraph() {
           <span>Save graph</span>
           <button className="small" onClick={() => save('png')} disabled={!runs.length}>PNG</button>
           <button className="small" onClick={() => save('svg')} disabled={!runs.length}>SVG</button>
-          <button className="small" onClick={exportGraph} disabled={!labelSeries.length} title="Plotted loading curves with an editable Excel chart">XLSX</button>
+          <button className="small" onClick={exportGraph} disabled={!data.length} title="Plotted loading curves with an editable Excel chart">XLSX</button>
         </div>
       </div>
       <GraphLabelControls view={v} set={(view) => set({ view })} runs={runs} suggestion={commonTitle(runs.map((r) => r.cond))} autoX={autoX} autoY={autoY} />

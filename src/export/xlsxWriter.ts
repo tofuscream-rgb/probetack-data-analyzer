@@ -14,6 +14,9 @@ export type CellValue = string | number | boolean | null | undefined;
 
 export interface ChartSeriesSpec {
   name: string;
+  color?: string;
+  dash?: 'dash' | 'dot';
+  markerOnly?: boolean;
   nameCell?: string; // e.g. "A1" on the chart data sheet
   xRange: [string, string]; // e.g. ["B3", "B120"]
   yRange: [string, string];
@@ -26,6 +29,7 @@ export interface ChartSpec {
   xTitle: string;
   yTitle: string;
   series: ChartSeriesSpec[];
+  showLegend?: boolean;
   /** Top-left anchor cell (0-based col,row) and size in cells. */
   from: { col: number; row: number };
   to: { col: number; row: number };
@@ -36,6 +40,8 @@ export interface SheetSpec {
   rows: CellValue[][];
   headerRows?: number; // bold + frozen
   colWidths?: number[];
+  filter?: boolean;
+  wrap?: boolean;
   charts?: ChartSpec[];
 }
 
@@ -103,7 +109,7 @@ function sheetXml(sheet: SheetSpec, hasDrawing: boolean): string {
   for (let r = 0; r < sheet.rows.length; r++) {
     const row = sheet.rows[r];
     if (!row || row.length === 0) continue;
-    const style = r < header ? ' s="1"' : '';
+    const style = r < header ? (sheet.wrap ? ' s="3"' : ' s="1"') : sheet.wrap ? ' s="2"' : '';
     let cells = '';
     for (let c = 0; c < row.length; c++) {
       const v = row[c];
@@ -120,6 +126,9 @@ function sheetXml(sheet: SheetSpec, hasDrawing: boolean): string {
     parts.push(`<row r="${r + 1}">${cells}</row>`);
   }
   parts.push('</sheetData>');
+  if (sheet.filter && sheet.rows.length > 1 && sheet.rows[0].length) {
+    parts.push(`<autoFilter ref="A1:${cellRef(sheet.rows[0].length - 1, sheet.rows.length - 1)}"/>`);
+  }
   if (hasDrawing) parts.push('<drawing r:id="rId1"/>');
   parts.push('</worksheet>');
   return parts.join('');
@@ -145,13 +154,13 @@ function axisXml(id: number, cross: number, pos: 'b' | 'l', title: string): stri
 function chartXml(chart: ChartSpec, sheetName: string): string {
   const series = chart.series
     .map((s, i) => {
-      const color = PALETTE[i % PALETTE.length];
+      const color = s.color && /^[0-9a-f]{6}$/i.test(s.color) ? s.color : PALETTE[i % PALETTE.length];
       const tx = s.nameCell
         ? `<c:tx><c:strRef><c:f>${esc(absRef(sheetName, s.nameCell))}</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>${esc(s.name)}</c:v></c:pt></c:strCache></c:strRef></c:tx>`
         : `<c:tx><c:v>${esc(s.name)}</c:v></c:tx>`;
       return `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>${tx}
-<c:spPr><a:ln w="15875" cap="rnd"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:round/></a:ln></c:spPr>
-<c:marker><c:symbol val="none"/></c:marker>
+<c:spPr><a:ln w="15875" cap="rnd">${s.markerOnly ? '<a:noFill/>' : `<a:solidFill><a:srgbClr val="${color}"/></a:solidFill>${s.dash ? `<a:prstDash val="${s.dash}"/>` : ''}<a:round/>`}</a:ln></c:spPr>
+<c:marker><c:symbol val="${s.markerOnly ? 'circle' : 'none'}"/></c:marker>
 <c:xVal><c:numRef><c:f>${esc(absRef(sheetName, s.xRange[0]))}:${esc(absRef(sheetName, s.xRange[1]).split('!')[1])}</c:f>${numCache(s.xValues)}</c:numRef></c:xVal>
 <c:yVal><c:numRef><c:f>${esc(absRef(sheetName, s.yRange[0]))}:${esc(absRef(sheetName, s.yRange[1]).split('!')[1])}</c:f>${numCache(s.yValues)}</c:numRef></c:yVal>
 <c:smooth val="0"/></c:ser>`;
@@ -170,7 +179,7 @@ ${series}
 ${axisXml(500001, 500002, 'b', chart.xTitle)}
 ${axisXml(500002, 500001, 'l', chart.yTitle)}
 </c:plotArea>
-<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>
+${chart.showLegend === false ? '' : '<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>'}
 <c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/>
 </c:chart>
 </c:chartSpace>`;
@@ -200,7 +209,7 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8EEF6"/><bgColor indexed="64"/></patternFill></fill></fills>
 <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>
+<cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;
 

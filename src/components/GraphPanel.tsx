@@ -10,7 +10,7 @@ import { EXPORT_SIZE, LINE, figAxis, figLayout } from '../plotting/figureStyle';
 import { CURVE_COLORS } from '../plotting/colors';
 import { STATUS_LABEL, isIncluded, type CycleResult } from '../analysis/engine';
 import { QC_LABEL } from '../analysis/pointOutliers';
-import { buildGraphWorkbook } from '../export/workbook';
+import { buildPlotWorkbook } from '../export/plotWorkbook';
 import type { GraphConfig } from '../types';
 import { useOpenRun } from './common';
 
@@ -29,14 +29,12 @@ export function useCurrentGraph(): GraphConfig {
   };
 }
 
-export function GraphPanel() {
-  const { project, update, derived, ui, setUi } = useApp();
+export function useTackPlot() {
+  const { project } = useApp();
   const ex = useExperiment();
   const graph = useCurrentGraph();
-  const openRun = useOpenRun();
   const s = project.settings;
   const pos = s.forceSign === 'positive';
-  const plotEl = useRef<PlotlyHTMLElement | null>(null);
   const multi = ex.graphFiles.length > 1;
   const probeAxes = needsProbe(graph.x) || needsProbe(graph.y);
   const probeMissing = (graph.x === 'strain' || graph.y === 'strain' ? !(s.probe.thicknessMm > 0) : false) || ([graph.x, graph.y].some((a) => a.startsWith('stress_')) ? !(s.probe.diameterMm > 0) : false);
@@ -117,6 +115,14 @@ export function GraphPanel() {
     return { data: traces, layout: lay };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curves, graph.hidden, graph.showExcluded, graph.showMarkers, graph.x, graph.y, graph.title, s, multi]);
+  return { ex, graph, s, pos, multi, probeAxes, probeMissing, options, curves, nExcluded, isDrawn, colorOf, nameOf, data, layout };
+}
+
+export function GraphPanel() {
+  const { update, ui, setUi } = useApp();
+  const openRun = useOpenRun();
+  const plotEl = useRef<PlotlyHTMLElement | null>(null);
+  const { ex, graph, s, pos, multi, probeAxes, probeMissing, options, curves, nExcluded, colorOf, nameOf, data, layout } = useTackPlot();
 
   const setGraph = (patch: Partial<GraphConfig>) =>
     update((p) => ({ ...p, graphs: p.graphs.map((g) => (g.id === graph.id ? { ...g, ...patch } : g)) }));
@@ -135,9 +141,7 @@ export function GraphPanel() {
     await Plotly.relayout(plotEl.current, { 'xaxis.autorange': true, 'yaxis.autorange': true });
   };
   const exportGraphData = () => {
-    // Export what is drawn: hidden runs (and left-out outliers when they are not shown) are omitted.
-    const drawn = { ...graph, hidden: curves.filter((r) => !isDrawn(r)).map((r) => r.cycle.cycleId) };
-    download(buildGraphWorkbook(derived, project, drawn, true), `${fileName}_data.xlsx`);
+    download(buildPlotWorkbook(graph.title, data, layout), 'probe_tack_graph.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   };
 
   if (!ex.main) {

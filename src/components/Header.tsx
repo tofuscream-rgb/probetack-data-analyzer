@@ -36,8 +36,6 @@ function SaveDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-type Scope = 'experiment' | 'graph' | 'all';
-
 function PrivacyDialog({ onClose }: { onClose: () => void }) {
   const { removeAllData } = useApp();
   return (

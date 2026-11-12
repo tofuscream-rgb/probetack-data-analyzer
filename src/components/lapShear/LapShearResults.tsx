@@ -5,7 +5,7 @@ import type { FailureMode, LapShearDims } from '../../types';
 import { fmt } from '../common';
 import { CURVE_COLORS } from '../../plotting/colors';
 import { NumberField } from './NumberField';
-import { ObservationGlossary } from '../ObservationTools';
+import { BulkAssignBar, ObservationGlossary, useRunSelection } from '../ObservationTools';
 import { EquationList, type EquationItem } from '../EquationList';
 
 /** Lap-shear equations with their sources (refs empty = defined by this analyzer or not adhesion-specific). */
@@ -76,29 +76,41 @@ function ApplyAll({ ids }: { ids: string[] }) {
     <NumberField label="Thickness (mm, optional metadata)" value={d.thicknessMm} positive onCommit={(v)=>setD({...d,thicknessMm:v??d.thicknessMm})}/>
     <button className="small" disabled={!ids.length} onClick={()=>setMeta(ids,d)}>Apply</button></div>;
 }
-function Row({ r, color }: { r: LapShearRun; color: string }) {
-  const { setMeta } = useLapShear(); const x=r.result,m=r.meta,p=x.peak;
-  return <tr>
+function Row({ r, color, setMeta, selection }: { r: LapShearRun; color: string; setMeta: ReturnType<typeof useLapShear>['setMeta']; selection: ReturnType<typeof useRunSelection> }) {
+  const x = r.result, m = r.meta, p = x.peak;
+  return <tr className={selection.current?.id === r.id ? 'focus' : ''} onClick={() => selection.setCurrentId(r.id)}>
+    <td><input type="checkbox" checked={selection.selected.has(r.id)} onChange={(e) => selection.toggle(r.id, e.target.checked)} aria-label={`Select ${r.label}`} /></td>
     <td className="sticky-col" title={r.file.path}><span className="run-dot" style={{background:color}}/>{r.label}<div className="cond">{r.condition}</div></td>
     <td><NumberField compact value={m.lengthMm} positive label="Overlap length" onCommit={(v)=>v!==null&&setMeta([r.id],{lengthMm:v})}/></td>
     <td><NumberField compact value={m.widthMm} positive label="Overlap width" onCommit={(v)=>v!==null&&setMeta([r.id],{widthMm:v})}/></td>
+    <td><NumberField compact value={m.thicknessMm} positive label="Gel thickness" onCommit={(v) => v !== null && setMeta([r.id], { thicknessMm: v })} /></td>
     <td className="num">{fmt(x.areaMm2,1)}</td><td className="num">{fmt(p?.forceN,4)}</td><td className="num strong">{fmt(x.strengthKPa,2)}</td><td className="num">{fmt(p?.dispMm,3)}</td>
     <td><NumberField compact allowEmpty min={0} value={m.manualFailureMm} placeholder={x.failure.source==='auto'&&x.failure.dispMm!==null?`${fmt(x.failure.dispMm,3)} auto`:'not found'} label="Failure displacement" onCommit={(v)=>setMeta([r.id],{manualFailureMm:v})}/></td>
     <td className="num">{fmt(x.work.toFailurePerAreaJm2,2)}</td>
     <td><select value={m.failureMode} onChange={(e)=>setMeta([r.id],{failureMode:e.target.value as FailureMode})}>{MODES.map((k)=><option key={k} value={k}>{FAILURE_MODE_LABEL[k]}</option>)}</select></td>
-    <td className="num">{x.nValid.toLocaleString()}</td>
+    <td><input className="obs-note" aria-label={`Observation for ${r.label}`} value={m.observation ?? ''} onChange={(e) => setMeta([r.id], { observation: e.target.value })} /></td>
+    <td className="num" title={x.warnings.join(' · ')}>{x.nValid.toLocaleString()}{x.warnings.length > 0 && <div className="note">{x.warnings.join(' · ')}</div>}</td>
   </tr>;
 }
 export function LapShearResults() {
-  const { ls, selected } = useLapShear(); const ok=selected.filter((r)=>r.result.ok);
+  const { ls, selected, setMeta } = useLapShear();
+  const ok = selected.filter((r) => r.result.ok);
+  const rows = ok.map((r) => ({ id: r.id, mode: r.meta.failureMode, morphology: 'unspecified', repeatKey: r.file.fileId, repeatLabel: r.file.name, conditionKey: r.condition, conditionLabel: r.condition }));
+  const selection = useRunSelection(rows);
   if(!selected.length)return <p className="note pad">Tick runs in step 3 on the left to see their results.</p>;
   const byFile=new Map<string,typeof ok>(); for(const r of ok)byFile.set(r.file.fileId,[...(byFile.get(r.file.fileId)??[]),r]);
   const repeats=[...byFile.entries()].map(([fileId,runs])=>({fileId,runs,label:runs[0].file.name,condition:runs[0].condition,props:Object.fromEntries(SUMMARY_PROPERTIES.map((p)=>[p.key,describe(runs.map((r)=>p.get(r.result))).mean]))}));
   const conditions=[...new Set(repeats.map((r)=>r.condition))];
   return <div className="ls-results"><ApplyAll ids={ok.map((r)=>r.id)}/>
     <p className="note">Primary result: apparent nominal lap-shear strength τ = F<sub>max</sub>/A with A = overlap length × width (apparent shear strength of a single-lap joint, ASTM D1002, applied by analogy to gel joints). Gel thickness does not enter τ. Automatic failure is the first post-peak force below {(ls.settings.failure.fraction*100).toFixed(1)}% of F<sub>max</sub> for {ls.settings.failure.consecutive} consecutive valid points; a manual failure displacement overrides it. The optional energy result is ∫F dδ/A to that failure point (defined by this analyzer) and is not fracture toughness.</p>
-    <div className="table-scroll ls-table-wrap"><table className="grid ls-table"><thead><tr><th className="sticky-col">Run</th><th>Overlap length (mm)</th><th>Overlap width (mm)</th><th>Area (mm²)</th><th>F<sub>max</sub> (N)</th><th>τ<sub>max</sub> (kPa)</th><th>δ at peak (mm)</th><th>Failure δ (mm)</th><th>Apparent work to failure / area (J/m²)</th><th>Failure mode</th><th>Valid points</th></tr></thead>
-    <tbody>{selected.map((r)=>r.result.ok?<Row key={r.id} r={r} color={CURVE_COLORS[ok.indexOf(r)%CURVE_COLORS.length]}/>:<tr key={r.id}><td>{r.label}</td><td colSpan={10}>{r.result.error}</td></tr>)}</tbody></table></div>
+    <BulkAssignBar rows={rows} selection={selection} onApply={(patches) => {
+      for (const failureMode of MODES) {
+        const ids = patches.filter((patch) => patch.mode === failureMode).map((patch) => patch.id);
+        if (ids.length) setMeta(ids, { failureMode });
+      }
+    }} />
+    <div className="table-scroll ls-table-wrap"><table className="grid ls-table"><thead><tr><th>Sel.</th><th className="sticky-col">Run</th><th>Overlap length (mm)</th><th>Overlap width (mm)</th><th>Gel thickness (mm)</th><th>Area (mm²)</th><th>F<sub>max</sub> (N)</th><th>τ<sub>max</sub> (kPa)</th><th>δ at peak (mm)</th><th>Failure δ (mm)</th><th>Apparent work to failure / area (J/m²)</th><th>Failure mode</th><th>Observation</th><th>Valid points / diagnostics</th></tr></thead>
+    <tbody>{selected.map((r)=>r.result.ok?<Row key={r.id} r={r} color={CURVE_COLORS[ok.indexOf(r)%CURVE_COLORS.length]} setMeta={setMeta} selection={selection}/>:<tr key={r.id}><td /><td>{r.label}</td><td colSpan={12}>{r.result.error}</td></tr>)}</tbody></table></div>
     <h3 className="ls-h">Mean ± SD per Repeat/file</h3><div className="table-scroll"><table className="grid ls-summary"><thead><tr><th>Repeat/file</th><th>Condition</th><th>Runs</th>{SUMMARY_PROPERTIES.map((p)=><th key={p.key}>{p.label}<br/><small>({p.unit})</small></th>)}</tr></thead><tbody>
       {repeats.map((rp)=><tr key={rp.fileId}><td>{rp.label}</td><td>{rp.condition}</td><td>{rp.runs.length}</td>{SUMMARY_PROPERTIES.map((p)=><td key={p.key}>{ms(rp.runs.map((r)=>p.get(r.result)),digits(p.unit))}</td>)}</tr>)}
     </tbody></table></div>

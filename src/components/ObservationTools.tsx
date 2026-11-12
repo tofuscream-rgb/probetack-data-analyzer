@@ -37,7 +37,7 @@ export function useRunSelection(rows: SelectableRow[]) {
 export function BulkAssignBar<M extends string>({ rows, selection, morphologies, onApply }: {
   rows: SelectableRow[];
   selection: ReturnType<typeof useRunSelection>;
-  morphologies: Option<M>[];
+  morphologies?: Option<M>[];
   onApply: (patches: { id: string; mode?: FailureMode; morphology?: M }[]) => void;
 }) {
   const [mode, setMode] = useState<FailureMode | ''>('');
@@ -77,14 +77,14 @@ export function BulkAssignBar<M extends string>({ rows, selection, morphologies,
             <option value="unspecified">Clear (blank)</option>
           </select>
         </label>
-        <label className="field inline">
+        {morphologies && <label className="field inline">
           <span>Debonding morphology</span>
           <select value={morph} onChange={(e) => setMorph(e.target.value as M | '')} aria-label="Bulk debonding morphology">
             <option value="">— no change —</option>
             {morphologies.filter((o) => o.value !== 'unspecified').map((o) => <option key={o.value} value={o.value} title={o.title}>{o.label}</option>)}
             <option value="unspecified">Clear (blank)</option>
           </select>
-        </label>
+        </label>}
         <label className="check" title="Keep fields that already have a value">
           <input type="checkbox" checked={onlyBlank} onChange={(e) => setOnlyBlank(e.target.checked)} /> Only fill blank fields
         </label>

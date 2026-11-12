@@ -115,7 +115,8 @@ export function migrateLapShear(raw: Partial<LapShearState> | undefined): LapShe
       lengthMm: pos(m.lengthMm, d.settings.defaults.lengthMm),
       widthMm: pos(m.widthMm, d.settings.defaults.widthMm),
       thicknessMm: pos(m.thicknessMm, d.settings.defaults.thicknessMm),
-      failureMode: ['adhesive', 'cohesive', 'mixed'].includes(m.failureMode) ? m.failureMode : 'unspecified',
+      failureMode: ['adhesive', 'cohesive', 'mixed', 'other'].includes(m.failureMode) ? m.failureMode : 'unspecified',
+      observation: typeof m.observation === 'string' ? m.observation : '',
       manualFailureMm: typeof m.manualFailureMm === 'number' && Number.isFinite(m.manualFailureMm) ? m.manualFailureMm : null,
     };
   }

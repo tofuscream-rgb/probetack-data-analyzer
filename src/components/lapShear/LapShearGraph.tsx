@@ -1,5 +1,7 @@
 import { useMemo, useRef } from 'react';
-import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
+import { download, useApp } from '../../state/AppContext';
+import { buildXlsx, cellRef, type CellValue, type ChartSpec } from '../../export/xlsxWriter';
+import type { Config, Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { useLapShear, type LapShearRun } from '../../state/lapShear';
 import { INTEGRATION_LABEL, LAP_INTEGRATION_MODES } from '../../analysis/lapShear';
 import { PlotlyChart, loadPlotly } from '../../plotting/PlotlyChart';
@@ -14,6 +16,7 @@ import { NumberField } from './NumberField';
 import { GraphLabelControls, RunGraphControls, Y_OPTIONS, commonTitle, curveLabelAnnotations, shortLabels, type LabelSeries, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
 
 const DISPLAY_LIMIT = 4000;
+const PLOT_CONFIG: Partial<Config> = { editable: true, edits: { annotationPosition: true, annotationTail: true, annotationText: false, axisTitleText: false, titleText: false, legendText: false, legendPosition: true, colorbarTitleText: false, colorbarPosition: false, shapePosition: true }, toImageButtonOptions: { format: 'png', filename: 'lap_shear', scale: 3 } };
 
 function hexToRgba(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16);
@@ -37,6 +40,7 @@ function displayIndices(r: LapShearRun, xs: Float64Array): number[] {
 
 export function LapShearGraph() {
   const { ls, selected, set, setSettings } = useLapShear();
+  const { notify } = useApp();
   const v = ls.view;
   const s = ls.settings;
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
@@ -47,14 +51,15 @@ export function LapShearGraph() {
   const xTitle = v.xTitle.trim() || autoX;
   const autoY = stress ? `Shear strength (${unit})` : `Loading force (${unit})`;
   const yTitle = v.yTitle.trim() || autoY;
-  const runs = selected.filter((r) => r.result.ok);
+  const runs = useMemo(() => selected.filter((r) => r.result.ok), [selected]);
+  const runKey = JSON.stringify(runs.map((r) => r.id));
   const areaRange = useMemo<[number, number] | null>(() => {
     let a = Infinity, b = -Infinity;
     for (const r of runs) { const sr = r.result.series; for (const x of sr.dispMm) if (Number.isFinite(x)) { if (x < a) a = x; if (x > b) b = x; } }
     return Number.isFinite(a) && b > a ? [a, b] : null;
   }, [runs]);
 
-  const { data, layout } = useMemo(() => {
+  const { data, layout, labelSeries } = useMemo(() => {
     const traces: Data[] = [];
     const annotations: Partial<Layout>['annotations'] = [];
     const labelSeries: LabelSeries[] = [];
@@ -71,9 +76,11 @@ export function LapShearGraph() {
       const idx = displayIndices(r, xs);
       const y = (i: number) => res.series.loadGf[i] * f;
       const name = v.names[r.id]?.trim() || short[k];
-      labelSeries.push({ id: r.id, name, color, x: idx.map((i) => xs[i]), y: idx.map(y) });
+      const plotX = idx.map((i) => xs[i]);
+      const plotY = idx.map(y);
+      labelSeries.push({ id: r.id, name, color, x: plotX, y: plotY });
       // Custom area (additional tool): shaded under this curve between the dashed boundaries.
-      const areaFill = areaFillTrace(idx.map((i) => xs[i]), idx.map(y), v.area, hexToRgba(color, 0.22), r.id);
+      const areaFill = areaFillTrace(plotX, plotY, v.area, hexToRgba(color, 0.22), r.id);
       if (areaFill) traces.push(areaFill);
 
       // Shaded integration interval (the one used for "Selected integration work").
@@ -113,8 +120,8 @@ export function LapShearGraph() {
         mode: 'lines',
         name,
         meta: r.id,
-        x: idx.map((i) => xs[i]),
-        y: idx.map(y),
+        x: plotX,
+        y: plotY,
         line: { color, width: st.width },
         opacity: st.opacity,
         legendgroup: r.id,
@@ -173,12 +180,12 @@ export function LapShearGraph() {
       editrevision: 'labels',
       dragmode: 'zoom',
       hovermode: 'closest',
-      uirevision: unit,
+      uirevision: JSON.stringify([unit, runKey]),
       shapes: areaShapes(v.area),
     };
-    return { data: traces, layout: lay };
+    return { data: traces, layout: lay, labelSeries };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs, v, unit, xTitle, yTitle]);
+  }, [runs, v, unit, xTitle, yTitle, runKey]);
 
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
@@ -191,6 +198,41 @@ export function LapShearGraph() {
     await Plotly.relayout(plotEl.current, { 'xaxis.autorange': true, 'yaxis.autorange': true });
   };
   const anyBaseline = runs.some((r) => r.result.baseline.applied);
+  const areaRows = useMemo(() => {
+    const limits = areaLimits(v.area);
+    return runs.map((r) => {
+      const { dispMm, loadGf } = r.result.series;
+      const work = limits ? integrateRange(dispMm, Array.from(loadGf, (g) => g * GF_TO_N), ...limits) : { workMJ: NaN, covered: true };
+      return { id: r.id, label: v.names[r.id]?.trim() || r.label, workMJ: work.workMJ, perAreaJm2: work.workMJ * 1000 / r.result.areaMm2, covered: work.covered };
+    });
+  }, [runs, v.area, v.names]);
+
+  const exportGraph = () => {
+    try {
+      const rows: CellValue[][] = [];
+      const series: ChartSpec['series'] = labelSeries.filter((r) => r.x.length > 0).map((r, i) => {
+        const col = 12 + i * 2;
+        (rows[0] ??= [])[col] = r.name;
+        (rows[1] ??= [])[col] = xTitle;
+        rows[1][col + 1] = yTitle;
+        r.x.forEach((x, j) => {
+          const row = rows[j + 2] ??= [];
+          row[col] = x;
+          row[col + 1] = r.y[j];
+        });
+        return {
+          name: r.name, nameCell: cellRef(col, 0),
+          xRange: [cellRef(col, 2), cellRef(col, r.x.length + 1)],
+          yRange: [cellRef(col + 1, 2), cellRef(col + 1, r.y.length + 1)],
+          xValues: r.x, yValues: r.y,
+        };
+      });
+      const bytes = buildXlsx([{ name: 'Graph', rows, charts: [{ title: v.title.trim() || 'Lap shear', xTitle, yTitle, series, from: { col: 0, row: 1 }, to: { col: 11, row: 26 } }] }], { title: 'Lap-shear graph' });
+      download(bytes, 'lap_shear_graph.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    } catch (error) {
+      notify('error', `Graph export failed: ${(error as Error).message}`);
+    }
+  };
 
   return (
     <section className="graph-panel" aria-label="Lap-shear graph">
@@ -208,8 +250,9 @@ export function LapShearGraph() {
         <button className="link" onClick={resetZoom}>Reset zoom</button>
         <div className="export-group">
           <span>Save graph</span>
-          <button className="small" onClick={() => save('png')}>PNG</button>
-          <button className="small" onClick={() => save('svg')}>SVG</button>
+          <button className="small" onClick={() => save('png')} disabled={!runs.length}>PNG</button>
+          <button className="small" onClick={() => save('svg')} disabled={!runs.length}>SVG</button>
+          <button className="small" onClick={exportGraph} disabled={!labelSeries.length} title="Plotted loading curves with an editable Excel chart">XLSX</button>
         </div>
       </div>
       <GraphLabelControls view={v} set={(view) => set({ view })} runs={runs} suggestion={commonTitle(runs.map((r) => r.cond))} autoX={autoX} autoY={autoY} />
@@ -237,8 +280,8 @@ export function LapShearGraph() {
         </div>
       ) : (
         <>
-          <PlotlyChart data={data} layout={layout} onRelayout={(e) => { const a = areaFromRelayout(e, v.area); if (a && a.fromMm !== null && a.toMm !== null) set({ view: { ...v, area: { fromMm: +a.fromMm.toFixed(4), toMm: +a.toMm.toFixed(4) } } }); }} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={{ editable: true, edits: { annotationPosition: true, annotationTail: true, annotationText: false, axisTitleText: false, titleText: false, legendText: false, legendPosition: true, colorbarTitleText: false, colorbarPosition: false, shapePosition: true }, toImageButtonOptions: { format: 'png', filename: 'lap_shear', scale: 3 } }} />
-          <AreaTool area={v.area} setArea={(area) => set({ view: { ...v, area } })} xRangeMm={areaRange} rows={runs.filter((r) => r.result.ok).map((r) => { const lim = areaLimits(v.area); const sr = r.result.series; const res = lim ? integrateRange(sr.dispMm, Array.from(sr.loadGf, (g) => g * GF_TO_N), lim[0], lim[1]) : { workMJ: NaN, covered: true }; return { id: r.id, label: v.names[r.id]?.trim() || r.label, workMJ: res.workMJ, perAreaJm2: (res.workMJ / r.result.areaMm2) * 1000, covered: res.covered }; })} perAreaLabel="Apparent W/A_overlap (J/m²)" note="Apparent work per overlap area A = L × W of each run; not fracture toughness." />
+          <PlotlyChart data={data} layout={layout} onRelayout={(e) => { const a = areaFromRelayout(e, v.area); if (a && a.fromMm !== null && a.toMm !== null) set({ view: { ...v, area: { fromMm: +a.fromMm.toFixed(4), toMm: +a.toMm.toFixed(4) } } }); }} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={PLOT_CONFIG} />
+          <AreaTool area={v.area} setArea={(area) => set({ view: { ...v, area } })} xRangeMm={areaRange} rows={areaRows} perAreaLabel="Apparent W/A_overlap (J/m²)" note="Apparent work per overlap area A = L × W of each run; not fracture toughness." />
         </>
       )}
     </section>

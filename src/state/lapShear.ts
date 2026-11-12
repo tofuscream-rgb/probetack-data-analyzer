@@ -36,7 +36,7 @@ function cachedResult(c: Cycle, meta: LapShearRunMeta, s: LapShearSettings): Lap
   return result;
 }
 
-export function runMeta(ls: LapShearState, id: string): LapShearRunMeta {
+export function runMeta(ls: Pick<LapShearState, 'runs' | 'settings'>, id: string): LapShearRunMeta {
   return ls.runs[id] ?? { ...ls.settings.defaults, failureMode: 'unspecified', manualFailureMm: null };
 }
 
@@ -44,10 +44,12 @@ export function useLapShear() {
   const { filesByMode, project, update, meta } = useApp();
   const files = filesByMode.lapShear;
   const ls = project.lapShear;
+  const { disabledFiles, runs: savedRuns, settings } = ls;
 
   const runs = useMemo<LapShearRun[]>(() => {
-    const off = new Set(project.lapShear.disabledFiles);
+    const off = new Set(disabledFiles);
     const out: LapShearRun[] = [];
+    const runCounts = new Map<string, number>();
     const names = uniqueFileNames(files.filter((l) => !off.has(l.parsed.fileId)).map((l) => l.parsed));
     for (const l of files) {
       if (off.has(l.parsed.fileId)) continue;
@@ -55,25 +57,26 @@ export function useLapShear() {
       const condition = m
         ? [m.chargeRatio.value !== null ? `CR ${m.chargeRatio.value}` : null, m.concentrationM.source === 'default' ? null : `${m.concentrationM.value} M`, m.substrate.value].filter(Boolean).join(' · ') || '(no condition in folder names)'
         : '';
+      runCounts.set(l.parsed.fileId, l.cycles.length);
       for (const c of l.cycles) {
-        const rm = runMeta(ls, c.cycleId);
-        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: '', condition, cond: runCondition(m), meta: rm, result: cachedResult(c, rm, ls.settings) });
+        const rm = runMeta({ runs: savedRuns, settings }, c.cycleId);
+        out.push({ id: c.cycleId, file: l.parsed, cycle: c, label: '', condition, cond: runCondition(m), meta: rm, result: cachedResult(c, rm, settings) });
       }
     }
-    const labels = runLabels(out.map((r) => ({ fileId: r.file.fileId, fileName: r.file.name, uniqueName: names.get(r.file.fileId) ?? r.file.name, cycleNumber: r.cycle.cycleNumber, runsInFile: r.file.blocks.length ? out.filter((x) => x.file.fileId === r.file.fileId).length : 1, cond: r.cond })));
+    const labels = runLabels(out.map((r) => ({ fileId: r.file.fileId, fileName: r.file.name, uniqueName: names.get(r.file.fileId) ?? r.file.name, cycleNumber: r.cycle.cycleNumber, runsInFile: runCounts.get(r.file.fileId) ?? 1, cond: r.cond })));
     out.forEach((r, i) => (r.label = labels[i]));
     return out;
-  }, [files, meta, ls]);
+  }, [files, meta, disabledFiles, savedRuns, settings]);
 
-  const valid = runs.filter((r) => r.result.ok);
-  const conditions = runs.map((r) => r.cond);
-  const pick = normalizePick(conditions, ls.pick);
-  const options = pickOptions(conditions, pick);
-  const picked = runs.filter((r) => matchesPick(r.cond, pick));
-  const selectedAllIds = new Set(ls.selected ?? valid.map((r) => r.id));
-  const selectedAll = runs.filter((r) => selectedAllIds.has(r.id));
-  const selected = picked.filter((r) => selectedAllIds.has(r.id));
-  const selectedIds = selected.map((r) => r.id);
+  const valid = useMemo(() => runs.filter((r) => r.result.ok), [runs]);
+  const conditions = useMemo(() => runs.map((r) => r.cond), [runs]);
+  const pick = useMemo(() => normalizePick(conditions, ls.pick), [conditions, ls.pick]);
+  const options = useMemo(() => pickOptions(conditions, pick), [conditions, pick]);
+  const picked = useMemo(() => runs.filter((r) => matchesPick(r.cond, pick)), [runs, pick]);
+  const selectedAllIds = useMemo(() => new Set(ls.selected ?? valid.map((r) => r.id)), [ls.selected, valid]);
+  const selectedAll = useMemo(() => runs.filter((r) => selectedAllIds.has(r.id)), [runs, selectedAllIds]);
+  const selected = useMemo(() => picked.filter((r) => selectedAllIds.has(r.id)), [picked, selectedAllIds]);
+  const selectedIds = useMemo(() => selected.map((r) => r.id), [selected]);
 
   const set = useCallback((patch: Partial<LapShearState>) => update((p) => ({ ...p, lapShear: { ...p.lapShear, ...patch } })), [update]);
   const setSettings = useCallback(

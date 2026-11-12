@@ -283,6 +283,7 @@ export type PeelMorphology = 'unspecified' | 'no-fibrils' | 'transient-fibrils' 
 
 export interface LapShearRunMeta extends LapShearDims {
   failureMode: FailureMode;
+  observation?: string;
   /** Failure displacement picked by the user (mm); overrides the automatic criterion. */
   manualFailureMm: number | null;
 }

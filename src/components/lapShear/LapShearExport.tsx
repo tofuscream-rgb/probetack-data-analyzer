@@ -28,11 +28,13 @@ export function LapShearExportDialog({ onClose }: { onClose: () => void }) {
           id: r.id,
           label: r.label,
           filePath: r.file.path,
+          fileId: r.file.fileId,
           condition: r.condition,
           time_s: r.cycle.time_s,
           z_mm: r.cycle.z_mm,
           force_gf: r.cycle.force_gf,
           failureMode: r.meta.failureMode,
+          observation: r.meta.observation,
           result: r.result,
         })),
       });

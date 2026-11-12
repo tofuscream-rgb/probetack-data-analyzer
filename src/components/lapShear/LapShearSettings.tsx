@@ -12,7 +12,7 @@ export function LapShearSettings() {
     <div className="settings-panel">
       <div className="settings-grid">
         <Section title="Work / integration">
-          <p className="note">The only reported lap-shear energy metric is apparent work to failure per bonded area. It is integrated automatically to the identified failure point. Other work intervals remain internal diagnostics.</p>
+          <p className="note">The Results tab reports apparent work to failure per bonded area. Use the Graph tab to choose an integration interval for shading and Excel diagnostics.</p>
           <NumberField label="Treat a time step longer than … × the median step as a gap" value={s.gapFactor} positive onCommit={(v) => v !== null && setSettings({ gapFactor: v })} />
         </Section>
 

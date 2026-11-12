@@ -1,3 +1,6 @@
+import { uniqueFileNames } from '../state/experiment';
+import type { RunCondition } from '../analysis/runCompare';
+import type { ExperimentMeta } from '../types';
 import { useState } from 'react';
 import type { LoadedFile } from '../parser/loader';
 import { fmt } from './common';
@@ -112,4 +115,32 @@ export function RunPicker({ files, runs, selectedIds, setSelected, hint, nameOf,
       <p className="hint">{hint}</p>
     </>
   );
+}
+
+/** Group repeats by experiment conditions and order them by repeat number. */
+export function groupedRunFiles(loadedFiles: LoadedFile[], picked: { file: { fileId: string }; cond: RunCondition }[], meta: ReadonlyMap<string, ExperimentMeta>) {
+  const pickedFiles = new Set(picked.map((r) => r.file.fileId));
+  // In version order within a substrate: PET, PETv2 (or PET-2), PET v3, …
+  const repeatOf = (id: string) => meta.get(id)?.repeat.value ?? 1;
+  const files = loadedFiles
+    .filter((l) => pickedFiles.has(l.parsed.fileId))
+    .sort((a, b) => repeatOf(a.parsed.fileId) - repeatOf(b.parsed.fileId) || a.parsed.name.localeCompare(b.parsed.name, undefined, { numeric: true }));
+  const names = uniqueFileNames(files.map((l) => l.parsed));
+  // Group files by their conditions; only what differs between the shown files is named
+  // (PET.txt, PETv2.txt, PET v3.txt → "PET"; with All charge ratios → "CR 0.25 · PET").
+  const condOf = new Map(picked.map((r) => [r.file.fileId, r.cond]));
+  const parts = (fileId: string) => {
+    const c = condOf.get(fileId);
+    if (!c) return ['', '', 'unknown'];
+    return [c.chargeRatio === '—' ? 'CR unknown' : `CR ${c.chargeRatio}`, c.concentration === '—' ? '' : `${c.concentration} M`, c.substrate === '—' ? 'substrate unknown' : c.substrate.trim()];
+  };
+  const allParts = files.map((l) => parts(l.parsed.fileId));
+  const varies = [0, 1].filter((k) => new Set(allParts.map((p) => p[k])).size > 1);
+  const subName = new Map<string, string>();
+  for (const p of allParts) if (!subName.has(p[2].toLowerCase())) subName.set(p[2].toLowerCase(), p[2]);
+  const groupOf = (l: { parsed: { fileId: string } }) => {
+    const p = parts(l.parsed.fileId);
+    return [...varies.map((k) => p[k]), subName.get(p[2].toLowerCase()) ?? p[2]].filter(Boolean).join(' · ');
+  };
+  return { files, names, groupOf };
 }

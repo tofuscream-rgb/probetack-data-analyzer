@@ -1,15 +1,14 @@
 import { useApp } from '../../state/AppContext';
 import { useLapShear } from '../../state/lapShear';
 import { ImportStep } from '../Sidebar';
-import { RunPicker } from '../RunPicker';
+import { groupedRunFiles, RunPicker } from '../RunPicker';
 import { ExperimentPicker } from '../ExperimentPicker';
 
 /** Lap Shear sidebar: its own files (step 1) and the runs to graph and analyse (step 2). */
 export function LapShearSidebar() {
-  const { files } = useApp();
+  const { files, meta } = useApp();
   const { runs, picked, pick, options, setPick, selectedIds, setSelected } = useLapShear();
-  const pickedFileIds = new Set(picked.map((r) => r.file.fileId));
-  const pickedFiles = files.filter((l) => pickedFileIds.has(l.parsed.fileId));
+  const { files: pickedFiles, names, groupOf } = groupedRunFiles(files, picked, meta);
   return (
     <nav className="sidebar" aria-label="Open lap-shear files and choose runs">
       <ImportStep />
@@ -34,6 +33,8 @@ export function LapShearSidebar() {
             runs={picked.map((r) => ({ id: r.id, fileId: r.file.fileId, cycleNumber: r.cycle.cycleNumber, ok: r.result.ok, error: r.result.error, peakGf: r.result.peak?.forceGf ?? null }))}
             selectedIds={selectedIds}
             setSelected={setSelected}
+            nameOf={(l) => names.get(l.parsed.fileId) ?? l.parsed.name}
+            groupOf={groupOf}
             hint="Tick any number of files (all their runs) or open a file (▸) to tick single runs. Compare charge ratios uses the ticked runs of every experiment. Each run keeps its own dimensions and failure mode (Results tab)."
           />
         </section>

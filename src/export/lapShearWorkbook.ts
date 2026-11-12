@@ -15,11 +15,13 @@ export interface LapShearExportRun {
   id: string;
   label: string;
   filePath: string;
+  fileId?: string;
   condition: string;
   time_s: ArrayLike<number>;
   z_mm: ArrayLike<number>;
   force_gf: ArrayLike<number>;
   failureMode: keyof typeof FAILURE_MODE_LABEL;
+  observation?: string;
   result: LapShearResult;
 }
 
@@ -55,7 +57,7 @@ export function buildLapShearSheets(o: LapShearExportOptions): SheetSpec[] {
     'Displacement at peak (mm)', 'Time at peak (s)', 'Full-curve work (mJ)', 'Work to peak (mJ)', 'Post-peak work (mJ)',
     `Selected integration work (mJ)`, 'Selected interval from (mm)', 'Selected interval to (mm)', 'Selected work per bonded area (J/m²)',
     'Full-curve work per bonded area (J/m²)', 'Failure mode', 'Failure displacement (mm)', 'Failure point source', 'Work to failure (mJ)',
-    'Signed work incl. reversals (mJ)', 'Valid data points', 'Loading force sign in file', 'Baseline offset subtracted (gf)', 'Notes',
+    'Signed work incl. reversals (mJ)', 'Valid data points', 'Loading force sign in file', 'Baseline offset subtracted (gf)', 'Notes', 'Observation',
   ];
   const s1: CellValue[][] = [
     ['Lap-shear analysis', o.projectName],
@@ -69,7 +71,7 @@ export function buildLapShearSheets(o: LapShearExportOptions): SheetSpec[] {
   for (const r of o.runs) {
     const x = r.result;
     if (!x.ok) {
-      s1.push([r.label, r.filePath, r.condition, ...Array(header.length - 4).fill(null), x.error]);
+      s1.push([r.label, r.filePath, r.condition, ...Array(header.length - 5).fill(null), x.error, r.observation ?? '']);
       continue;
     }
     s1.push([
@@ -79,7 +81,7 @@ export function buildLapShearSheets(o: LapShearExportOptions): SheetSpec[] {
       num(x.work.selectedPerAreaJm2), num(x.work.fullPerAreaJm2), FAILURE_MODE_LABEL[r.failureMode], num(x.failure.dispMm),
       x.failure.dispMm === null ? 'not identified' : x.failure.source, num(x.work.toFailureMJ), num(x.work.signedMJ), x.nValid,
       x.loadingSign === -1 ? 'negative (shown as positive magnitude)' : 'positive', num(x.baseline.applied ? x.baseline.offsetGf : null),
-      [x.directionNote, x.baseline.requested ? x.baseline.note : '', x.failure.note, ...x.warnings].filter(Boolean).join(' | '),
+      [x.directionNote, x.baseline.requested ? x.baseline.note : '', x.failure.note, ...x.warnings].filter(Boolean).join(' | '), r.observation ?? '',
     ]);
   }
   s1.push([], ['Statistics of all exported runs (each run computed with its own bonded area, then averaged)'], ['Property', 'Unit', 'Mean', 'Sample SD', 'n']);
@@ -88,18 +90,30 @@ export function buildLapShearSheets(o: LapShearExportOptions): SheetSpec[] {
     s1.push([p.label, p.unit, num(d.mean), num(d.sd), d.n]);
   }
   s1.push(['Failure modes', '', (Object.keys(FAILURE_MODE_LABEL) as (keyof typeof FAILURE_MODE_LABEL)[]).map((k) => `${FAILURE_MODE_LABEL[k]}: ${runs.filter((r) => r.failureMode === k).length}`).join(', ')]);
-  const conditions = [...new Set(runs.map((r) => r.condition))];
-  if (conditions.length > 1) {
-    for (const c of conditions) {
-      const sub = runs.filter((r) => r.condition === c);
-      s1.push([], [`Statistics: ${c}`], ['Property', 'Unit', 'Mean', 'Sample SD', 'n']);
-      for (const p of SUMMARY_PROPERTIES) {
-        const d = describe(sub.map((r) => p.get(r.result)));
-        s1.push([p.label, p.unit, num(d.mean), num(d.sd), d.n]);
-      }
+  const byFile = new Map<string, LapShearExportRun[]>();
+  for (const run of runs) {
+    const key = run.fileId ?? run.filePath;
+    const file = byFile.get(key) ?? [];
+    file.push(run);
+    byFile.set(key, file);
+  }
+  const repeats = [...byFile.values()];
+  for (const file of repeats) {
+    s1.push([], [`Statistics per Repeat/file: ${file[0].filePath}`], ['Property', 'Unit', 'Mean', 'Sample SD', 'n']);
+    for (const p of SUMMARY_PROPERTIES) {
+      const d = describe(file.map((r) => p.get(r.result)));
+      s1.push([p.label, p.unit, num(d.mean), num(d.sd), d.n]);
     }
   }
-  const sheets: SheetSpec[] = [{ name: summaryName, rows: s1, headerRows: 0, colWidths: [26, 34, 22, ...Array(26).fill(14), 80] }];
+  for (const condition of new Set(runs.map((r) => r.condition))) {
+    const files = repeats.filter((file) => file[0].condition === condition);
+    s1.push([], [`Statistics over Repeat/file means: ${condition}`], ['Property', 'Unit', 'Mean', 'Sample SD', 'n (files)']);
+    for (const p of SUMMARY_PROPERTIES) {
+      const d = describe(files.map((file) => describe(file.map((r) => p.get(r.result))).mean));
+      s1.push([p.label, p.unit, num(d.mean), num(d.sd), d.n]);
+    }
+  }
+  const sheets: SheetSpec[] = [{ name: summaryName, rows: s1, headerRows: 0, colWidths: [26, 34, 22, ...Array(26).fill(14), 80, 45] }];
 
   // ---- Chart ------------------------------------------------------------------------------
   if (o.includeChart && runs.length) {

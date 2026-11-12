@@ -2,10 +2,9 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../../state/AppContext';
 import { usePeel } from '../../state/peel';
 import { ImportStep } from '../Sidebar';
-import { RunPicker } from '../RunPicker';
+import { groupedRunFiles, RunPicker } from '../RunPicker';
 import { NumberField } from '../lapShear/NumberField';
 import { fmt } from '../common';
-import { uniqueFileNames } from '../../state/experiment';
 import { ExperimentPicker } from '../ExperimentPicker';
 
 type Dims = { lengthMm: number; widthMm: number; thicknessMm: number; angleDeg: number };
@@ -44,31 +43,8 @@ function GelDimensions() {
 
 export function PeelSidebar() {
   const { filesByMode, meta } = useApp();
-  const { ps, runs, picked, pick, options, setPick, selectedIds, setPickedSelected } = usePeel();
-  const off = new Set(ps.disabledFiles);
-  const pickedFiles = new Set(picked.map((r) => r.file.fileId));
-  // In version order within a substrate: PET, PETv2 (or PET-2), PET v3, …
-  const repeatOf = (id: string) => meta.get(id)?.repeat.value ?? 1;
-  const files = filesByMode.peel
-    .filter((l) => !off.has(l.parsed.fileId) && pickedFiles.has(l.parsed.fileId))
-    .sort((a, b) => repeatOf(a.parsed.fileId) - repeatOf(b.parsed.fileId) || a.parsed.name.localeCompare(b.parsed.name, undefined, { numeric: true }));
-  const names = uniqueFileNames(files.map((l) => l.parsed));
-  // Group files by their conditions; only what differs between the shown files is named
-  // (PET.txt, PETv2.txt, PET v3.txt → "PET"; with All charge ratios → "CR 0.25 · PET").
-  const condOf = new Map(picked.map((r) => [r.file.fileId, r.cond]));
-  const parts = (fileId: string) => {
-    const c = condOf.get(fileId);
-    if (!c) return ['', '', 'unknown'];
-    return [c.chargeRatio === '—' ? 'CR unknown' : `CR ${c.chargeRatio}`, c.concentration === '—' ? '' : `${c.concentration} M`, c.substrate === '—' ? 'substrate unknown' : c.substrate.trim()];
-  };
-  const allParts = files.map((l) => parts(l.parsed.fileId));
-  const varies = [0, 1].filter((k) => new Set(allParts.map((p) => p[k])).size > 1);
-  const subName = new Map<string, string>();
-  for (const p of allParts) if (!subName.has(p[2].toLowerCase())) subName.set(p[2].toLowerCase(), p[2]);
-  const groupOf = (l: { parsed: { fileId: string } }) => {
-    const p = parts(l.parsed.fileId);
-    return [...varies.map((k) => p[k]), subName.get(p[2].toLowerCase()) ?? p[2]].filter(Boolean).join(' · ');
-  };
+  const { runs, picked, pick, options, setPick, selectedIds, setPickedSelected } = usePeel();
+  const { files, names, groupOf } = groupedRunFiles(filesByMode.peel, picked, meta);
   return (
     <nav className="sidebar" aria-label="Open 90° peel files and choose runs">
       <ImportStep />

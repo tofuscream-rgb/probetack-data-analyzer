@@ -122,7 +122,7 @@ export function GraphPanel() {
   const { update, ui, setUi } = useApp();
   const openRun = useOpenRun();
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
-  const { ex, graph, s, pos, multi, probeAxes, probeMissing, options, curves, nExcluded, colorOf, nameOf, data, layout } = useTackPlot();
+  const { ex, graph, pos, multi, probeAxes, probeMissing, options, curves, nExcluded, colorOf, nameOf, data, layout } = useTackPlot();
 
   const setGraph = (patch: Partial<GraphConfig>) =>
     update((p) => ({ ...p, graphs: p.graphs.map((g) => (g.id === graph.id ? { ...g, ...patch } : g)) }));

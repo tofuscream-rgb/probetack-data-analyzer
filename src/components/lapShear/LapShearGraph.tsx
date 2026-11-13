@@ -13,7 +13,7 @@ import { AreaTool, areaFillTrace, areaShapes } from '../AreaTool';
 import { areaFromRelayout, areaLimits, integrateRange } from '../../analysis/customArea';
 import { GF_TO_N } from '../../types';
 import { NumberField } from './NumberField';
-import { GraphLabelControls, RunGraphControls, Y_OPTIONS, commonTitle, curveLabelAnnotations, shortLabels, type LabelSeries, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
+import { GraphLabelControls, RunGraphControls, Y_OPTIONS, commonTitle, endLabelAnnotations, shortLabels, type LabelSeries, runStyle, yDigits, yFactor, type YUnit } from '../RunGraphControls';
 
 const DISPLAY_LIMIT = 4000;
 const PLOT_CONFIG: Partial<Config> = { editable: true, edits: { annotationPosition: true, annotationTail: true, annotationText: false, axisTitleText: false, titleText: false, legendText: false, legendPosition: true, colorbarTitleText: false, colorbarPosition: false, shapePosition: true }, toImageButtonOptions: { format: 'png', filename: 'lap_shear', scale: 3 } };
@@ -164,6 +164,7 @@ export function useLapShearPlot() {
         }
       }
     });
+    const ends = endLabelAnnotations(labelSeries);
     const lay: Partial<Layout> = {
       ...figLayout(),
       paper_bgcolor: '#ffffff',
@@ -171,9 +172,10 @@ export function useLapShearPlot() {
       xaxis: figAxis(xTitle),
       yaxis: figAxis(yTitle),
       legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 15, color: '#000' } },
-      showlegend: v.labels === 'legend',
-      annotations: v.labels === 'curve' ? [...annotations, ...curveLabelAnnotations(labelSeries, v.peakLabels ? avoid : [])] : annotations,
-      ...(v.title.trim() ? { title: { text: `<b>${v.title.trim()}</b>`, font: { size: 22, color: '#000' }, x: 0.5, xanchor: 'center' }, margin: { l: 90, r: 16, t: 64, b: 78 } } : {}),
+      showlegend: v.labels === 'legend' || (v.labels === 'curve' && ends.tooMany),
+      annotations: v.labels === 'curve' ? [...annotations, ...ends.annotations] : annotations,
+      margin: { l: 90, r: v.labels === 'curve' && !ends.tooMany ? ends.marginRight : 16, t: v.title.trim() ? 64 : 20, b: 78 },
+      ...(v.title.trim() ? { title: { text: `<b>${v.title.trim()}</b>`, font: { size: 22, color: '#000' }, x: 0.5, xanchor: 'center' } } : {}),
       // Keep labels the user dragged while the graph updates.
       editrevision: 'labels',
       dragmode: 'zoom',

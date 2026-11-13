@@ -193,6 +193,10 @@ export interface GraphConfig {
   showMarkers: boolean;
   /** Draw excluded runs as thin grey dashed lines (otherwise they are hidden). */
   showExcluded: boolean;
+  /** Run drawn bold while the others fade (click a curve); null = none. */
+  highlight?: string | null;
+  /** How curves are named: legend box (default), labels beside the curve ends, or none. */
+  labels?: 'legend' | 'curve' | 'none';
 }
 
 export type ViewMode = 'raw' | 'flagged' | 'processed' | 'compare';

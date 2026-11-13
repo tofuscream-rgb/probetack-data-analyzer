@@ -18,10 +18,10 @@ import { plotSheet, type PlotExport } from '../export/plotWorkbook';
 type Scope = 'experiment' | 'graph' | 'all';
 
 const SHEETS: { key: SummarySheet; label: string; description: string }[] = [
-  { key: 'run', label: 'Per Run', description: 'Each included run’s values, with where the work integral ended' },
-  { key: 'repeat', label: 'Per Repeat', description: 'Mean and sample SD across the included runs of each file' },
-  { key: 'condition', label: 'Per Condition', description: 'Mean and sample SD across repeat means; each repeat file counts once' },
-  { key: 'gel', label: 'Compare Gels', description: 'Filterable table of condition means by gel, with charts' },
+  { key: 'run', label: 'Per Run', description: 'Each included run’s values, grouped by metric, with where the work integral ended' },
+  { key: 'repeat', label: 'Per Repeat', description: 'Mean and sample SD across the included runs of each file, grouped by metric' },
+  { key: 'condition', label: 'Per Condition', description: 'Mean and sample SD across repeat means, grouped by metric so conditions sit side by side' },
+  { key: 'gel', label: 'Compare Gels', description: 'Every gel (charge ratio · concentration) on every substrate and dwell time, with charts within each gel and across all gels. Choose All enabled files to compare everything.' },
 ];
 
 function ReportDialog({ mode, counts, getRows, plot, onClose }: {
@@ -33,10 +33,8 @@ function ReportDialog({ mode, counts, getRows, plot, onClose }: {
 }) {
   const { project, notify } = useApp();
   const [scope, setScope] = useState<Scope>(() => counts.experiment ? 'experiment' : counts.all ? 'all' : 'experiment');
-  // Compare Gels only when a gel is named in the folders.
-  const hasGels = useMemo(() => getRows('all').some((r) => r.gel?.trim()), [getRows]);
   const [sheets, setSheets] = useState<SummarySheet[]>(SHEETS.map((s) => s.key));
-  const chosen = sheets.filter((k) => k !== 'gel' || hasGels);
+  const chosen = sheets;
   const graph = useMemo(() => plotSheet('Current Graph', plot), [plot.data, plot.layout]);
   const [includeGraph, setIncludeGraph] = useState(Boolean(graph));
   const hasGraph = includeGraph && Boolean(graph);
@@ -70,7 +68,7 @@ function ReportDialog({ mode, counts, getRows, plot, onClose }: {
       </fieldset>
       <fieldset>
         <legend>Which sheets</legend>
-        {SHEETS.filter(({ key }) => key !== 'gel' || hasGels).map(({ key, label, description }) => <label className="radio" key={key}>
+        {SHEETS.map(({ key, label, description }) => <label className="radio" key={key}>
           <input type="checkbox" checked={sheets.includes(key)} onChange={(e) => {
             const checked = e.target.checked;
             setSheets((current) => checked ? [...current, key] : current.filter((s) => s !== key));

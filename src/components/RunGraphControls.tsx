@@ -142,6 +142,42 @@ export function curveLabelAnnotations(series: LabelSeries[], avoidX: number[] = 
   });
 }
 
+/**
+ * Curve labels in the right margin, outside the plot, each at the height where its curve ends
+ * (nudged apart so labels never overlap each other or the curves). Returns the annotations and
+ * the right margin they need.
+ */
+/** Above this many curves, labels beside them cannot be read; the legend box is used instead. */
+export const MAX_END_LABELS = 20;
+
+export function endLabelAnnotations(series: LabelSeries[]): { annotations: Partial<import('plotly.js').Annotations>[]; marginRight: number; tooMany: boolean } {
+  const ends = series.map((s) => {
+    for (let i = s.y.length - 1; i >= 0; i--) if (Number.isFinite(s.y[i]) && Number.isFinite(s.x[i])) return { s, y: s.y[i] };
+    return null;
+  }).filter((p): p is { s: LabelSeries; y: number } => p !== null).sort((a, b) => a.y - b.y);
+  if (!ends.length) return { annotations: [], marginRight: 16, tooMany: false };
+  if (ends.length > MAX_END_LABELS) return { annotations: [], marginRight: 16, tooMany: true };
+  let ymin = 0, ymax = 0;
+  for (const s of series) for (const v of s.y) if (Number.isFinite(v)) { ymin = Math.min(ymin, v); ymax = Math.max(ymax, v); }
+  const span = ymax - ymin || 1;
+  // About one text line on a ~520 px tall plot; tighter when many labels must fit.
+  const gap = Math.min(0.05 * span, (1.05 * span) / ends.length);
+  const placed: number[] = [];
+  ends.forEach((p, k) => placed.push(k === 0 ? p.y : Math.max(p.y, placed[k - 1] + gap)));
+  const over = placed[placed.length - 1] - (ymax + 0.04 * span);
+  if (over > 0) for (let k = placed.length - 1; k >= 0; k--) placed[k] = Math.min(placed[k] - over, k < placed.length - 1 ? placed[k + 1] - gap : Infinity);
+  const longest = Math.max(...ends.map((p) => p.s.name.replace(/<[^>]+>/g, '').length));
+  return {
+    tooMany: false,
+    marginRight: Math.min(320, 34 + longest * 9),
+    annotations: ends.map((p, k) => ({
+      x: 1, xref: 'paper', xanchor: 'left', xshift: 6, y: placed[k], yref: 'y', yanchor: 'middle',
+      text: `<span style="color:${p.s.color}">━</span> <b>${p.s.name}</b>`,
+      font: { size: 15, color: p.s.color }, showarrow: false, align: 'left',
+    } as Partial<import('plotly.js').Annotations>)),
+  };
+}
+
 /** What all runs share ("0.25 · 2.5 M"), as a suggested graph title. */
 export function commonTitle(conds: { chargeRatio: string; concentration: string; concentrationDefault: boolean; substrate: string }[]): string {
   if (!conds.length) return '';
@@ -171,7 +207,7 @@ export function GraphLabelControls({ view, set, runs, suggestion, autoX, autoY }
         Curve labels
         <select value={view.labels} onChange={(e) => set({ ...view, labels: e.target.value as RunGraphView['labels'] })}>
           <option value="legend">Legend box</option>
-          <option value="curve">Label on curves</option>
+          <option value="curve">Labels beside the curves</option>
           <option value="none">None</option>
         </select>
       </label>

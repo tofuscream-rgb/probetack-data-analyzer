@@ -17,6 +17,13 @@ export interface ChartSeriesSpec {
   color?: string;
   dash?: 'dash' | 'dot';
   markerOnly?: boolean;
+  /** Line with circle markers (summary charts with few points). */
+  markers?: boolean;
+  /** Symmetric custom error bars (e.g. SD) from this range, with cached values. */
+  yErrRange?: [string, string];
+  yErrValues?: (number | null)[];
+  /** Bar charts: category labels of xRange (text cells). */
+  categories?: string[];
   nameCell?: string; // e.g. "A1" on the chart data sheet
   xRange: [string, string]; // e.g. ["B3", "B120"]
   yRange: [string, string];
@@ -25,6 +32,8 @@ export interface ChartSeriesSpec {
 }
 
 export interface ChartSpec {
+  /** 'scatter' (default): numeric x; 'bar': clustered columns over text categories. */
+  type?: 'scatter' | 'bar';
   title: string;
   xTitle: string;
   yTitle: string;
@@ -41,6 +50,8 @@ export interface SheetSpec {
   headerRows?: number; // bold + frozen
   colWidths?: number[];
   filter?: boolean;
+  /** Rows covered by the autofilter, header included (default: all rows). */
+  filterRows?: number;
   wrap?: boolean;
   charts?: ChartSpec[];
 }
@@ -127,7 +138,7 @@ function sheetXml(sheet: SheetSpec, hasDrawing: boolean): string {
   }
   parts.push('</sheetData>');
   if (sheet.filter && sheet.rows.length > 1 && sheet.rows[0].length) {
-    parts.push(`<autoFilter ref="A1:${cellRef(sheet.rows[0].length - 1, sheet.rows.length - 1)}"/>`);
+    parts.push(`<autoFilter ref="A1:${cellRef(sheet.rows[0].length - 1, Math.min(sheet.rows.length, sheet.filterRows ?? sheet.rows.length) - 1)}"/>`);
   }
   if (hasDrawing) parts.push('<drawing r:id="rId1"/>');
   parts.push('</worksheet>');
@@ -151,6 +162,32 @@ function axisXml(id: number, cross: number, pos: 'b' | 'l', title: string): stri
 <c:crossAx val="${cross}"/><c:crosses val="autoZero"/><c:crossBetween val="midCat"/></c:valAx>`;
 }
 
+const ref = (sheetName: string, r: [string, string]) => `${esc(absRef(sheetName, r[0]))}:${esc(absRef(sheetName, r[1]).split('!')[1])}`;
+const strCache = (v: string[]) => `<c:strCache><c:ptCount val="${v.length}"/>${v.map((x, i) => `<c:pt idx="${i}"><c:v>${esc(x)}</c:v></c:pt>`).join('')}</c:strCache>`;
+const titleXml = (title: string) => `<c:title><c:tx><c:rich><a:bodyPr/><a:p><a:pPr><a:defRPr sz="1000" b="0"/></a:pPr><a:r><a:rPr lang="en-US" sz="1000" b="0"/><a:t>${esc(title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>`;
+const errXml = (sheetName: string, s: ChartSeriesSpec, color: string) => {
+  if (!s.yErrRange) return '';
+  const r = `<c:numRef><c:f>${ref(sheetName, s.yErrRange)}</c:f>${numCache(s.yErrValues ?? [])}</c:numRef>`;
+  return `<c:errBars><c:errDir val="y"/><c:errBarType val="both"/><c:errValType val="cust"/><c:noEndCap val="0"/><c:plus>${r}</c:plus><c:minus>${r}</c:minus><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln></c:spPr></c:errBars>`;
+};
+
+/** Clustered column chart over text categories (e.g. gels), with optional custom error bars. */
+function barPlotXml(chart: ChartSpec, sheetName: string): string {
+  const series = chart.series.map((s, i) => {
+    const color = s.color && /^[0-9a-f]{6}$/i.test(s.color) ? s.color : PALETTE[i % PALETTE.length];
+    return `<c:ser><c:idx val="${i}"/><c:order val="${i}"/><c:tx><c:v>${esc(s.name)}</c:v></c:tx>
+<c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:ln w="6350"><a:solidFill><a:srgbClr val="404040"/></a:solidFill></a:ln></c:spPr><c:invertIfNegative val="0"/>
+${errXml(sheetName, s, '404040')}
+<c:cat><c:strRef><c:f>${ref(sheetName, s.xRange)}</c:f>${strCache(s.categories ?? [])}</c:strRef></c:cat>
+<c:val><c:numRef><c:f>${ref(sheetName, s.yRange)}</c:f>${numCache(s.yValues)}</c:numRef></c:val></c:ser>`;
+  }).join('\n');
+  return `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>
+${series}
+<c:gapWidth val="80"/><c:axId val="500001"/><c:axId val="500002"/></c:barChart>
+<c:catAx><c:axId val="500001"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/>${titleXml(chart.xTitle)}<c:numFmt formatCode="General" sourceLinked="0"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="low"/><c:crossAx val="500002"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>
+<c:valAx><c:axId val="500002"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr></c:majorGridlines>${titleXml(chart.yTitle)}<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="500001"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>`;
+}
+
 function chartXml(chart: ChartSpec, sheetName: string): string {
   const series = chart.series
     .map((s, i) => {
@@ -160,7 +197,11 @@ function chartXml(chart: ChartSpec, sheetName: string): string {
         : `<c:tx><c:v>${esc(s.name)}</c:v></c:tx>`;
       return `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>${tx}
 <c:spPr><a:ln w="15875" cap="rnd">${s.markerOnly ? '<a:noFill/>' : `<a:solidFill><a:srgbClr val="${color}"/></a:solidFill>${s.dash ? `<a:prstDash val="${s.dash}"/>` : ''}<a:round/>`}</a:ln></c:spPr>
-<c:marker><c:symbol val="${s.markerOnly ? 'circle' : 'none'}"/></c:marker>
+<c:marker><c:symbol val="${s.markerOnly || s.markers ? 'circle' : 'none'}"/>${s.markerOnly || s.markers ? `<c:size val="6"/><c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:ln><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln></c:spPr>` : ''}</c:marker>
+${s.yErrRange ? (() => {
+        const ref = `<c:numRef><c:f>${esc(absRef(sheetName, s.yErrRange[0]))}:${esc(absRef(sheetName, s.yErrRange[1]).split('!')[1])}</c:f>${numCache(s.yErrValues ?? [])}</c:numRef>`;
+        return `<c:errBars><c:errDir val="y"/><c:errBarType val="both"/><c:errValType val="cust"/><c:noEndCap val="0"/><c:plus>${ref}</c:plus><c:minus>${ref}</c:minus><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:ln></c:spPr></c:errBars>`;
+      })() : ''}
 <c:xVal><c:numRef><c:f>${esc(absRef(sheetName, s.xRange[0]))}:${esc(absRef(sheetName, s.xRange[1]).split('!')[1])}</c:f>${numCache(s.xValues)}</c:numRef></c:xVal>
 <c:yVal><c:numRef><c:f>${esc(absRef(sheetName, s.yRange[0]))}:${esc(absRef(sheetName, s.yRange[1]).split('!')[1])}</c:f>${numCache(s.yValues)}</c:numRef></c:yVal>
 <c:smooth val="0"/></c:ser>`;
@@ -173,11 +214,11 @@ function chartXml(chart: ChartSpec, sheetName: string): string {
 <c:title><c:tx><c:rich><a:bodyPr/><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="1200" b="1"/><a:t>${esc(chart.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
 <c:autoTitleDeleted val="0"/>
 <c:plotArea><c:layout/>
-<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>
+${chart.type === 'bar' ? barPlotXml(chart, sheetName) : `<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>
 ${series}
 <c:axId val="500001"/><c:axId val="500002"/></c:scatterChart>
 ${axisXml(500001, 500002, 'b', chart.xTitle)}
-${axisXml(500002, 500001, 'l', chart.yTitle)}
+${axisXml(500002, 500001, 'l', chart.yTitle)}`}
 </c:plotArea>
 ${chart.showLegend === false ? '' : '<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>'}
 <c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/>

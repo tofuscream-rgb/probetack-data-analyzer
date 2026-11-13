@@ -13,6 +13,7 @@ import { QC_LABEL } from '../analysis/pointOutliers';
 import { buildPlotWorkbook } from '../export/plotWorkbook';
 import type { GraphConfig } from '../types';
 import { useOpenRun } from './common';
+import { MAX_END_LABELS, endLabelAnnotations, type LabelSeries } from './RunGraphControls';
 
 const DISPLAY_LIMIT = 4000;
 const EXCLUDED_COLOR = '#9AA6B5';
@@ -51,8 +52,13 @@ export function useTackPlot() {
   };
   const nameOf = (r: CycleResult) => `${r.file.name} – Run ${r.cycle.cycleNumber}`;
 
+  const drawnIds = curves.filter(isDrawn).map((r) => r.cycle.cycleId);
+  const highlight = graph.highlight && drawnIds.includes(graph.highlight) ? graph.highlight : null;
+  const labels = graph.labels ?? 'legend';
+
   const { data, layout } = useMemo(() => {
     const traces: Data[] = [];
+    const labelSeries: LabelSeries[] = [];
     for (const r of curves) {
       if (!isDrawn(r)) continue;
       const excluded = !isIncluded(r);
@@ -63,6 +69,9 @@ export function useTackPlot() {
       const name = nameOf(r) + (excluded ? ' (outlier, left out)' : '');
       const idx = xs.length > DISPLAY_LIMIT ? lttbIndices(xs, ys, DISPLAY_LIMIT) : Array.from(xs, (_, i) => i);
       const meta = r.cycle.cycleId;
+      const dim = highlight !== null && highlight !== meta;
+      const width = highlight === meta ? LINE.bold : dim || excluded ? LINE.faded : LINE.normal;
+      if (!excluded) labelSeries.push({ id: meta, name: nameOf(r), color, x: idx.map((i) => xs[i]), y: idx.map((i) => (r.include[i] ? ys[i] : NaN)) });
       traces.push({
         type: 'scatter',
         mode: 'lines',
@@ -74,7 +83,8 @@ export function useTackPlot() {
         legendgroup: multi ? r.file.fileId : meta,
         connectgaps: false,
         name,
-        line: excluded ? { color, width: LINE.faded, dash: 'dash' } : { color, width: LINE.normal },
+        line: excluded ? { color, width, dash: 'dash' } : { color, width },
+        opacity: dim ? 0.25 : 1,
         hovertemplate: `${name}<br>x = %{x:.4f}<br>y = %{y:.4f}<br>point %{customdata}<extra></extra>`,
       } as unknown as Data);
       if (graph.showMarkers) {
@@ -94,19 +104,22 @@ export function useTackPlot() {
             legendgroup: multi ? r.file.fileId : meta,
             showlegend: false,
             marker: { symbol: pos ? 'triangle-up' : 'triangle-down', size: excluded ? 8 : 11, color, line: { color: '#18263A', width: 1 } },
+            opacity: dim ? 0.25 : 1,
             hovertemplate: `${name}<br>${pos ? 'Peak adhesion force' : 'Minimum force'}: y = %{y:.4f}, x = %{x:.4f}<br>point %{customdata}<extra></extra>`,
           } as unknown as Data);
         }
       }
     }
+    const ends = labels === 'curve' ? endLabelAnnotations(labelSeries) : null;
     const lay: Partial<Layout> = {
-      ...figLayout({ margin: { l: 90, r: 16, t: 46, b: 78 } }),
+      ...figLayout({ margin: { l: 90, r: ends && !ends.tooMany ? ends.marginRight : 16, t: 46, b: 78 } }),
+      annotations: ends ? ends.annotations : [],
       title: { text: `<b>${graph.title}</b>`, font: { size: 18, color: '#000' }, x: 0.01, xanchor: 'left' },
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
       xaxis: figAxis(axisLabel(graph.x, s)),
       yaxis: figAxis(axisLabel(graph.y, s)),
-      showlegend: curves.length <= 15,
+      showlegend: labels === 'legend' || Boolean(ends?.tooMany),
       legend: { orientation: 'v', x: 1.01, y: 1, font: { size: 14, color: '#000' }, bgcolor: 'rgba(255,255,255,0.85)' },
       dragmode: 'zoom',
       hovermode: 'closest',
@@ -114,15 +127,16 @@ export function useTackPlot() {
     };
     return { data: traces, layout: lay };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curves, graph.hidden, graph.showExcluded, graph.showMarkers, graph.x, graph.y, graph.title, s, multi]);
-  return { ex, graph, s, pos, multi, probeAxes, probeMissing, options, curves, nExcluded, isDrawn, colorOf, nameOf, data, layout };
+  }, [curves, graph.hidden, graph.showExcluded, graph.showMarkers, graph.x, graph.y, graph.title, s, multi, highlight, labels]);
+  return { ex, graph, s, pos, multi, probeAxes, probeMissing, options, curves, nExcluded, isDrawn, colorOf, nameOf, data, layout, highlight, labels, drawnIds };
 }
 
 export function GraphPanel() {
   const { update, ui, setUi } = useApp();
   const openRun = useOpenRun();
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
-  const { ex, graph, pos, multi, probeAxes, probeMissing, options, curves, nExcluded, colorOf, nameOf, data, layout } = useTackPlot();
+  const { ex, graph, pos, multi, probeAxes, probeMissing, options, curves, nExcluded, colorOf, nameOf, data, layout, highlight, labels, isDrawn, drawnIds } = useTackPlot();
+  const toggleHighlight = (id: string) => setGraph({ highlight: highlight === id ? null : id });
 
   const setGraph = (patch: Partial<GraphConfig>) =>
     update((p) => ({ ...p, graphs: p.graphs.map((g) => (g.id === graph.id ? { ...g, ...patch } : g)) }));
@@ -183,6 +197,21 @@ export function GraphPanel() {
         <label className="check" title="Draw runs that are left out of the averages as thin grey dashed lines">
           <input type="checkbox" checked={graph.showExcluded} onChange={(e) => setGraph({ showExcluded: e.target.checked })} /> Show runs left out of the average
         </label>
+        <label title="How curves are named">
+          Curve labels
+          <select value={labels} onChange={(e) => setGraph({ labels: e.target.value as GraphConfig['labels'] })}>
+            <option value="legend">Legend box</option>
+            <option value="curve">Labels beside the curves</option>
+            <option value="none">None</option>
+          </select>
+        </label>
+        <label title="The highlighted run is drawn bold and the others fade. You can also click a curve; click it again to clear.">
+          Highlight
+          <select value={highlight ?? ''} onChange={(e) => setGraph({ highlight: e.target.value || null })}>
+            <option value="">None (all equal)</option>
+            {curves.filter(isDrawn).map((r) => <option key={r.cycle.cycleId} value={r.cycle.cycleId}>{nameOf(r)}</option>)}
+          </select>
+        </label>
         <button className="link" onClick={resetZoom} title="Drag on the graph to zoom, scroll to zoom; double-click also resets">Reset zoom</button>
         <div className="export-group" role="group" aria-label="Export graph">
           <span>Save graph</span>
@@ -202,19 +231,13 @@ export function GraphPanel() {
       )}
       <p className="view-help">
         Drag to zoom.{' '}
+        {labels === 'curve' && drawnIds.length > MAX_END_LABELS ? `More than ${MAX_END_LABELS} curves: the legend box is shown instead of labels beside the curves. ` : ''}
         {nExcluded > 0 ? `${nExcluded} of ${curves.length} run(s) are outliers left out of the averages${graph.showExcluded ? ' (grey dashed)' : ' and hidden'}.` : ''}
         {!multi && ex.files.length > 1 ? ' Tick more files under “Runs on the graph” on the left to compare them.' : ''}
       </p>
 
-      <PlotlyChart
-        data={data}
-        layout={layout}
-        onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') setUi({ focusId: m }); }}
-        onReady={(el) => (plotEl.current = el)}
-        config={{ toImageButtonOptions: { format: 'png', filename: fileName, scale: 3 } }}
-      />
-
-      <p className="view-help curve-help">Show or hide curves below. Hiding a curve only changes this graph; to leave a run out of the averages, untick <em>In average</em> in Data analysis (click a run name).</p>
+      <details className="curve-panel" open>
+        <summary>Curves on this graph <small>— tick to show or hide, click a name to highlight. Hiding a curve only changes the graph; to leave a run out of the averages, use <em>In average</em> in Data analysis (↗).</small></summary>
       <div className="curve-list" aria-label="Show or hide curves on this graph">
         {ex.graphFiles.map((e) => {
           const ids = e.runs.map((r) => r.cycle.cycleId);
@@ -237,10 +260,11 @@ export function GraphPanel() {
                   <span key={r.cycle.cycleId} className={`curve ${hidden ? 'off' : ''} ${isIncluded(r) ? '' : 'excluded'} ${ui.focusId === r.cycle.cycleId ? 'focus' : ''}`}>
                     <input type="checkbox" checked={!hidden} aria-label={`Show ${nameOf(r)}`} onChange={() => setHidden([r.cycle.cycleId], !hidden)} />
                     {!multi && <span className={`swatch ${isIncluded(r) ? '' : 'dashed'}`} style={isIncluded(r) ? { background: colorOf(r) } : undefined} />}
-                    <button className="link curve-name" onClick={() => openRun(r.cycle.cycleId)} title={`Open in Data analysis. ${QC_LABEL[r.qc]}. ${STATUS_LABEL[r.status]}.`}>
+                    <button className={`link curve-name ${highlight === r.cycle.cycleId ? 'on' : ''}`} aria-pressed={highlight === r.cycle.cycleId} disabled={hidden} onClick={() => toggleHighlight(r.cycle.cycleId)} title={`Highlight this run (click again to clear). ${QC_LABEL[r.qc]}. ${STATUS_LABEL[r.status]}.`}>
                       Run {r.cycle.cycleNumber}
                     </button>
-                    <span className={`qc-dot ${r.qc}`} />
+                    <span className={`qc-dot ${r.qc}`} title={QC_LABEL[r.qc]} />
+                    <button className="link open-run" onClick={() => openRun(r.cycle.cycleId)} title="Open in Data analysis" aria-label={`Open ${nameOf(r)} in Data analysis`}>↗</button>
                   </span>
                 );
               })}
@@ -248,6 +272,15 @@ export function GraphPanel() {
           );
         })}
       </div>
+      </details>
+      <PlotlyChart
+        data={data}
+        layout={layout}
+        onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') { toggleHighlight(m); setUi({ focusId: m }); } }}
+        onReady={(el) => (plotEl.current = el)}
+        config={{ toImageButtonOptions: { format: 'png', filename: fileName, scale: 3 } }}
+      />
+
     </section>
   );
 }

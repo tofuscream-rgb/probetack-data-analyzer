@@ -13,17 +13,56 @@ describe('processed adhesion report', () => {
   it('averages repeat means equally and writes only the requested sheet', () => {
     const [sheet] = processedSheets('lapShear', [row('1s', 1, 10), row('1s', 2, 10), row('1s-v2', 1, 30)], ['condition']);
     expect(sheet.name).toBe('Per Condition');
-    expect(sheet.rows[0]).toEqual(['Condition', 'Metric', 'Mean', 'SD', 'Work note']);
-    expect(sheet.rows[1][2]).toBeCloseTo(20);
-    expect(sheet.rows[1][3]).toBeCloseTo(Math.sqrt(200));
-    expect(sheet.rows[2][2]).toBeCloseTo(20 * GF_TO_N);
+    expect(sheet.rows[0]).toEqual(['Metric', 'Charge ratio', 'Concentration (M)', 'Substrate', 'Dwell (s)', 'Mean', 'SD', 'Work note']);
+    expect(sheet.rows[1].slice(0, 5)).toEqual(['Peak load (gf)', 0.25, 2.5, 'PET', 1]);
+    expect(sheet.rows[1][5]).toBeCloseTo(20);
+    expect(sheet.rows[1][6]).toBeCloseTo(Math.sqrt(200));
+    expect(sheet.rows[2][5]).toBeCloseTo(20 * GF_TO_N);
+  });
+
+  it('groups rows by metric, then conditions in numeric order', () => {
+    const at = (hold: string, substrate: string, gf: number) => ({ ...row(`${substrate}${hold}`, 1, gf), cond: { ...row('x', 1, 1).cond, hold, substrate } });
+    const [sheet] = processedSheets('tack', [at('60', 'ss', 3), at('1', 'ss', 1), at('30', 'ss', 2), at('1', 'glass', 4)], ['condition']);
+    const peak = sheet.rows.filter((r) => r[0] === 'Peak adhesion force (gf)');
+    expect(peak.map((r) => [r[3], r[4], r[5]])).toEqual([['ss', 1, 1], ['ss', 30, 2], ['ss', 60, 3], ['glass', 1, 4]]);
+    expect(sheet.rows[1][0]).toBe('Peak adhesion force (gf)');
+    expect(sheet.rows[5][0]).toBe('Peak adhesion force (N)');
+  });
+
+  it('Compare Gels: bars per gel with substrates side by side, dwell-time lines, SD error bars', () => {
+    const at = (cr: string, hold: string, substrate: string, gf: number) => ({ ...row(`${cr}${substrate}${hold}`, 1, gf), cond: { ...row('x', 1, 1).cond, chargeRatio: cr, hold, substrate } });
+    const data = ['0.25', '0.5'].flatMap((cr) => ['ss', 'glass'].flatMap((sub) => ['1', '30'].map((h) => at(cr, h, sub, Number(h) + Number(cr)))));
+    const [sheet] = processedSheets('lapShear', data, ['gel']);
+    expect(sheet.name).toBe('Compare Gels');
+    const bar = sheet.charts!.find((c) => c.title === 'Peak load (N): each gel, substrates side by side')!;
+    expect(bar.type).toBe('bar');
+    expect(bar.series.map((x) => x.name)).toEqual(['ss · 1 s', 'ss · 30 s', 'glass · 1 s', 'glass · 30 s']);
+    expect(bar.series[0].categories).toEqual(['CR 0.25 · 2.5 M', 'CR 0.5 · 2.5 M']);
+    expect(bar.series[1].yValues.map((v) => +(v! / GF_TO_N).toFixed(2))).toEqual([30.25, 30.5]);
+    expect(bar.series[0].yErrRange).toBeDefined();
+    const dwell = sheet.charts!.find((c) => c.title.startsWith('Peak load (N) vs dwell'))!;
+    expect(dwell.series.map((x) => x.name)).toEqual(['CR 0.25 · 2.5 M · ss', 'CR 0.25 · 2.5 M · glass', 'CR 0.5 · 2.5 M · ss', 'CR 0.5 · 2.5 M · glass']);
+    expect(dwell.series[0].xValues).toEqual([1, 30]);
+    // The autofilter covers only the long table.
+    expect(sheet.filterRows).toBe(1 + data.length * 5);
+  });
+
+  it('Compare Gels draws bars even with one dwell time and gels that differ by concentration', () => {
+    const at = (cr: string, conc: string, substrate: string) => ({ ...row(`${cr}${conc}${substrate}`, 1, 10), cond: { ...row('x', 1, 1).cond, chargeRatio: cr, concentration: conc, substrate, hold: '—' } });
+    const [sheet] = processedSheets('peel', [at('0.25', '2.5', 'glass'), at('0.25', '2.98', 'glass'), at('0.25', '2.5', 'PET')], ['gel']);
+    const bars = sheet.charts!.filter((c) => c.type === 'bar');
+    expect(bars).toHaveLength(4); // the four metrics not in gf
+    expect(bars[0].series.map((x) => x.name)).toEqual(['PET', 'glass']);
+    expect(bars[0].series[0].categories).toEqual(['CR 0.25 · 2.5 M', 'CR 0.25 · 2.98 M']);
+    expect(sheet.charts!.some((c) => c.type !== 'bar')).toBe(false);
   });
 
   it('keeps missing normalized values blank and labels recorded-end work', () => {
     const [sheet] = processedSheets('tack', [{ ...row('1s', 1, 10), normalized: NaN, incomplete: true }], ['run']);
-    expect(sheet.rows[1][4]).toBeCloseTo(10);
-    expect(sheet.rows[3].slice(3)).toEqual(['Measured work Wadh (mJ)', 3, 'Recorded end']);
-    expect(sheet.rows[4][4]).toBeNull();
+    const value = (metric: string) => sheet.rows.find((r) => r[0] === metric)!;
+    expect(value('Peak adhesion force (gf)')[7]).toBeCloseTo(10);
+    expect(value('Measured work Wadh (mJ)').slice(7)).toEqual([3, 'Recorded end']);
+    expect(value('Peak nominal tensile stress (kPa)')[7]).toBeNull();
   });
 });
 

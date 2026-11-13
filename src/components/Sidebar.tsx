@@ -278,8 +278,8 @@ function conditionLabel(r: CycleResult): string {
     m.chargeRatio.value !== null ? `CR ${m.chargeRatio.value}` : 'CR unknown',
     `${m.concentrationM.value} M${m.concentrationM.source === 'default' ? ' (assumed)' : ''}`,
     m.substrate.value ?? 'substrate unknown',
-    m.gel.value ?? 'gel unspecified',
-  ].join(' · ');
+    m.gel.value,
+  ].filter(Boolean).join(' · ');
 }
 
 export function Sidebar() {

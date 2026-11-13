@@ -38,8 +38,9 @@ export function ExperimentPicker({ pick, options, setPick }: {
       <PickSelect label="Charge ratio" value={pick.chargeRatio} options={options.chargeRatios} allLabel="All" onChange={(v) => setPick({ chargeRatio: v })} />
       <PickSelect label="Concentration (M)" value={pick.concentration} options={options.concentrations} allLabel="All" onChange={(v) => setPick({ concentration: v })} />
       <PickSelect label="Substrate" value={pick.substrate} options={options.substrates} allLabel="All" onChange={(v) => setPick({ substrate: v })} />
-      <PickSelect label="Gel" value={pick.gel} options={options.gels} allLabel="All" onChange={(v) => setPick({ gel: v })} />
-      <PickSelect label="Dwell time" value={pick.hold} options={options.holds} allLabel="All" onChange={(v) => setPick({ hold: v })} />
+      {/* Only when the data have them: a gel named in the folders, a dwell time in the files. */}
+      {options.gels.some((o) => o.value !== '—') && <PickSelect label="Gel" value={pick.gel} options={options.gels} allLabel="All" onChange={(v) => setPick({ gel: v })} />}
+      {options.holds.some((o) => o.value !== '—') && <PickSelect label="Dwell time" value={pick.hold} options={options.holds} allLabel="All" onChange={(v) => setPick({ hold: v })} />}
       {assumed && <p className="hint warn">No concentration was found in some folder names; 2.1 M is assumed for those files. Correct it in a run’s details if needed.</p>}
       {unknown.length > 0 && <p className="hint">“unknown” = the {unknown.join(' or ')} could not be read from the folder or file names.</p>}
     </div>

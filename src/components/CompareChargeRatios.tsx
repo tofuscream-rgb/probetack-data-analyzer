@@ -74,6 +74,8 @@ export function CompareChargeRatios() {
   const manyConc = new Set(visible.map((s) => s.concentration)).size > 1;
   const conc = (s: DataSet) => `${s.concentration} M${s.concentrationDefault ? '*' : ''}`;
   const manyGels = new Set(visible.map((s) => s.gel)).size > 1;
+  /** A gel is named in the folders (otherwise the Gel filter and column are left out). */
+  const hasGels = cmp.gels.some((g) => g.value !== '—');
   const byCr = sel.panelBy === 'chargeRatio' && manyGels;
   const tickMain = (s: DataSet) => (byCr ? s.gelLabel : s.chargeRatio);
   const tick = (s: DataSet) => (manyConc ? `${tickMain(s)}<br>${conc(s)}` : tickMain(s));
@@ -180,7 +182,7 @@ export function CompareChargeRatios() {
     <div className="compare-tab">
       <div className="compare-picker">
         <ChipGroup title="Substrate" items={cmp.substrates} selected={cmp.selected.substrates} onToggle={(v) => toggle('substrates', v)} onAll={() => set({ substrates: all.substrates })} onNone={() => set({ substrates: [] })} />
-        <ChipGroup title="Gel" items={cmp.gels} selected={cmp.selected.gels} onToggle={(v) => toggle('gels', v)} onAll={() => set({ gels: null })} onNone={() => set({ gels: [] })} />
+        {hasGels && <ChipGroup title="Gel" items={cmp.gels} selected={cmp.selected.gels} onToggle={(v) => toggle('gels', v)} onAll={() => set({ gels: null })} onNone={() => set({ gels: [] })} />}
         <ChipGroup title="Charge ratio" items={cmp.chargeRatios.map((v) => ({ value: v, label: v }))} selected={cmp.selected.chargeRatios} onToggle={(v) => toggle('chargeRatios', v)} onAll={() => set({ chargeRatios: null })} onNone={() => set({ chargeRatios: [] })} />
         <ChipGroup title="Concentration" items={cmp.concentrations.map((v) => ({ value: v, label: v === '—' ? 'unknown' : `${v} M` }))} selected={cmp.selected.concentrations} onToggle={(v) => toggle('concentrations', v)} onAll={() => set({ concentrations: null })} onNone={() => set({ concentrations: [] })} />
         <ChipGroup title="Dwell time" items={cmp.holdTimes.map((v) => ({ value: v, label: v === '—' ? 'unknown' : `${v} s` }))} selected={cmp.selected.holdTimes} onToggle={(v) => toggle('holdTimes', v)} onAll={() => set({ holdTimes: null })} onNone={() => set({ holdTimes: [] })} />
@@ -240,7 +242,7 @@ export function CompareChargeRatios() {
             <table className="grid compare-table">
               <thead>
                 <tr>
-                  <th>Substrate</th><th>Gel</th><th>Charge ratio</th><th>Concentration</th>
+                  <th>Substrate</th>{hasGels && <th>Gel</th>}<th>Charge ratio</th><th>Concentration</th>
                   {holds.map((h) => <th key={h} className="num">{h === '—' ? 'Dwell unknown' : `${h} s dwell`} ({u})</th>)}
                 </tr>
               </thead>
@@ -248,7 +250,7 @@ export function CompareChargeRatios() {
                 {visible.map((s) => (
                   <tr key={s.key}>
                     <td>{s.substrateLabel}</td>
-                    <td>{s.gelLabel}</td>
+                    {hasGels && <td>{s.gelLabel}</td>}
                     <td className="strong">{s.chargeRatio}</td>
                     <td>{conc(s)}</td>
                     {holds.map((h) => {

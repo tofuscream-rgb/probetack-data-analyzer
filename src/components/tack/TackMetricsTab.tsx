@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Data, Layout, PlotlyHTMLElement } from 'plotly.js';
 import { useApp, download } from '../../state/AppContext';
 import {
-  DIAG_METRICS, FAILURE_MODES, MAIN_METRICS, TACK_MORPHOLOGIES, failureModeCounts, failureModeLabel, morphologyCounts, morphologyLabel, tackFlags, usedRuns, allOkRuns, useTackMetrics,
+  CONDITION_METRICS, DIAG_METRICS, FAILURE_MODES, MAIN_METRICS, TACK_MORPHOLOGIES, failureModeCounts, failureModeLabel, morphologyCounts, morphologyLabel, tackFlags, usedRuns, allOkRuns, useTackMetrics,
   type Metric, type TackRepeat,
 } from '../../state/tackMetrics';
 import { TACK_DEFAULTS } from '../../analysis/tackMetrics';
@@ -214,8 +214,8 @@ export function TackMetricsTab() {
     ...t.repeats.map((rp) => [rp.name, rp.substrateLabel, rp.dwellS, rp.included ? '' : 'yes', usedRuns(rp).length, allOkRuns(rp).length, ...MAIN_METRICS.flatMap((k) => { const s = t.repeatStats.get(rp.fileId)![k.key]; const a = t.repeatStatsAll.get(rp.fileId)![k.key]; return [s.mean, s.sd, a.mean, a.sd]; }), failureModeCounts(usedRuns(rp))]),
     [],
     ['Mean ± SD per condition (substrate × dwell) over the Repeat means: after exclusion and before exclusion (all runs)'],
-    ['Substrate', 'Dwell (s)', 'Repeats used', 'Repeats (all)', 'Runs used', 'Runs (all)', ...MAIN_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`, `${k.label} mean, all runs (${k.unit})`, `${k.label} SD, all runs (${k.unit})`]), 'Failure modes'],
-    ...t.conditions.map((c) => [c.substrate, c.dwellS, c.nRepeats, c.nRepeatsAll, c.nRuns, c.nRunsAll, ...MAIN_METRICS.flatMap((k) => [c.stats[k.key].mean, c.stats[k.key].sd, c.statsAll[k.key].mean, c.statsAll[k.key].sd]), c.modes]),
+    ['Substrate', 'Dwell (s)', 'Repeats used', 'Repeats (all)', 'Runs used', 'Runs (all)', ...CONDITION_METRICS.flatMap((k) => [`${k.label} mean (${k.unit})`, `${k.label} SD (${k.unit})`, `${k.label} mean, all runs (${k.unit})`, `${k.label} SD, all runs (${k.unit})`]), 'Failure modes'],
+    ...t.conditions.map((c) => [c.substrate, c.dwellS, c.nRepeats, c.nRepeatsAll, c.nRuns, c.nRunsAll, ...CONDITION_METRICS.flatMap((k) => [c.stats[k.key].mean, c.stats[k.key].sd, c.statsAll[k.key].mean, c.statsAll[k.key].sd]), c.modes]),
     [],
     ['Probe diameter (mm)', d, 'A (mm²)', area],
     ['Excluded Repeats'], ...excludedRepeats.map((r) => [r.name, r.excluded!.reason]),
@@ -359,12 +359,12 @@ export function TackMetricsTab() {
       <Section n={5} title="Mean ± SD per condition (substrate × dwell; after exclusion, all runs below)">
         <div className="table-scroll">
           <table className="grid">
-            <thead><tr><th>Condition</th><th className="num" title="Repeats with included runs / all Repeats">Repeats</th><th className="num" title="Runs used after exclusion / all analysed runs">Runs</th>{MAIN_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure modes</th><th>Debonding morphologies</th></tr></thead>
+            <thead><tr><th>Condition</th><th className="num" title="Repeats with included runs / all Repeats">Repeats</th><th className="num" title="Runs used after exclusion / all analysed runs">Runs</th>{CONDITION_METRICS.map((k) => <MetricTh key={k.key} k={k} />)}<th>Failure modes</th><th>Debonding morphologies</th></tr></thead>
             <tbody>
               {t.conditions.map((c) => (
                 <tr key={c.key}>
                   <td className="strong">{c.label}</td><td className="num">{c.nRepeats} / {c.nRepeatsAll}</td><td className="num">{c.nRuns} / {c.nRunsAll}</td>
-                  {MAIN_METRICS.map((k) => <td key={k.key} className="num"><Both after={c.stats[k.key]} before={c.statsAll[k.key]} d={k.digits} /></td>)}
+                  {CONDITION_METRICS.map((k) => <td key={k.key} className="num"><Both after={c.stats[k.key]} before={c.statsAll[k.key]} d={k.digits} /></td>)}
                   <td>{c.modes}</td><td>{morphologyCounts(t.repeats.filter((rp) => rp.substrateLabel === c.substrate && rp.dwellS === c.dwellS).flatMap(usedRuns))}</td>
                 </tr>
               ))}

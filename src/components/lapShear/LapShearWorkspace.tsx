@@ -35,11 +35,11 @@ function LapShearAnalysis() {
 }
 
 function LapShearCompare() {
-  const { meta, project } = useApp();
+  const { meta } = useApp();
   const { ls, runs, set } = useLapShear();
   // Every enabled run, with the review decisions of Data analysis; the tab has its own filters.
-  const included = useMemo(() => includedRuns(runs.map((r) => lapShearAnalysisRow(r, meta.get(r.file.fileId)?.gel.value ?? null)), project.settings.cycle, project.settings.runExclusion.excludeClasses, ls.analysisInclusion ?? {}),
-    [runs, meta, project.settings.cycle, project.settings.runExclusion.excludeClasses, ls.analysisInclusion]);
+  const included = useMemo(() => includedRuns(runs.map((r) => lapShearAnalysisRow(r, meta.get(r.file.fileId)?.gel.value ?? null)), ls.analysisInclusion ?? {}),
+    [runs, meta, ls.analysisInclusion]);
   const items = runs.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, included: included.has(r.id), values: Object.fromEntries(SUMMARY_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
   return (
     <RunCompare

@@ -1,8 +1,6 @@
 import type { PeelRun } from '../state/peel';
 import type { LapShearRun } from '../state/lapShear';
-import { modifiedZScores } from './stats';
 import type { RunCondition } from './runCompare';
-import type { CycleOutlierSettings, QCClass } from '../types';
 
 export interface AnalysisRow {
   id: string;
@@ -29,12 +27,17 @@ export function conditionTitle({ cond: c, gel }: AnalysisRow) {
     c.substrate === '—' ? 'Substrate unknown' : c.substrate.trim(),
     c.chargeRatio === '—' ? 'Charge ratio unknown' : `CR ${c.chargeRatio}`,
     c.concentration === '—' ? 'Concentration unknown' : `${c.concentration} M${c.concentrationDefault ? ' (assumed)' : ''}`,
-    gel?.trim() || 'Gel unspecified',
-    c.hold === '—' ? 'Dwell unknown' : `${c.hold} s dwell`,
+    gel?.trim() || null,
+    c.hold === '—' ? null : `${c.hold} s dwell`,
   ].filter(Boolean).join(' · ');
 }
 
-export function reviewGroups(rows: AnalysisRow[], qc: CycleOutlierSettings, exclude: QCClass[]) {
+/**
+ * Condition groups of Lap Shear and 90° Peel runs. These tests usually have only one or two
+ * runs per file and few repeats, too few for a modified Z-score, so runs are not scored:
+ * every valid run is included unless the user leaves it out (In average).
+ */
+export function reviewGroups(rows: AnalysisRow[]) {
   const grouped = new Map<string, AnalysisRow[]>();
   for (const row of rows) {
     const key = groupKey(row);
@@ -42,26 +45,15 @@ export function reviewGroups(rows: AnalysisRow[], qc: CycleOutlierSettings, excl
     list.push(row);
     grouped.set(key, list);
   }
-  return [...grouped].sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true })).map(([key, list]) => {
-    const valid = list.filter((r) => Number.isFinite(r.primary));
-    const result = valid.length >= qc.minGroupSize ? modifiedZScores(valid.map((r) => r.primary)) : null;
-    const scores = new Map(valid.map((r, i) => [r.id, result?.z[i] ?? null]));
-    return {
-      key, title: conditionTitle(list[0]), method: result?.method, valid: valid.length,
-      runs: list.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }) || a.number - b.number).map((row) => {
-        const z = scores.get(row.id) ?? null;
-        const a = Math.abs(z ?? 0);
-        const flag: QCClass = a >= qc.modZRed ? 'red' : a >= qc.modZOrange ? 'orange' : a >= qc.modZYellow ? 'yellow' : 'green';
-        return { row, z, flag, automatic: Number.isFinite(row.primary) && !exclude.includes(flag) };
-      }),
-    };
-  });
+  return [...grouped].sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true })).map(([key, list]) => ({
+    key, title: conditionTitle(list[0]),
+    runs: list.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }) || a.number - b.number)
+      .map((row) => ({ row, automatic: Number.isFinite(row.primary) })),
+  }));
 }
 
-export function includedRuns(rows: AnalysisRow[], qc: CycleOutlierSettings, exclude: QCClass[], inclusion: Record<string, boolean>): Set<string> {
-  return new Set(reviewGroups(rows, qc, exclude).flatMap((group) => group.runs
-    .filter(({ row, automatic }) => Number.isFinite(row.primary) && (inclusion[row.id] ?? automatic))
-    .map(({ row }) => row.id)));
+export function includedRuns(rows: AnalysisRow[], inclusion: Record<string, boolean>): Set<string> {
+  return new Set(rows.filter((row) => Number.isFinite(row.primary) && (inclusion[row.id] ?? true)).map((row) => row.id));
 }
 
 export function lapShearAnalysisRow(r: LapShearRun, gel: string | null): AnalysisRow {

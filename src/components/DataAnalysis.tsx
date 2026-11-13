@@ -37,9 +37,9 @@ function groupTitle(r: CycleResult): string {
     m.substrate.value ?? 'Substrate unknown',
     m.chargeRatio.value !== null ? `CR ${m.chargeRatio.value}` : 'Charge ratio unknown',
     `${m.concentrationM.value} M${m.concentrationM.source === 'default' ? ' (assumed)' : ''}`,
-    m.gel.value ?? 'Gel unspecified',
+    m.gel.value,
     r.holdTimeS !== null ? `${r.holdTimeS} s dwell` : 'Dwell unknown',
-  ].join(' · ');
+  ].filter(Boolean).join(' · ');
 }
 
 const byRepeatAndRun = (a: CycleResult, b: CycleResult) =>

@@ -34,11 +34,11 @@ function PeelAnalysis() {
 }
 
 function PeelCompare() {
-  const { meta, project } = useApp();
+  const { meta } = useApp();
   const { ps, runs, set } = usePeel();
   // Every enabled run, with the review decisions of Data analysis; the tab has its own filters.
-  const included = useMemo(() => includedRuns(runs.map((r) => peelAnalysisRow(r, meta.get(r.file.fileId)?.gel.value ?? null)), project.settings.cycle, project.settings.runExclusion.excludeClasses, ps.analysisInclusion ?? {}),
-    [runs, meta, project.settings.cycle, project.settings.runExclusion.excludeClasses, ps.analysisInclusion]);
+  const included = useMemo(() => includedRuns(runs.map((r) => peelAnalysisRow(r, meta.get(r.file.fileId)?.gel.value ?? null)), ps.analysisInclusion ?? {}),
+    [runs, meta, ps.analysisInclusion]);
   const items = runs.filter((r) => r.result.ok).map((r) => ({ id: r.id, cond: r.cond, included: included.has(r.id), values: Object.fromEntries(PEEL_PROPERTIES.map((p) => [p.key, p.get(r.result)])) }));
   return (
     <RunCompare

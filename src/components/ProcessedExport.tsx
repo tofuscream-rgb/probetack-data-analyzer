@@ -33,15 +33,18 @@ function ReportDialog({ mode, counts, getRows, plot, onClose }: {
 }) {
   const { project, notify } = useApp();
   const [scope, setScope] = useState<Scope>(() => counts.experiment ? 'experiment' : counts.all ? 'all' : 'experiment');
+  // Compare Gels only when a gel is named in the folders.
+  const hasGels = useMemo(() => getRows('all').some((r) => r.gel?.trim()), [getRows]);
   const [sheets, setSheets] = useState<SummarySheet[]>(SHEETS.map((s) => s.key));
+  const chosen = sheets.filter((k) => k !== 'gel' || hasGels);
   const graph = useMemo(() => plotSheet('Current Graph', plot), [plot.data, plot.layout]);
   const [includeGraph, setIncludeGraph] = useState(Boolean(graph));
   const hasGraph = includeGraph && Boolean(graph);
-  const canDownload = (counts[scope] > 0 && sheets.length > 0) || hasGraph;
+  const canDownload = (counts[scope] > 0 && chosen.length > 0) || hasGraph;
   const save = () => {
     try {
       const rows = getRows(scope);
-      const workbook = buildProcessedWorkbook(project.name, mode, rows, rows.length ? sheets : [], hasGraph ? graph ?? undefined : undefined);
+      const workbook = buildProcessedWorkbook(project.name, mode, rows, rows.length ? chosen : [], hasGraph ? graph ?? undefined : undefined);
       const file = project.name.replace(/[^\w.-]+/g, '_') || 'Mach1_Analysis';
       const test = { tack: 'probe_tack', lapShear: 'lap_shear', peel: '90_peel' }[mode];
       download(workbook, `${file}_${test}_processed.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -67,7 +70,7 @@ function ReportDialog({ mode, counts, getRows, plot, onClose }: {
       </fieldset>
       <fieldset>
         <legend>Which sheets</legend>
-        {SHEETS.map(({ key, label, description }) => <label className="radio" key={key}>
+        {SHEETS.filter(({ key }) => key !== 'gel' || hasGels).map(({ key, label, description }) => <label className="radio" key={key}>
           <input type="checkbox" checked={sheets.includes(key)} onChange={(e) => {
             const checked = e.target.checked;
             setSheets((current) => checked ? [...current, key] : current.filter((s) => s !== key));
@@ -125,9 +128,8 @@ function RunReport({ mode, rows, picked, graphed, inclusion, plot, onClose }: {
   plot: PlotExport;
   onClose: () => void;
 }) {
-  const { project } = useApp();
-  const included = useMemo(() => includedRuns(rows, project.settings.cycle, project.settings.runExclusion.excludeClasses, inclusion),
-    [rows, project.settings.cycle, project.settings.runExclusion.excludeClasses, inclusion]);
+  const included = useMemo(() => includedRuns(rows, inclusion),
+    [rows, inclusion]);
   const all = rows.filter((r) => included.has(r.id));
   const scoped = { experiment: all.filter((r) => picked.has(r.id)), graph: all.filter((r) => graphed.has(r.id)), all };
   return <ReportDialog mode={mode} plot={plot} counts={{ experiment: scoped.experiment.length, graph: scoped.graph.length, all: all.length }} getRows={(scope) => scoped[scope]} onClose={onClose} />;

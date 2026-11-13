@@ -36,12 +36,12 @@ export function WorkMethods({ mode }: { mode: Mode }) {
           refs: ['creton2016', ...(mode === 'lapShear' ? ['wang2020'] : mode === 'peel' ? ['bartlett2023'] : [])],
           note: 'Integration limits and fallback to recorded displacement are analyzer conventions.',
         },
-        {
+        ...(mode !== 'tack' ? [] : [{
           title: 'Modified Z-score and review',
           tex: String.raw`Z_i=0.6745(x_i-\operatorname{median}(x))/\operatorname{MAD}(x)`,
           text: 'MAD is the median absolute deviation from the median. The analyzer uses its existing mean absolute deviation fallback when MAD is zero. Flags are screening aids. Group summaries give mean ± sample SD and the number of finite observations for each metric.',
           refs: ['nistOutliers'], note: 'Thresholds, minimum group size and the zero-MAD fallback are analyzer settings or conventions.',
-        },
+        }]),
       ]} />
     </details>
   );

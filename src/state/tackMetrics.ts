@@ -83,6 +83,9 @@ export const MAIN_METRICS: Metric[] = [
   { key: 'plateau', label: 'Plateau stress', html: 'Plateau stress', unit: 'kPa', digits: 2, get: (m) => m.plateau?.stressKPa ?? null },
 ];
 
+/** Condition table (section 5): the main results without ε_failure. */
+export const CONDITION_METRICS: Metric[] = MAIN_METRICS.filter((k) => k.key !== 'eps');
+
 export const DIAG_METRICS: Metric[] = [
   { key: 'fmax', label: 'F_max', html: 'F<sub>max</sub>', unit: 'N', digits: 4, get: (m) => m.fmaxN },
   { key: 'dpeak', label: 'δ_peak', html: 'δ<sub>peak</sub>', unit: 'mm', digits: 3, get: (m) => m.deltaPeakMm },

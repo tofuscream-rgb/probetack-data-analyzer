@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react';
-import { useApp } from '../state/AppContext';
 import { mean, sampleSD } from '../analysis/stats';
-import { QC_LABEL } from '../analysis/pointOutliers';
 import { reviewGroups, type AnalysisRow } from '../analysis/adhesionReview';
-import { fmt, meanSd, QcLegend } from './common';
+import { fmt, meanSd } from './common';
 import { GF_TO_N } from '../types';
 import { WorkMethods } from './AdhesionMethods';
 
@@ -19,17 +17,16 @@ export function AdhesionDataAnalysis({ mode, rows, graphed, inclusion, setInclus
   inclusion: Record<string, boolean>;
   setInclusion: (id: string, value: boolean | null) => void;
 }) {
-  const { project } = useApp();
   const [scope, setScope] = useState<'experiment' | 'graph'>('experiment');
-  const qc = project.settings.cycle;
-  const exclude = project.settings.runExclusion.excludeClasses;
   const graphIds = new Set(graphed);
   const primary = mode === 'lapShear' ? 'Peak load' : 'Steady-state force';
   const normalized = mode === 'lapShear' ? 'Apparent strength (kPa)' : 'Peel energy (J/m²)';
   const groups = useMemo(() => {
-    return reviewGroups(rows, qc, exclude);
-  }, [rows, qc, exclude]);
+    return reviewGroups(rows);
+  }, [rows]);
 
+  const gelNote = rows.some((r) => r.gel) ? ' × gel' : '';
+  const dwellNote = rows.some((r) => r.cond.hold !== '—') ? ' × dwell time' : '';
   const dupNames = new Set(rows.map((r) => r.name).filter((n, i, all) => all.indexOf(n) !== i && rows.some((x) => x.name === n && x.fileId !== rows[i].fileId)));
 
   return (
@@ -43,9 +40,8 @@ export function AdhesionDataAnalysis({ mode, rows, graphed, inclusion, setInclus
               <button className={scope === 'graph' ? 'on' : ''} aria-pressed={scope === 'graph'} onClick={() => setScope('graph')}>Runs on the graph ({graphed.length})</button>
             </div>
           </div>
-          <p className="note">One summary per condition (substrate × charge ratio × concentration × gel × dwell time); repeat files of the same condition, such as 1s.txt and 1s-v2.txt, are combined. Each run counts once. The modified Z-score uses the {primary.toLowerCase()} of the runs of the condition and needs at least {qc.minGroupSize} valid values; otherwise the run is <em>not scored</em>. Flag colours and automatic exclusion follow the shared settings. Untick or tick <em>In average</em> to decide yourself; <em>Reset</em> returns to the automatic decision.</p>
+          <p className="note">One summary per condition (substrate × charge ratio × concentration{gelNote}{dwellNote}); repeat files of the same condition, such as glass.txt and glass-v2.txt, are combined. Each run counts once, and every valid run is included until you untick <em>In average</em>; <em>Reset</em> includes it again. No outlier score is calculated: these tests have too few runs per condition for a modified Z-score to be meaningful.</p>
           <p className="note">An asterisk marks work integrated to the end of the recording because no separation was detected.</p>
-          <QcLegend />
         </div>
         <WorkMethods mode={mode} />
         {!rows.length && <p className="note pad">No runs in the chosen experiment. Open your files in step 1, or set a dropdown in step 2 back to <em>All</em>.</p>}
@@ -79,20 +75,18 @@ export function AdhesionDataAnalysis({ mode, rows, graphed, inclusion, setInclus
               <p className="note sources">Source files: {sources.map((r) => <span key={r.fileId} title={r.path} className="source-file">{r.name}</span>)}</p>
               <div className="table-scroll">
                 <table className="grid run-table">
-                  <thead><tr><th>File</th><th className="num">Run</th><th className="num">{primary} (N)</th>{mode === 'peel' && <th className="num">Peak load (N)</th>}<th className="num">{normalized}</th><th className="num">W<sub>adh</sub> (mJ)</th><th className="num">Modified Z</th><th>Flag</th><th>Reason</th><th>In average</th></tr></thead>
-                  <tbody>{shown.map(({ row, z, flag, automatic }) => {
+                  <thead><tr><th>File</th><th className="num">Run</th><th className="num">{primary} (N)</th>{mode === 'peel' && <th className="num">Peak load (N)</th>}<th className="num">{normalized}</th><th className="num">W<sub>adh</sub> (mJ)</th><th>Notes</th><th>In average</th></tr></thead>
+                  <tbody>{shown.map(({ row, automatic }) => {
                     const included = inclusion[row.id] ?? automatic;
                     const label = `${row.name}, run ${row.number}`;
-                    const reason = z === null ? Number.isFinite(row.primary) ? `Not scored: ${g.valid} valid run${g.valid === 1 ? '' : 's'} (needs ${qc.minGroupSize})` : 'Missing measurement' : g.method === 'meanAD' ? 'Zero MAD: mean deviation fallback' : flag === 'green' ? '' : `|Z| = ${Math.abs(z).toFixed(2)}`;
+                    const reason = Number.isFinite(row.primary) ? '' : 'Missing measurement';
                     const notes = row.note ? row.note.split(' · ') : [];
                     return (
-                      <tr key={row.id} className={`hl-${flag} ${included ? '' : 'excluded'}`}>
+                      <tr key={row.id} className={included ? '' : 'excluded'}>
                         <td title={row.path}>{row.name}{dupNames.has(row.name) && <div className="cond">{row.path.split('/').slice(-3, -1).join('/')}</div>}</td>
                         <td className="num">{row.number}</td><td className="num">{fmt(row.primary, 4)}</td>
                         {mode === 'peel' && <td className="num">{fmt(row.peakN, 4)}</td>}
                         <td className="num">{fmt(row.normalized, 3)}</td><td className="num">{fmt(row.workMJ, 3)}{row.incomplete && ' *'}</td>
-                        <td className="num z">{z === null ? '—' : Number.isFinite(z) ? z.toFixed(2) : z < 0 ? '−∞' : '+∞'}</td>
-                        <td>{z === null ? <span className="muted">Not scored</span> : <span className={`qc-pill ${flag}`}>{flag === 'green' ? 'ok' : QC_LABEL[flag].split(' —')[0].toLowerCase()}</span>}</td>
                         <td className="reason">
                           {reason || (notes.length ? '' : <span className="muted">—</span>)}
                           {notes.length > 0 && (

@@ -30,8 +30,7 @@ function TackBar() {
 }
 
 function RunBar({ rows, picked, graphed, inclusion, title }: { rows: AnalysisRow[]; picked: Set<string>; graphed: { id: string; file: { fileId: string } }[]; inclusion: Record<string, boolean>; title: string }) {
-  const { project } = useApp();
-  const included = useMemo(() => includedRuns(rows, project.settings.cycle, project.settings.runExclusion.excludeClasses, inclusion), [rows, project.settings.cycle, project.settings.runExclusion.excludeClasses, inclusion]);
+  const included = useMemo(() => includedRuns(rows, inclusion), [rows, inclusion]);
   const inChoice = rows.filter((r) => picked.has(r.id));
   return <Bar title={title} inChoice={[new Set(inChoice.map((r) => r.fileId)).size, inChoice.length]} onGraph={[new Set(graphed.map((r) => r.file.fileId)).size, graphed.length]} included={inChoice.filter((r) => included.has(r.id)).length} />;
 }

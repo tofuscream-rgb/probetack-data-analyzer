@@ -31,6 +31,7 @@ function displayIndices(r: PeelRun, xs: ArrayLike<number>): number[] {
 
 export function usePeelPlot() {
   const { ps, selected, set, setSettings } = usePeel();
+  const leftOut = (id: string) => (ps.analysisInclusion ?? {})[id] === false;
   const v = ps.view;
   const s = ps.settings;
   const unit = v.unit;
@@ -40,7 +41,7 @@ export function usePeelPlot() {
   const autoX = 'Peel displacement δ = |z − z₀| (mm)';
   const xTitle = v.xTitle.trim() || autoX;
   const ut = unitText(unit);
-  const runs = selected.filter((r) => r.result.ok);
+  const runs = selected.filter((r) => r.result.ok && (v.showExcluded !== false || !leftOut(r.id)));
   const areaRange = useMemo<[number, number] | null>(() => {
     let a = Infinity, b = -Infinity;
     for (const r of runs) { const sr = r.result.curve.series; for (const x of sr.dispMm) if (Number.isFinite(x)) { if (x < a) a = x; if (x > b) b = x; } }
@@ -55,8 +56,11 @@ export function usePeelPlot() {
     const short = v.labels === 'curve' ? shortLabels(runs.map((r) => ({ label: r.label, cycleNumber: r.cycle.cycleNumber, cond: r.cond }))) : runs.map((r) => r.label);
     const avoid: number[] = [];
     runs.forEach((r, k) => {
-      const color = CURVE_COLORS[k % CURVE_COLORS.length];
-      const st = runStyle(v, r.id, ids);
+      const out = leftOut(r.id);
+      // Runs left out of the average in Data analysis: thin grey dashed, as in Probe Tack.
+      const color = out ? '#9AA6B5' : CURVE_COLORS[k % CURVE_COLORS.length];
+      const st0 = runStyle(v, r.id, ids);
+      const st = out ? { ...st0, width: Math.min(st0.width, 1.6) } : st0;
       const res = r.result;
       const series = res.curve.series;
       // Each run with its own gel area / width; peel energy G = F/w · (1 − cos θ) with its own peel angle (= F/w at 90°).
@@ -65,7 +69,7 @@ export function usePeelPlot() {
       const xs = series.dispMm;
       const idx = displayIndices(r, xs);
       const y = (i: number) => series.loadGf[i] * f;
-      const name = v.names[r.id]?.trim() || short[k];
+      const name = (v.names[r.id]?.trim() || short[k]) + (out ? ' (left out of the average)' : '');
       labelSeries.push({ id: r.id, name, color, x: idx.map((i) => xs[i]), y: idx.map(y) });
       // Custom area (additional tool): shaded under this curve between the dashed boundaries.
       const areaFill = areaFillTrace(idx.map((i) => xs[i]), idx.map(y), v.area, rgba(color, 0.22), r.id);
@@ -85,7 +89,7 @@ export function usePeelPlot() {
         traces.push({ type: 'scatter', mode: 'lines', name: `${name} (raw)`, x: idx.map((i) => xs[i]), y: idx.map((i) => res.curve.loadingSign * r.cycle.force_gf[i] * f), line: { color, width: 1, dash: 'dot' }, legendgroup: r.id } as unknown as Data);
       }
       traces.push({
-        type: 'scatter', mode: 'lines', name, meta: r.id, x: idx.map((i) => xs[i]), y: idx.map(y), line: { color, width: st.width }, opacity: st.opacity, legendgroup: r.id,
+        type: 'scatter', mode: 'lines', name, meta: r.id, x: idx.map((i) => xs[i]), y: idx.map(y), line: { color, width: st.width, ...(out ? { dash: 'dash' } : {}) }, opacity: st.opacity, legendgroup: r.id,
         hovertemplate: `${name}<br>δ = %{x:.3f} mm<br>%{y:.${dg}f} ${ut}<extra></extra>`,
       } as unknown as Data);
       const pk = res.curve.peak;
@@ -154,6 +158,7 @@ export function PeelGraph() {
           <span className="vs">vs displacement</span>
         </label>
         <label className="check"><input type="checkbox" checked={v.peakLabels} onChange={(e) => set({ view: { ...v, peakLabels: e.target.checked } })} /> Peak labels</label>
+        <label className="check" title="Draw runs left out of the average (In average unticked in Data analysis) as thin grey dashed lines"><input type="checkbox" checked={v.showExcluded !== false} onChange={(e) => set({ view: { ...v, showExcluded: e.target.checked } })} /> Show runs left out of the average</label>
         <RunGraphControls view={v} set={(view) => set({ view })} runs={runs} shadeLabel="Shades the steady-state window and draws its average peel force (dashed)" />
         {runs.some((r) => r.result.curve.baseline.applied) && <label className="check"><input type="checkbox" checked={v.showRaw} onChange={(e) => set({ view: { ...v, showRaw: e.target.checked } })} /> Raw curve</label>}
         <button className="link" onClick={resetZoom}>Reset zoom</button>

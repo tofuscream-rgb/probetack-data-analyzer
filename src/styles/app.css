@@ -467,7 +467,7 @@ table.ls-summary td:first-child { white-space: nowrap; }
 
 /* run picker (Lap Shear, 90° Peel) */
 .run-search { width: 100%; }
-.picker-head { grid-template-columns: 16px minmax(0, 1fr) auto !important; }
+.picker-head { grid-template-columns: 16px minmax(0, 1fr) auto auto !important; }
 .picker-head .disclose { display: flex; align-items: center; gap: 4px; min-width: 0; padding: 0; font-weight: 600; }
 .picker-head .caret { color: var(--ink-3); width: 10px; flex: none; }
 .pad-s { padding: 6px; }
@@ -605,3 +605,6 @@ table.area-table td.note { font-size: 11px; }
 .curve-panel .curve-name.on { font-weight: 700; text-decoration: underline; }
 .curve-panel .swatch { width: 14px; height: 4px; }
 .curve-panel .open-run { font-size: 12px; color: var(--ink-3) !important; text-decoration: none; }
+.run-picker .picker-head { grid-template-columns: 16px minmax(0, 1fr) auto auto; }
+.run-picker .left-out { color: var(--red); font-weight: 400; }
+.run-table tr.clickable { cursor: pointer; }

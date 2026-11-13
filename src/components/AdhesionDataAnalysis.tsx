@@ -4,20 +4,26 @@ import { reviewGroups, type AnalysisRow } from '../analysis/adhesionReview';
 import { fmt, meanSd } from './common';
 import { GF_TO_N } from '../types';
 import { WorkMethods } from './AdhesionMethods';
+import { AdhesionRunDetail, type DetailRun } from './AdhesionRunDetail';
 
 function summarize(rows: AnalysisRow[], metric: (row: AnalysisRow) => number, digits: number) {
   const values = rows.map(metric).filter(Number.isFinite);
   return meanSd(mean(values), sampleSD(values), values.length, digits);
 }
 
-export function AdhesionDataAnalysis({ mode, rows, graphed, inclusion, setInclusion }: {
+export function AdhesionDataAnalysis({ mode, rows, graphed, inclusion, setInclusion, detailOf }: {
   mode: 'lapShear' | 'peel';
   rows: AnalysisRow[];
   graphed: string[];
   inclusion: Record<string, boolean>;
   setInclusion: (id: string, value: boolean | null) => void;
+  /** Data for the details panel of a run (opened by clicking its row). */
+  detailOf: (id: string) => DetailRun | null;
 }) {
   const [scope, setScope] = useState<'experiment' | 'graph'>('experiment');
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const focusRow = focusId ? rows.find((r) => r.id === focusId) ?? null : null;
+  const focusRun = focusRow ? detailOf(focusRow.id) : null;
   const graphIds = new Set(graphed);
   const primary = mode === 'lapShear' ? 'Peak load' : 'Steady-state force';
   const normalized = mode === 'lapShear' ? 'Apparent strength (kPa)' : 'Peel energy (J/m²)';
@@ -30,7 +36,7 @@ export function AdhesionDataAnalysis({ mode, rows, graphed, inclusion, setInclus
   const dupNames = new Set(rows.map((r) => r.name).filter((n, i, all) => all.indexOf(n) !== i && rows.some((x) => x.name === n && x.fileId !== rows[i].fileId)));
 
   return (
-    <div className="analysis-layout">
+    <div className={`analysis-layout ${focusRun ? 'with-detail' : ''}`}>
       <div className="analysis-main">
         <div className="analysis-intro">
           <div className="table-actions">
@@ -41,7 +47,7 @@ export function AdhesionDataAnalysis({ mode, rows, graphed, inclusion, setInclus
             </div>
           </div>
           <p className="note">One summary per condition (substrate × charge ratio × concentration{gelNote}{dwellNote}); repeat files of the same condition, such as glass.txt and glass-v2.txt, are combined. Each run counts once, and every valid run is included until you untick <em>In average</em>; <em>Reset</em> includes it again. No outlier score is calculated: these tests have too few runs per condition for a modified Z-score to be meaningful.</p>
-          <p className="note">An asterisk marks work integrated to the end of the recording because no separation was detected.</p>
+          <p className="note">Click a row for its curve, notes, file details (date, load cell, filter), metadata corrections and point data. An asterisk marks work integrated to the end of the recording because no separation was detected.</p>
         </div>
         <WorkMethods mode={mode} />
         {!rows.length && <p className="note pad">No runs in the chosen experiment. Open your files in step 1, or set a dropdown in step 2 back to <em>All</em>.</p>}
@@ -82,7 +88,7 @@ export function AdhesionDataAnalysis({ mode, rows, graphed, inclusion, setInclus
                     const reason = Number.isFinite(row.primary) ? '' : 'Missing measurement';
                     const notes = row.note ? row.note.split(' · ') : [];
                     return (
-                      <tr key={row.id} className={included ? '' : 'excluded'}>
+                      <tr key={row.id} className={`${included ? '' : 'excluded'} ${focusId === row.id ? 'focus' : ''} clickable`} onClick={() => setFocusId(row.id)} title="Click for the run details">
                         <td title={row.path}>{row.name}{dupNames.has(row.name) && <div className="cond">{row.path.split('/').slice(-3, -1).join('/')}</div>}</td>
                         <td className="num">{row.number}</td><td className="num">{fmt(row.primary, 4)}</td>
                         {mode === 'peel' && <td className="num">{fmt(row.peakN, 4)}</td>}
@@ -94,7 +100,7 @@ export function AdhesionDataAnalysis({ mode, rows, graphed, inclusion, setInclus
                           )}
                         </td>
                         <td className="center">
-                          <span className="in-average">
+                          <span className="in-average" onClick={(e) => e.stopPropagation()}>
                             <input type="checkbox" aria-label={`Use ${label} in the average`} checked={included} disabled={!Number.isFinite(row.primary)} onChange={(e) => setInclusion(row.id, e.target.checked === automatic ? null : e.target.checked)} />
                             {inclusion[row.id] !== undefined && <button className="link small" onClick={() => setInclusion(row.id, null)} aria-label={`Reset ${label} to the automatic decision`} title="Back to the automatic decision">Reset</button>}
                           </span>
@@ -108,6 +114,18 @@ export function AdhesionDataAnalysis({ mode, rows, graphed, inclusion, setInclus
           );
         })}
       </div>
+      {focusRow && focusRun && (
+        <AdhesionRunDetail
+          row={focusRow}
+          run={focusRun}
+          included={inclusion[focusRow.id] ?? Number.isFinite(focusRow.primary)}
+          overridden={inclusion[focusRow.id] !== undefined}
+          onInclude={(on) => setInclusion(focusRow.id, on === Number.isFinite(focusRow.primary) ? null : on)}
+          onReset={() => setInclusion(focusRow.id, null)}
+          primary={{ label: primary, digits: 4 }}
+          onClose={() => setFocusId(null)}
+        />
+      )}
     </div>
   );
 }

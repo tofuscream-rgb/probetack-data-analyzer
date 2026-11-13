@@ -7,7 +7,7 @@ import { ExperimentPicker } from '../ExperimentPicker';
 /** Lap Shear sidebar: its own files (step 1) and the runs to graph and analyse (step 2). */
 export function LapShearSidebar() {
   const { files, meta } = useApp();
-  const { runs, picked, pick, options, setPick, selectedIds, setSelected } = useLapShear();
+  const { ls, runs, picked, pick, options, setPick, selectedIds, setSelected } = useLapShear();
   const { files: pickedFiles, names, groupOf } = groupedRunFiles(files, picked, meta);
   return (
     <nav className="sidebar" aria-label="Open lap-shear files and choose runs">
@@ -30,7 +30,7 @@ export function LapShearSidebar() {
           <h2>3. Runs on the graph</h2>
           <RunPicker
             files={pickedFiles}
-            runs={picked.map((r) => ({ id: r.id, fileId: r.file.fileId, cycleNumber: r.cycle.cycleNumber, ok: r.result.ok, error: r.result.error, peakGf: r.result.peak?.forceGf ?? null }))}
+            runs={picked.map((r) => ({ id: r.id, fileId: r.file.fileId, cycleNumber: r.cycle.cycleNumber, ok: r.result.ok, error: r.result.error, peakGf: r.result.peak?.forceGf ?? null, leftOut: (ls.analysisInclusion ?? {})[r.id] === false }))}
             selectedIds={selectedIds}
             setSelected={setSelected}
             nameOf={(l) => names.get(l.parsed.fileId) ?? l.parsed.name}

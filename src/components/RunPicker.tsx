@@ -12,6 +12,8 @@ export interface PickableRun {
   ok: boolean;
   error: string | null;
   peakGf: number | null;
+  /** Left out of the average in Data analysis. */
+  leftOut?: boolean;
 }
 
 /**
@@ -63,13 +65,18 @@ export function RunPicker({ files, runs, selectedIds, setSelected, hint, nameOf,
             <span className="caret">{isOpen ? '▾' : '▸'}</span> <span className="fl-name">{l.parsed.name}{context(l) && <small className="fl-context"> {context(l)}</small>}</span>
           </button>
           <small>{n}/{ids.length} run{ids.length === 1 ? '' : 's'}</small>
+          {list.length > 0 && (
+            <span className="ribbon" aria-label="Runs: filled = included in the average, hollow = left out">
+              {list.map((r) => <i key={r.id} style={{ background: r.ok && !r.leftOut ? '#2E8B57' : 'transparent', borderColor: r.ok ? '#2E8B57' : '#9AA6B5' }} title={`Run ${r.cycleNumber}: ${!r.ok ? 'no valid measurement' : r.leftOut ? 'left out of the average' : 'included in the average'}`} />)}
+            </span>
+          )}
         </div>
         {list.length === 0 && <p className="run-error">No &lt;Move&gt; or &lt;Scripts&gt; sections with data were found, so this file has no runs. {l.parsed.issues[0]?.message ?? ''}</p>}
         {isOpen && list.map((r) => (
           <div key={r.id}>
-            <label className={`fl-file ${r.ok ? '' : 'off'}`}>
+            <label className={`fl-file ${r.ok ? '' : 'off'}`} title={r.leftOut ? 'Left out of the average (In average unticked in Data analysis); still drawn grey dashed if ticked here' : ''}>
               <input type="checkbox" checked={selectedIds.includes(r.id)} disabled={!r.ok} onChange={(e) => toggle([r.id], e.target.checked)} />
-              <span className="fl-name">Run {r.cycleNumber}</span>
+              <span className="fl-name">Run {r.cycleNumber}{r.leftOut && <small className="left-out"> · left out</small>}</span>
               <small>{r.peakGf !== null ? `${fmt(r.peakGf, 1)} gf` : '—'}</small>
             </label>
             {!r.ok && <p className="run-error">{r.error}</p>}

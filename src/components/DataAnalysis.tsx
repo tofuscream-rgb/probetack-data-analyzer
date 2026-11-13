@@ -291,10 +291,11 @@ function RunCurve({ r }: { r: CycleResult }) {
   return <PlotlyChart data={data} layout={layout} className="plot detail" config={{ displayModeBar: false }} />;
 }
 
-function MetadataEditor({ r }: { r: CycleResult }) {
+/** Corrections of the metadata read from folder and file names (this file or its whole folder); shared by all tests. */
+export function MetadataEditor({ r }: { r: { file: { fileId: string; path: string } } }) {
   const { project, update, files, meta } = useApp();
   const [scope, setScope] = useState<'file' | 'folder'>('file');
-  const m = meta.get(r.file.fileId)!;
+  const m = meta.get(r.file.fileId);
   const folder = r.file.path.split('/').slice(0, -1).join('/');
   const targets = scope === 'file' ? [r.file.fileId] : files.filter((l) => l.parsed.path.split('/').slice(0, -1).join('/') === folder).map((l) => l.parsed.fileId);
   const setField = (k: keyof MetaOverride, v: string, numeric: boolean) => {
@@ -320,6 +321,7 @@ function MetadataEditor({ r }: { r: CycleResult }) {
     ['repeat', 'Repeat number', true],
   ];
   const ov = project.overrides[r.file.fileId] ?? {};
+  if (!m) return null;
   return (
     <div className="metadata-editor">
       <div className="segmented small">

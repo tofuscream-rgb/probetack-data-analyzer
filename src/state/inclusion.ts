@@ -18,3 +18,15 @@ export function withOverrideReason(p: ProjectState, cycleId: string, reason: str
   const o = p.runOverrides[cycleId];
   return o ? { ...p, runOverrides: { ...p.runOverrides, [cycleId]: { ...o, reason } } } : p;
 }
+
+/**
+ * Lap Shear / 90° Peel review choice of one run (true = in the average, false = left out,
+ * null = back to the default: every valid run is included). Shared by Data analysis and the
+ * metrics tab.
+ */
+export function withAnalysisInclusion(p: ProjectState, mode: 'lapShear' | 'peel', id: string, value: boolean | null): ProjectState {
+  const cur = { ...(p[mode].analysisInclusion ?? {}) };
+  if (value === null) delete cur[id];
+  else cur[id] = value;
+  return mode === 'lapShear' ? { ...p, lapShear: { ...p.lapShear, analysisInclusion: cur } } : { ...p, peel: { ...p.peel, analysisInclusion: cur } };
+}

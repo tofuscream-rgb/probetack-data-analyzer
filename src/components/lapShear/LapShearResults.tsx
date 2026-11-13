@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useApp } from '../../state/AppContext';
+import { withAnalysisInclusion } from '../../state/inclusion';
+import { conditionTitle, groupKey, includedRuns, lapShearAnalysisRow } from '../../analysis/adhesionReview';
+import { ReviewSummaries, Section, SectionToggles, saveCsv, summaryCsv, type SummaryRun } from '../MetricsSections';
 import { useLapShear, type LapShearRun } from '../../state/lapShear';
-import { FAILURE_MODE_LABEL, SUMMARY_PROPERTIES, describe } from '../../analysis/lapShear';
+import { FAILURE_MODE_LABEL, SUMMARY_PROPERTIES } from '../../analysis/lapShear';
 import type { FailureMode, LapShearDims } from '../../types';
 import { fmt } from '../common';
 import { CURVE_COLORS } from '../../plotting/colors';
@@ -65,7 +69,6 @@ export function lapEquations(fraction: number, consecutive: number): EquationIte
 
 const MODES = Object.keys(FAILURE_MODE_LABEL) as FailureMode[];
 const digits = (u: string) => ({ N: 4, kPa: 2, mm: 3, 'J/m²': 2 }[u] ?? 3);
-const ms = (values: number[], d: number) => { const s = describe(values); return s.n ? `${fmt(s.mean,d)} ± ${s.n>1?fmt(s.sd,d):'—'} (n = ${s.n})` : '—'; };
 
 function ApplyAll({ ids }: { ids: string[] }) {
   const { ls, setMeta } = useLapShear();
@@ -76,10 +79,11 @@ function ApplyAll({ ids }: { ids: string[] }) {
     <NumberField label="Thickness (mm, optional metadata)" value={d.thicknessMm} positive onCommit={(v)=>setD({...d,thicknessMm:v??d.thicknessMm})}/>
     <button className="small" disabled={!ids.length} onClick={()=>setMeta(ids,d)}>Apply</button></div>;
 }
-function Row({ r, color, setMeta, selection }: { r: LapShearRun; color: string; setMeta: ReturnType<typeof useLapShear>['setMeta']; selection: ReturnType<typeof useRunSelection> }) {
+function Row({ r, color, setMeta, selection, included, onInclude }: { r: LapShearRun; color: string; setMeta: ReturnType<typeof useLapShear>['setMeta']; selection: ReturnType<typeof useRunSelection>; included: boolean; onInclude: (on: boolean) => void }) {
   const x = r.result, m = r.meta, p = x.peak;
-  return <tr className={selection.current?.id === r.id ? 'focus' : ''} onClick={() => selection.setCurrentId(r.id)}>
+  return <tr className={`${selection.current?.id === r.id ? 'focus' : ''} ${included ? '' : 'excluded'}`} onClick={() => selection.setCurrentId(r.id)}>
     <td><input type="checkbox" checked={selection.selected.has(r.id)} onChange={(e) => selection.toggle(r.id, e.target.checked)} aria-label={`Select ${r.label}`} /></td>
+    <td className="center"><input type="checkbox" checked={included} onChange={(e) => onInclude(e.target.checked)} aria-label={`Use ${r.label} in the average`} title="Same choice as In average in Data analysis" /></td>
     <td className="sticky-col" title={r.file.path}><span className="run-dot" style={{background:color}}/>{r.label}<div className="cond">{r.condition}</div></td>
     <td><NumberField compact value={m.lengthMm} positive label="Overlap length" onCommit={(v)=>v!==null&&setMeta([r.id],{lengthMm:v})}/></td>
     <td><NumberField compact value={m.widthMm} positive label="Overlap width" onCommit={(v)=>v!==null&&setMeta([r.id],{widthMm:v})}/></td>
@@ -93,30 +97,51 @@ function Row({ r, color, setMeta, selection }: { r: LapShearRun; color: string; 
   </tr>;
 }
 export function LapShearResults() {
-  const { ls, selected, setMeta } = useLapShear();
-  const ok = selected.filter((r) => r.result.ok);
+  const { ls, picked, setMeta } = useLapShear();
+  const { meta, update, project } = useApp();
+  const ok = picked.filter((r) => r.result.ok);
   const rows = ok.map((r) => ({ id: r.id, mode: r.meta.failureMode, morphology: 'unspecified', repeatKey: r.file.fileId, repeatLabel: r.file.name, conditionKey: r.condition, conditionLabel: r.condition }));
   const selection = useRunSelection(rows);
-  if(!selected.length)return <p className="note pad">Tick runs in step 3 on the left to see their results.</p>;
-  const byFile=new Map<string,typeof ok>(); for(const r of ok)byFile.set(r.file.fileId,[...(byFile.get(r.file.fileId)??[]),r]);
-  const repeats=[...byFile.entries()].map(([fileId,runs])=>({fileId,runs,label:runs[0].file.name,condition:runs[0].condition,props:Object.fromEntries(SUMMARY_PROPERTIES.map((p)=>[p.key,describe(runs.map((r)=>p.get(r.result))).mean]))}));
-  const conditions=[...new Set(repeats.map((r)=>r.condition))];
-  return <div className="ls-results"><ApplyAll ids={ok.map((r)=>r.id)}/>
-    <p className="note">Primary result: apparent nominal lap-shear strength τ = F<sub>max</sub>/A with A = overlap length × width (apparent shear strength of a single-lap joint, ASTM D1002, applied by analogy to gel joints). Gel thickness does not enter τ. Automatic failure is the first post-peak force below {(ls.settings.failure.fraction*100).toFixed(1)}% of F<sub>max</sub> for {ls.settings.failure.consecutive} consecutive valid points; a manual failure displacement overrides it. The optional energy result is ∫F dδ/A to that failure point (defined by this analyzer) and is not fracture toughness.</p>
+  const inclusion = ls.analysisInclusion ?? {};
+  const analysis = useMemo(() => new Map(picked.map((r) => [r.id, lapShearAnalysisRow(r, meta.get(r.file.fileId)?.gel.value ?? null)])), [picked, meta]);
+  const included = useMemo(() => includedRuns([...analysis.values()], inclusion), [analysis, inclusion]);
+  const setIncluded = (id: string, on: boolean) => update((p) => withAnalysisInclusion(p, 'lapShear', id, on ? null : false));
+  if (!picked.length) return <p className="note pad">No runs in the chosen experiment. Open files in step 1 on the left, or set a dropdown in step 2 back to <em>All</em>.</p>;
+  const props = SUMMARY_PROPERTIES.map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: digits(p.unit) }));
+  const summaryRuns: SummaryRun[] = ok.map((r) => {
+    const a = analysis.get(r.id)!;
+    return { id: r.id, fileId: r.file.fileId, fileName: r.file.name, path: r.file.path, condKey: groupKey(a), condTitle: conditionTitle(a), included: included.has(r.id), values: Object.fromEntries(SUMMARY_PROPERTIES.map((p) => [p.key, p.get(r.result)])) };
+  });
+  const base = (project: string) => project.replace(/[^\w.-]+/g, '_') || 'lap_shear';
+  const runCsv = () => [
+    ['Repeat (file)', 'Path', 'Condition', 'Run', 'In average', 'Overlap length (mm)', 'Overlap width (mm)', 'Gel thickness (mm)', 'Area (mm²)', ...SUMMARY_PROPERTIES.map((p) => `${p.label} (${p.unit})`), 'Failure source', 'Failure mode', 'Observation', 'Notes'],
+    ...ok.map((r) => [r.file.name, r.file.path, conditionTitle(analysis.get(r.id)!), r.cycle.cycleNumber, included.has(r.id) ? 'yes' : 'no', r.meta.lengthMm, r.meta.widthMm, r.meta.thicknessMm, r.result.areaMm2,
+      ...SUMMARY_PROPERTIES.map((p) => p.get(r.result)), r.result.failure.source, FAILURE_MODE_LABEL[r.meta.failureMode], r.meta.observation ?? '', r.result.warnings.join(' · ')]),
+  ];
+  return <div className="ls-results metrics-tab">
+    <p className="note">Primary result: apparent nominal lap-shear strength τ = F<sub>max</sub>/A with A = overlap length × width (apparent shear strength of a single-lap joint, ASTM D1002, applied by analogy to gel joints). Gel thickness does not enter τ. Automatic failure is the first post-peak force below {(ls.settings.failure.fraction*100).toFixed(1)}% of F<sub>max</sub> for {ls.settings.failure.consecutive} consecutive points. All runs of the chosen experiment are listed; <em>In average</em> is the same choice as in Data analysis.</p>
+    <SectionToggles />
+    <Section n={1} title="Dimensions"><ApplyAll ids={ok.map((r)=>r.id)}/></Section>
+    <Section n={2} title="Per-run results">
     <BulkAssignBar rows={rows} selection={selection} onApply={(patches) => {
       for (const failureMode of MODES) {
         const ids = patches.filter((patch) => patch.mode === failureMode).map((patch) => patch.id);
         if (ids.length) setMeta(ids, { failureMode });
       }
     }} />
-    <div className="table-scroll ls-table-wrap"><table className="grid ls-table"><thead><tr><th>Sel.</th><th className="sticky-col">Run</th><th>Overlap length (mm)</th><th>Overlap width (mm)</th><th>Gel thickness (mm)</th><th>Area (mm²)</th><th>F<sub>max</sub> (N)</th><th>τ<sub>max</sub> (kPa)</th><th>δ at peak (mm)</th><th>Failure δ (mm)</th><th>Apparent work to failure / area (J/m²)</th><th>Failure mode</th><th>Observation</th><th>Valid points / diagnostics</th></tr></thead>
-    <tbody>{selected.map((r)=>r.result.ok?<Row key={r.id} r={r} color={CURVE_COLORS[ok.indexOf(r)%CURVE_COLORS.length]} setMeta={setMeta} selection={selection}/>:<tr key={r.id}><td /><td>{r.label}</td><td colSpan={12}>{r.result.error}</td></tr>)}</tbody></table></div>
-    <h3 className="ls-h">Mean ± SD per Repeat/file</h3><div className="table-scroll"><table className="grid ls-summary"><thead><tr><th>Repeat/file</th><th>Condition</th><th>Runs</th>{SUMMARY_PROPERTIES.map((p)=><th key={p.key}>{p.label}<br/><small>({p.unit})</small></th>)}</tr></thead><tbody>
-      {repeats.map((rp)=><tr key={rp.fileId}><td>{rp.label}</td><td>{rp.condition}</td><td>{rp.runs.length}</td>{SUMMARY_PROPERTIES.map((p)=><td key={p.key}>{ms(rp.runs.map((r)=>p.get(r.result)),digits(p.unit))}</td>)}</tr>)}
-    </tbody></table></div>
-    <h3 className="ls-h">Mean ± SD per condition (over Repeat/file means)</h3><div className="table-scroll"><table className="grid ls-summary"><thead><tr><th>Condition</th><th>Repeats</th><th>Runs</th>{SUMMARY_PROPERTIES.map((p)=><th key={p.key}>{p.label}<br/><small>({p.unit})</small></th>)}</tr></thead><tbody>
-      {conditions.map((c)=>{const reps=repeats.filter((r)=>r.condition===c);return <tr key={c}><td>{c}</td><td>{reps.length}</td><td>{reps.reduce((n,r)=>n+r.runs.length,0)}</td>{SUMMARY_PROPERTIES.map((p)=><td key={p.key}>{ms(reps.map((r)=>r.props[p.key]),digits(p.unit))}</td>)}</tr>})}
-    </tbody></table></div><p className="note">Each file/Repeat counts once at condition level.</p>
-    <EquationList items={lapEquations(ls.settings.failure.fraction, ls.settings.failure.consecutive)} title="Equations and sources: lap-shear results" />
-    <ObservationGlossary test="lapShear" title="Definitions & References: failure mode" /></div>;
+    <div className="table-scroll ls-table-wrap"><table className="grid ls-table"><thead><tr><th>Sel.</th><th title="Same choice as In average in Data analysis">In average</th><th className="sticky-col">Run</th><th>Overlap length (mm)</th><th>Overlap width (mm)</th><th>Gel thickness (mm)</th><th>Area (mm²)</th><th>F<sub>max</sub> (N)</th><th>τ<sub>max</sub> (kPa)</th><th>δ at peak (mm)</th><th>Failure δ (mm)</th><th>Apparent work to failure / area (J/m²)</th><th>Failure mode</th><th>Observation</th><th>Valid points / diagnostics</th></tr></thead>
+    <tbody>{picked.map((r)=>r.result.ok?<Row key={r.id} r={r} color={CURVE_COLORS[ok.indexOf(r)%CURVE_COLORS.length]} setMeta={setMeta} selection={selection} included={included.has(r.id)} onInclude={(on) => setIncluded(r.id, on)}/>:<tr key={r.id}><td /><td /><td>{r.label}</td><td colSpan={12}>{r.result.error}</td></tr>)}</tbody></table></div>
+    <p className="note">Excluded rows stay visible (struck through).</p>
+    </Section>
+    <ReviewSummaries runs={summaryRuns} props={props} first={3} />
+    <Section n={5} title="Equations and sources"><EquationList items={lapEquations(ls.settings.failure.fraction, ls.settings.failure.consecutive)} title="Equations and sources: lap-shear results" /></Section>
+    <Section n={6} title="Definitions & References: failure mode"><ObservationGlossary test="lapShear" title="Definitions & References: failure mode" hideTitle /></Section>
+    <Section n={7} title="Export CSV">
+      <div className="table-actions">
+        <button className="small" onClick={() => saveCsv(runCsv(), `${base(project.name)}_lap_shear_runs.csv`)}>Per-run results</button>
+        <button className="small" onClick={() => saveCsv(summaryCsv(summaryRuns, props), `${base(project.name)}_lap_shear_summary.csv`)}>Repeat and condition summaries</button>
+        <span className="note">Per-run CSV includes dimensions, failure point, failure modes, observations and notes; summaries give included runs after review and all valid runs.</span>
+      </div>
+    </Section>
+  </div>;
 }

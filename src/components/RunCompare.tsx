@@ -94,6 +94,34 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cmp, metric.key, manyConc, noHold, byCr, manyGels]);
 
+  // Line chart, as in Probe Tack: one line per data set across dwell times (when they vary).
+  const numericHolds = holds.filter((h) => Number.isFinite(Number(h)));
+  const lines = useMemo(() => {
+    const data: Data[] = visible.map((s, k) => {
+      const color = PASTEL_COLORS[k % PASTEL_COLORS.length];
+      const pts = numericHolds.map((h) => ({ h, v: cmp.stat(s, h, metric.key) })).filter((p) => p.v.n > 0);
+      const name = setName(s);
+      return {
+        type: 'scatter', mode: 'lines+markers', name,
+        x: pts.map((p) => Number(p.h)), y: pts.map((p) => p.v.mean),
+        error_y: { type: 'data', array: pts.map((p) => (p.v.n > 1 ? p.v.sd : 0)), visible: true, color: '#18263A', thickness: 1, width: 3 },
+        text: pts.map((p) => `n = ${p.v.n}`),
+        line: { color, width: 2.4 }, marker: { color, size: 9, line: { color: '#18263A', width: 1 } },
+        hovertemplate: `${name}<br>%{x} s dwell<br>%{y:.${metric.digits}f} ± %{error_y.array:.${metric.digits}f} ${metric.unit} (SD)<br>%{text}<extra></extra>`,
+      } as unknown as Data;
+    });
+    const layout: Partial<Layout> = {
+      margin: { l: 90, r: 16, t: 16, b: 78 },
+      font: { family: FIG_FONT_FAMILY, size: 15, color: '#000' },
+      xaxis: { ...AXIS, title: { text: '<b>Dwell time (s)</b>', font: { size: 20 } } },
+      yaxis: { ...AXIS, rangemode: 'tozero', title: { text: `<b>${yTitle}</b>`, font: { size: 20 } } },
+      legend: { orientation: 'h', y: -0.28, font: { size: 15 } },
+      hovermode: 'closest',
+    };
+    return { data, layout };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cmp, metric.key, numericHolds.join('|')]);
+
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
     const Plotly = await loadPlotly();
@@ -185,6 +213,12 @@ export function RunCompare({ items, metrics, sel, setSel, fileName, note }: {
               </tbody>
             </table>
           </div>
+          {numericHolds.length > 1 && (
+            <section>
+              <h3>{metric.label} vs dwell time</h3>
+              <PlotlyChart data={lines.data} layout={lines.layout} className="plot summary" />
+            </section>
+          )}
         </>
       )}
     </div>

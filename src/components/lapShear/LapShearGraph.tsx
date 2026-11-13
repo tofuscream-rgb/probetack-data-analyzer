@@ -40,6 +40,7 @@ function displayIndices(r: LapShearRun, xs: Float64Array): number[] {
 
 export function useLapShearPlot() {
   const { ls, selected, set, setSettings } = useLapShear();
+  const leftOut = (id: string) => (ls.analysisInclusion ?? {})[id] === false;
   const v = ls.view;
   const s = ls.settings;
   const unit = v.unit === 'N/m' ? 'gf' : v.unit; // N/m is a peel-only choice
@@ -49,7 +50,7 @@ export function useLapShearPlot() {
   const xTitle = v.xTitle.trim() || autoX;
   const autoY = stress ? `Shear strength (${unit})` : `Loading force (${unit})`;
   const yTitle = v.yTitle.trim() || autoY;
-  const runs = useMemo(() => selected.filter((r) => r.result.ok), [selected]);
+  const runs = useMemo(() => selected.filter((r) => r.result.ok && (v.showExcluded !== false || !leftOut(r.id))), [selected, v.showExcluded, ls.analysisInclusion]); // eslint-disable-line react-hooks/exhaustive-deps
   const runKey = JSON.stringify(runs.map((r) => r.id));
   const areaRange = useMemo<[number, number] | null>(() => {
     let a = Infinity, b = -Infinity;
@@ -65,15 +66,18 @@ export function useLapShearPlot() {
     const short = v.labels === 'curve' ? shortLabels(runs.map((r) => ({ label: r.label, cycleNumber: r.cycle.cycleNumber, cond: r.cond }))) : runs.map((r) => r.label);
     const avoid: number[] = [];
     runs.forEach((r, k) => {
-      const color = CURVE_COLORS[k % CURVE_COLORS.length];
-      const st = runStyle(v, r.id, ids);
+      const out = leftOut(r.id);
+      // Runs left out of the average in Data analysis: thin grey dashed, as in Probe Tack.
+      const color = out ? '#9AA6B5' : CURVE_COLORS[k % CURVE_COLORS.length];
+      const st0 = runStyle(v, r.id, ids);
+      const st = out ? { ...st0, width: Math.min(st0.width, 1.6) } : st0;
       const res = r.result;
       const f = yFactor(unit, res.areaMm2, res.dims.widthMm); // each run with its own bonded area
       if (!Number.isFinite(f)) return;
       const xs = res.series.dispMm;
       const idx = displayIndices(r, xs);
       const y = (i: number) => res.series.loadGf[i] * f;
-      const name = v.names[r.id]?.trim() || short[k];
+      const name = (v.names[r.id]?.trim() || short[k]) + (out ? ' (left out of the average)' : '');
       const plotX = idx.map((i) => xs[i]);
       const plotY = idx.map(y);
       labelSeries.push({ id: r.id, name, color, x: plotX, y: plotY });
@@ -120,7 +124,7 @@ export function useLapShearPlot() {
         meta: r.id,
         x: plotX,
         y: plotY,
-        line: { color, width: st.width },
+        line: { color, width: st.width, ...(out ? { dash: 'dash' } : {}) },
         opacity: st.opacity,
         legendgroup: r.id,
         hovertemplate: `${name}<br>δ = %{x:.4f} mm<br>${stress ? 'τ' : 'F'} = %{y:.${dg}f} ${unit}${stress ? ` (A = ${res.areaMm2} mm²)` : ''}<extra></extra>`,
@@ -226,6 +230,7 @@ export function LapShearGraph() {
           <span className="vs">vs displacement</span>
         </label>
         <label className="check"><input type="checkbox" checked={v.peakLabels} onChange={(e) => set({ view: { ...v, peakLabels: e.target.checked } })} /> Peak labels</label>
+        <label className="check" title="Draw runs left out of the average (In average unticked in Data analysis) as thin grey dashed lines"><input type="checkbox" checked={v.showExcluded !== false} onChange={(e) => set({ view: { ...v, showExcluded: e.target.checked } })} /> Show runs left out of the average</label>
         <RunGraphControls view={v} set={(view) => set({ view })} runs={runs} shadeLabel="Shades the interval used for the selected integration work" />
         {anyBaseline && <label className="check"><input type="checkbox" checked={v.showRaw} onChange={(e) => set({ view: { ...v, showRaw: e.target.checked } })} /> Raw curve</label>}
         <button className="link" onClick={resetZoom}>Reset zoom</button>

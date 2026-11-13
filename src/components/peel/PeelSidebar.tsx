@@ -43,7 +43,7 @@ function GelDimensions() {
 
 export function PeelSidebar() {
   const { filesByMode, meta } = useApp();
-  const { runs, picked, pick, options, setPick, selectedIds, setPickedSelected } = usePeel();
+  const { ps, runs, picked, pick, options, setPick, selectedIds, setPickedSelected } = usePeel();
   const { files, names, groupOf } = groupedRunFiles(filesByMode.peel, picked, meta);
   return (
     <nav className="sidebar" aria-label="Open 90° peel files and choose runs">
@@ -69,7 +69,7 @@ export function PeelSidebar() {
           <h2>3. Runs on the graph</h2>
           <RunPicker
             files={files}
-            runs={picked.map((r) => ({ id: r.id, fileId: r.file.fileId, cycleNumber: r.cycle.cycleNumber, ok: r.result.ok, error: r.result.error, peakGf: r.result.peak?.forceGf ?? null }))}
+            runs={picked.map((r) => ({ id: r.id, fileId: r.file.fileId, cycleNumber: r.cycle.cycleNumber, ok: r.result.ok, error: r.result.error, peakGf: r.result.peak?.forceGf ?? null, leftOut: (ps.analysisInclusion ?? {})[r.id] === false }))}
             selectedIds={selectedIds}
             setSelected={setPickedSelected}
             nameOf={(l) => names.get(l.parsed.fileId) ?? l.parsed.name}

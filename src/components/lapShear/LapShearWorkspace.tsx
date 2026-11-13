@@ -10,7 +10,8 @@ import { RunCompare } from '../RunCompare';
 import { AdhesionDataAnalysis } from '../AdhesionDataAnalysis';
 import { includedRuns, lapShearAnalysisRow } from '../../analysis/adhesionReview';
 import { useMemo } from 'react';
-import { SUMMARY_PROPERTIES } from '../../analysis/lapShear';
+import { FAILURE_MODE_LABEL, SUMMARY_PROPERTIES } from '../../analysis/lapShear';
+import { fmt } from '../common';
 
 const DIGITS: Record<string, number> = { gf: 2, N: 4, kPa: 3, MPa: 6, mm: 3, s: 2, mJ: 3, 'J/m²': 2 };
 const METRICS = SUMMARY_PROPERTIES.map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: DIGITS[p.unit] ?? 3 }));
@@ -24,6 +25,20 @@ function LapShearAnalysis() {
       rows={picked.map((r) => lapShearAnalysisRow(r, meta.get(r.file.fileId)?.gel.value ?? null))}
       graphed={selected.filter((r) => r.result.ok).map((r) => r.id)}
       inclusion={ls.analysisInclusion ?? {}}
+      detailOf={(id) => {
+        const r = picked.find((x) => x.id === id);
+        if (!r) return null;
+        return {
+          file: r.file, cycle: r.cycle, curve: r.result, endMm: r.result.failure.dispMm, endLabel: r.result.failure.source === 'manual' ? 'failure (typed)' : 'failure',
+          facts: [
+            ['Overlap', `${fmt(r.meta.lengthMm, 2)} × ${fmt(r.meta.widthMm, 2)} mm = ${fmt(r.result.areaMm2, 1)} mm²`],
+            ['Gel thickness', `${fmt(r.meta.thicknessMm, 2)} mm (metadata only)`],
+            ['Failure', r.result.failure.dispMm !== null ? `${fmt(r.result.failure.dispMm, 3)} mm (${r.result.failure.source})` : r.result.failure.note || 'not detected'],
+            ['Failure mode', FAILURE_MODE_LABEL[r.meta.failureMode]],
+            ...(r.meta.observation ? [['Observation', r.meta.observation] as [string, string]] : []),
+          ],
+        };
+      }}
       setInclusion={(id, value) => update((p) => {
         const analysisInclusion = { ...p.lapShear.analysisInclusion };
         if (value === null) delete analysisInclusion[id];
@@ -65,7 +80,7 @@ const TABS: { id: LapShearState['tab']; label: string; minor?: boolean }[] = [
 /** Main area in Lap Shear mode. */
 export function LapShearWorkspace() {
   const { files } = useApp();
-  const { ls, set, selected } = useLapShear();
+  const { ls, set } = useLapShear();
   const problems = files.filter((f) => f.parsed.status !== 'ok').length;
   return (
     <section className="main-area">
@@ -74,7 +89,6 @@ export function LapShearWorkspace() {
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={ls.tab === t.id} className={`tab ${ls.tab === t.id ? 'active' : ''} ${t.minor ? 'minor' : ''}`} onClick={() => set({ tab: t.id })}>
             {t.label}
-            {t.id === 'results' && selected.length > 0 && <span className="count">{selected.length}</span>}
             {t.id === 'files' && files.length > 0 && <span className={`count ${problems ? 'warn' : ''}`}>{problems || files.length}</span>}
           </button>
         ))}

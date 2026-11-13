@@ -81,7 +81,9 @@ export function Header() {
   const anyFiles = filesByMode.tack.length + filesByMode.lapShear.length + filesByMode.peel.length > 0;
   const [dialog, setDialog] = useState<'save' | 'export' | 'privacy' | null>(null);
   const projectInput = useRef<HTMLInputElement>(null);
-  const hasExclusions = Object.keys(project.runOverrides).length + Object.keys(project.excludedPoints).length + Object.keys(project.tackMetrics.excludedRepeats).length + Object.keys(project.tackMetrics.excludedSessions).length > 0 || project.settings.exclusionRule !== 'keepAll';
+  const tackChoices = Object.keys(project.runOverrides).length + Object.keys(project.excludedPoints).length + Object.keys(project.tackMetrics.excludedRepeats).length + Object.keys(project.tackMetrics.excludedSessions).length > 0 || project.settings.exclusionRule !== 'keepAll';
+  const runMode = project.mode === 'lapShear' || project.mode === 'peel' ? project.mode : null;
+  const hasExclusions = runMode ? Object.keys(project[runMode].analysisInclusion ?? {}).length > 0 : tackChoices;
   return (
     <header className="app-header">
       <div className="brand">
@@ -106,10 +108,15 @@ export function Header() {
       <button onClick={() => setDialog('save')} disabled={!anyFiles && !Object.keys(project.overrides).length}>Save project</button>
       <button className="primary" onClick={() => setDialog('export')} disabled={!files.length}>Export Excel</button>
       <button
-        hidden={project.mode !== 'tack'}
         disabled={!hasExclusions}
-        title="Clear every manual exclusion and set the automatic rule to Keep all points"
+        title={runMode ? 'Clear every In average choice of this test: every valid run counts again' : 'Clear every manual exclusion and set the automatic rule to Keep all points'}
         onClick={() => {
+          if (runMode) {
+            if (window.confirm(`Restore original data? Every In average choice of ${runMode === 'lapShear' ? 'Lap Shear' : '90° Peel'} is cleared, so every valid run counts again. Raw data were never changed.`)) {
+              update((p) => (runMode === 'lapShear' ? { ...p, lapShear: { ...p.lapShear, analysisInclusion: {} } } : { ...p, peel: { ...p.peel, analysisInclusion: {} } }));
+            }
+            return;
+          }
           if (window.confirm('Restore original data? All manual exclusions (runs, Repeats and sessions) are cleared and the automatic rule is set to “Keep all points”. Raw data were never changed.')) {
             update((p) => ({ ...p, runOverrides: {}, excludedPoints: {}, settings: { ...p.settings, exclusionRule: 'keepAll' }, tackMetrics: { ...p.tackMetrics, excludedRepeats: {}, excludedSessions: {} } }));
           }

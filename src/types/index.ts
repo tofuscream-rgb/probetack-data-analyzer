@@ -344,6 +344,8 @@ export interface RunGraphView {
   yTitle: string;
   /** Custom area-under-curve limits δ1, δ2 (mm); null = not set. Additional tool, does not change the results. */
   area: { fromMm: number | null; toMm: number | null };
+  /** Draw runs left out of the average (Data analysis) as grey dashed curves; false = hide them. Absent = true. */
+  showExcluded?: boolean;
 }
 
 /** Compare charge ratios tab of Lap Shear and 90° Peel: which data sets and which property. */

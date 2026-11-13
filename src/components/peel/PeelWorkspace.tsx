@@ -14,7 +14,8 @@ import { PEEL_PROPERTIES } from '../../analysis/peel';
 import { FAILURE_MODES } from '../../analysis/observations';
 import { fmt } from '../common';
 
-const METRICS = PEEL_PROPERTIES.map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: p.digits }));
+// Compare offers measured results only; the peel rate is a test setting (the same for every run), not an outcome.
+const METRICS = PEEL_PROPERTIES.filter((p) => p.key !== 'rate').map((p) => ({ key: p.key, label: p.label, unit: p.unit, digits: p.digits }));
 
 function PeelAnalysis() {
   const { meta, update } = useApp();

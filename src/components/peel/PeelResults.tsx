@@ -27,6 +27,9 @@ function Row({ r, color, checked, onCheck, focus, onFocus, included, onInclude }
       <td className="num strong">{fmt(x.toughnessJm2, 2)}</td>
       <td className="num">{fmt(x.plateau.cv * 100, 1)}</td>
       <td className="num">{fmt(x.initiationPeak?.forceN, 4)}</td>
+      <td className="num">{fmt(x.initiationPeak?.dispMm, 2)}</td>
+      <td className="num">{fmt(x.initiation.gPreJm2, 2)}</td>
+      <td className="num">{fmt(x.initiation.ratio, 3)}</td>
       <td className="num">{fmt(x.peelRateMmS, 3)}</td>
       <td>{fmt(x.window.fromMm, 1)}–{fmt(x.window.toMm, 1)} ({x.window.n})</td>
       <td>
@@ -99,7 +102,7 @@ export function PeelResults() {
             <thead>
               <tr>
                 <th title="Select for bulk assignment">Sel.</th><th title="Same choice as In average in Data analysis">In average</th><th className="sticky-col">Run</th><th>Width (mm)</th><th>F̄<sub>ss</sub> (N)</th><th>G<sub>peel</sub> (J/m²)</th><th>CV (%)</th>
-                <th>Pre-SS max (N)</th><th>Rate (mm/s)</th><th>Window mm (n)</th><th>Failure mode</th><th>Debonding morphology</th><th>Observation</th><th>S (mm)</th><th>a<sub>f</sub> (mm)</th>
+                <th title="Largest force for 0 ≤ travel < start of the steady-state window">F<sub>pre,max</sub> (N)</th><th>Travel at F<sub>pre,max</sub> (mm)</th><th title="Apparent initiation energy F_pre,max / w × (1 − cos θ); not a steady-state fracture energy">G<sub>pre</sub> (J/m²)</th><th title="F_pre,max / F̄ss">F<sub>pre,max</sub>/F̄<sub>ss</sub> (–)</th><th>Rate (mm/s)</th><th>Window mm (n)</th><th>Failure mode</th><th>Debonding morphology</th><th>Observation</th><th>S (mm)</th><th>a<sub>f</sub> (mm)</th>
               </tr>
             </thead>
             <tbody>
@@ -117,7 +120,7 @@ export function PeelResults() {
                     onInclude={(on) => setIncluded(r.id, on)}
                   />
                 ) : (
-                  <tr key={r.id}><td /><td /><td>{r.label}</td><td colSpan={12}>{r.result.error}</td></tr>
+                  <tr key={r.id}><td /><td /><td>{r.label}</td><td colSpan={15}>{r.result.error}</td></tr>
                 ),
               )}
             </tbody>

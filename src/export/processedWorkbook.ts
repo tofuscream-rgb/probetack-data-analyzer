@@ -25,6 +25,10 @@ function columnsFor(mode: ExperimentMode): { label: string; value: (row: Process
     { label: 'Steady-state peel force (N)', value: (r) => r.primary },
     { label: 'Steady-state force CV (%)', value: (r) => r.cvPct ?? NaN },
     { label: 'Steady-state peel energy (J/m²)', value: (r) => r.normalized },
+    { label: 'Pre-peak force F_pre,max (N)', value: (r) => r.preForceN ?? NaN },
+    { label: 'Travel at F_pre,max (mm)', value: (r) => r.preTravelMm ?? NaN },
+    { label: 'Peak energy G_pre (J/m²)', value: (r) => r.gPreJm2 ?? NaN },
+    { label: 'Peak/steady ratio F_pre,max/F̄ss (–)', value: (r) => r.preRatio ?? NaN },
   ];
   return [
     ...columns,

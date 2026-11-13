@@ -60,8 +60,9 @@ describe('processed adhesion report', () => {
     const at = (cr: string, conc: string, substrate: string) => ({ ...row(`${cr}${conc}${substrate}`, 1, 10), cond: { ...row('x', 1, 1).cond, chargeRatio: cr, concentration: conc, substrate, hold: '—' } });
     const [sheet] = processedSheets('peel', [at('0.25', '2.5', 'glass'), at('0.25', '2.98', 'glass'), at('0.25', '2.5', 'PET')], ['gel']);
     const bars = sheet.charts!.filter((c) => c.type === 'bar');
-    expect(bars).toHaveLength(5); // the metrics not in gf, including the steady-state force CV
+    expect(bars).toHaveLength(9); // the metrics not in gf, including the steady-state force CV and the four initiation metrics
     expect(bars.map((c) => c.title)).toContain('Steady-state force CV (%): each gel, substrates side by side');
+    expect(bars.map((c) => c.title)).toContain('Peak energy G_pre (J/m²): each gel, substrates side by side');
     expect(bars[0].series.map((x) => x.name)).toEqual(['PET', 'glass']);
     expect(bars[0].series[0].categories).toEqual(['CR 0.25 · 2.5 M', 'CR 0.25 · 2.98 M']);
     expect(sheet.charts!.some((c) => c.type !== 'bar')).toBe(false);

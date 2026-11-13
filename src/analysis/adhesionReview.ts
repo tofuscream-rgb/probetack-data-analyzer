@@ -18,6 +18,11 @@ export interface AnalysisRow {
   note: string;
   /** 90° Peel: CV of the force in the steady-state window, in % (stick–slip screening). */
   cvPct?: number;
+  /** 90° Peel initiation: F_pre,max (N), its travel (mm), G_pre (J/m²) and F_pre,max / F̄_ss (–). */
+  preForceN?: number;
+  preTravelMm?: number;
+  gPreJm2?: number;
+  preRatio?: number;
 }
 
 export const groupKey = ({ cond: c, gel }: AnalysisRow) => JSON.stringify([
@@ -82,6 +87,10 @@ export function peelAnalysisRow(r: PeelRun, gel: string | null): AnalysisRow {
     normalized: r.result.toughnessJm2,
     workMJ: r.result.work.toDetachMJ ?? r.result.work.fullMJ,
     cvPct: r.result.plateau.cv * 100,
+    preForceN: r.result.initiationPeak?.forceN ?? NaN,
+    preTravelMm: r.result.initiationPeak?.dispMm ?? NaN,
+    gPreJm2: r.result.initiation.gPreJm2,
+    preRatio: r.result.initiation.ratio,
     incomplete: r.result.ok && r.result.work.toDetachMJ === null,
     note: [r.result.error, ...r.result.warnings].filter(Boolean).join(' · '),
   };

@@ -29,6 +29,61 @@ function peelRun() {
   return { time_s: F.map((_, i) => i * 0.02), z_mm: F.map((_, i) => -i * 0.1), force_gf: F, amplitudeMm: -65 };
 }
 
+/** Steady peel without overshoot: ramp to 2 N by 0.5 mm, flat 2 N to 50 mm, then zero. */
+function flatPeelRun() {
+  const F: number[] = [];
+  for (let i = 0; i <= 600; i++) {
+    const d = i * 0.1;
+    F.push(-(d < 0.5 ? 4 * d : d < 50 ? 2 : 0) / GF_TO_N);
+  }
+  return { time_s: F.map((_, i) => i * 0.02), z_mm: F.map((_, i) => -i * 0.1), force_gf: F, amplitudeMm: -65 };
+}
+
+describe('90° peel initiation metrics', () => {
+  it('F_pre,max, its travel, G_pre and the peak/steady ratio for a known overshoot before the window', () => {
+    // peelRun(): 3 N spike at 1 mm, window 10.2–40.8 mm (20–80% of 51 mm) on the 2 N ± 0.1 N plateau.
+    const r = analyzePeel(peelRun(), meta(), settings());
+    expect(r.initiationPeak!.forceN).toBeCloseTo(3, 9);
+    expect(r.initiationPeak!.dispMm).toBeCloseTo(1, 9);
+    expect(r.initiation.gPreJm2).toBeCloseTo((3 / 10) * 1000, 6); // 3 N / 10 mm = 300 J/m² at 90°
+    expect(r.initiation.ratio).toBeCloseTo(3 / r.plateau.meanN, 12);
+    expect(r.initiation.ratio).toBeCloseTo(1.5, 2);
+    // Width and angle of the run: G_pre = F/w × (1 − cos θ).
+    expect(analyzePeel(peelRun(), meta({ widthMm: 20 }), settings()).initiation.gPreJm2).toBeCloseTo(150, 6);
+    expect(analyzePeel(peelRun(), meta({ angleDeg: 180 }), settings()).initiation.gPreJm2).toBeCloseTo(600, 6);
+  });
+
+  it('uses the window start the user set (custom fromMm), the same start as the steady-state mean', () => {
+    const custom = (fromMm: number) => analyzePeel(peelRun(), meta(), settings({ plateau: { mode: 'custom', startFrac: 0.2, endFrac: 0.8, fromMm, toMm: 40 } }));
+    const late = custom(20);
+    expect(late.initiationPeak!.forceN).toBeCloseTo(3, 9); // the spike is still before 20 mm
+    expect(late.initiationPeak!.dispMm).toBeCloseTo(1, 9);
+    const early = custom(0.5); // only the ramp 0–0.4 mm lies before the window
+    expect(early.initiationPeak!.forceN).toBeCloseTo(1.2, 9);
+    expect(early.initiationPeak!.dispMm).toBeCloseTo(0.4, 9);
+    expect(early.initiation.ratio).toBeCloseTo(1.2 / early.plateau.meanN, 12);
+    // Fraction-based start: 30% of the peeled length.
+    const frac = analyzePeel(peelRun(), meta(), settings({ plateau: { mode: 'auto', startFrac: 0.3, endFrac: 0.8, fromMm: 0, toMm: 0 } }));
+    expect(frac.window.fromMm).toBeCloseTo(0.3 * 51, 9);
+    expect(frac.initiationPeak!.forceN).toBeCloseTo(3, 9);
+  });
+
+  it('gives a ratio of about 1 when there is no overshoot', () => {
+    const r = analyzePeel(flatPeelRun(), meta(), settings());
+    expect(r.plateau.meanN).toBeCloseTo(2, 9);
+    expect(r.initiationPeak!.forceN).toBeCloseTo(2, 9);
+    expect(r.initiation.ratio).toBeCloseTo(1, 9);
+    expect(r.initiation.gPreJm2).toBeCloseTo(r.toughnessJm2, 9); // same force: G_pre = G_peel
+  });
+
+  it('leaves the metrics blank when no point lies before the window', () => {
+    const r = analyzePeel(peelRun(), meta(), settings({ plateau: { mode: 'custom', startFrac: 0.2, endFrac: 0.8, fromMm: 0, toMm: 40 } }));
+    expect(r.initiationPeak).toBeNull();
+    expect(r.initiation.gPreJm2).toBeNaN();
+    expect(r.initiation.ratio).toBeNaN();
+  });
+});
+
 describe('90° peel', () => {
   it('reports the plateau force, peel strength and interfacial toughness Γ = F̄/w', () => {
     const r = analyzePeel(peelRun(), meta(), settings());

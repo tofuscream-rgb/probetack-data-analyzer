@@ -33,8 +33,13 @@ export interface PeelResult {
   curve: LapShearResult;
   dims: { lengthMm: number; widthMm: number; thicknessMm: number; angleDeg: number };
   peak: { forceGf: number; forceN: number; dispMm: number; timeS: number; perWidthNm: number } | null;
-  /** Largest force before the steady-state window (crack initiation). */
+  /** F_pre,max: largest loading force for 0 ≤ travel < start of the steady-state window, and its travel. */
   initiationPeak: { forceN: number; dispMm: number } | null;
+  /**
+   * Initiation metrics from F_pre,max: apparent peak energy G_pre = F_pre,max / w × (1 − cos θ) (J/m²)
+   * and the peak/steady ratio F_pre,max / F̄_ss (–). NaN when there is no point before the window.
+   */
+  initiation: { gPreJm2: number; ratio: number };
   /** End of peeling (complete detachment). */
   detach: { dispMm: number | null; source: 'auto' | 'manual' | 'none'; note: string };
   /** Peeled length used for the automatic window and the work per peeled area. */
@@ -85,6 +90,7 @@ export function analyzePeel(run: RunInput, meta: PeelRunMeta, s: PeelSettings): 
     dims,
     peak: null,
     initiationPeak: null,
+    initiation: { gPreJm2: NaN, ratio: NaN },
     detach: { dispMm: null, source: 'none', note: '' },
     peeledLengthMm: NaN,
     window: { fromMm: NaN, toMm: NaN, source: s.plateau.mode, n: 0, note: '' },
@@ -129,12 +135,13 @@ export function analyzePeel(run: RunInput, meta: PeelRunMeta, s: PeelSettings): 
     ? { meanGf: d.mean / GF_TO_N, meanN: d.mean, medianN: median(inWin), sdN: d.sd, cv: d.sd / Math.abs(d.mean), minN: Math.min(...inWin), maxN: Math.max(...inWin) }
     : nan;
 
-  // ---- initiation peak (largest force before the window) ------------------------------------
+  // ---- initiation: F_pre,max, the largest loading force for 0 ≤ travel < window start --------------
+  // The window start is the one used for the steady-state mean (custom fromMm or the fraction-based start).
   let init: PeelResult['initiationPeak'] = null;
   for (let i = 0; i < dispMm.length; i++) {
-    if (!Number.isFinite(loadGf[i]) || !(dispMm[i] < from)) continue;
+    if (!Number.isFinite(loadGf[i]) || !(dispMm[i] >= 0 && dispMm[i] < from)) continue;
     const f = loadGf[i] * GF_TO_N;
-    if (!init || f > init.forceN) init = { forceN: f, dispMm: dispMm[i] };
+    if (!init || f > init.forceN) init = { forceN: f, dispMm: dispMm[i] }; // ties keep the first travel
   }
 
   // ---- peel rate over the window (least-squares slope of δ vs t) -----------------------------
@@ -161,6 +168,10 @@ export function analyzePeel(run: RunInput, meta: PeelRunMeta, s: PeelSettings): 
     warnings,
     peak: { ...curve.peak, perWidthNm: (curve.peak.forceN / w) * 1000 },
     initiationPeak: init,
+    initiation: {
+      gPreJm2: init ? (init.forceN / w) * 1000 * factor : NaN, // N/mm × 1000 = N/m = J/m²
+      ratio: init && plateau.meanN > 0 ? init.forceN / plateau.meanN : NaN,
+    },
     detach,
     peeledLengthMm: peeled,
     window: { fromMm: from, toMm: to, source: s.plateau.mode, n: inWin.length, note },
@@ -190,7 +201,10 @@ export const PEEL_PROPERTIES: { key: string; label: string; unit: string; digits
   { key: 'plateauN', label: 'Average peel force (steady state)', unit: 'N', digits: 4, get: (r) => r.plateau.meanN },
   { key: 'toughness', label: 'Peel energy G_peel', unit: 'J/m²', digits: 2, get: (r) => r.toughnessJm2 },
   { key: 'cv', label: 'Steady-state force variation (CV)', unit: '%', digits: 1, get: (r) => r.plateau.cv * 100 },
-  { key: 'preSS', label: 'Pre-steady-state maximum', unit: 'N', digits: 4, get: (r) => r.initiationPeak?.forceN ?? NaN },
+  { key: 'preSS', label: 'Pre-peak force F_pre,max', unit: 'N', digits: 4, get: (r) => r.initiationPeak?.forceN ?? NaN },
+  { key: 'preTravel', label: 'Travel at F_pre,max', unit: 'mm', digits: 2, get: (r) => r.initiationPeak?.dispMm ?? NaN },
+  { key: 'gPre', label: 'Peak energy G_pre', unit: 'J/m²', digits: 2, get: (r) => r.initiation.gPreJm2 },
+  { key: 'preRatio', label: 'Peak/steady ratio F_pre,max/F̄_ss', unit: '–', digits: 3, get: (r) => r.initiation.ratio },
   { key: 'rate', label: 'Peel rate', unit: 'mm/s', digits: 3, get: (r) => r.peelRateMmS },
 ];
 
@@ -219,11 +233,11 @@ export const PEEL_EQUATIONS: { title: string; tex?: string; text: string; refs: 
     note: 'standard coefficient of variation; not adhesion-specific.',
   },
   {
-    title: 'Pre-steady-state maximum',
-    tex: String.raw`F_{\text{pre}} = \max_{\delta < \delta_{\text{window start}}} F(\delta)`,
-    text: 'Highest force before the selected steady-state window. It is not automatically interpreted as the true crack-initiation force.',
-    refs: [],
-    note: 'defined by this analyzer.',
+    title: 'Initiation: pre-peak force, its travel, peak energy and peak/steady ratio',
+    tex: String.raw`F_{\text{pre,max}} = \max_{0 \le \delta < \delta_{\text{start}}} F(\delta),\quad \delta_{\text{pre}} = \arg\max_{0 \le \delta < \delta_{\text{start}}} F(\delta),\quad G_{\text{pre}} = \frac{F_{\text{pre,max}}}{w}\,(1-\cos\theta),\quad R = \frac{F_{\text{pre,max}}}{\bar{F}_{ss}}`,
+    text: 'F = loading (tensile) force in N, δ = travel in mm, δ_start = start of the steady-state window used for F̄_ss (the custom start, or the fraction of the peeled length). δ_pre = travel at F_pre,max (the first point where it is reached, when several recorded points share the maximum because of the force resolution). G_pre in J/m² with the run’s own width w (m) and peel angle θ; at 90° it equals F_pre,max / w. R (dimensionless) compares the force before the window with the steady-state mean; R ≈ 1 means no overshoot. G_pre is an apparent initiation energy, not a steady-state fracture energy. F_pre,max is not automatically interpreted as the true crack-initiation force.',
+    refs: ['kendall1975'],
+    note: 'the energy form F/w × (1 − cos θ) is the peel energy of Kendall (1975), applied here to the pre-window maximum as an apparent quantity; the pre-window search, R and the use of the window start are defined by this analyzer.',
   },
   {
     title: 'Detachment and peeled length',

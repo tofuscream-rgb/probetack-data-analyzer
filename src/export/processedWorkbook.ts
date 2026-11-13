@@ -23,6 +23,7 @@ function columnsFor(mode: ExperimentMode): { label: string; value: (row: Process
     ...columns,
     { label: 'Steady-state peel force (gf)', value: (r) => r.primary / GF_TO_N },
     { label: 'Steady-state peel force (N)', value: (r) => r.primary },
+    { label: 'Steady-state force CV (%)', value: (r) => r.cvPct ?? NaN },
     { label: 'Steady-state peel energy (J/m²)', value: (r) => r.normalized },
   ];
   return [

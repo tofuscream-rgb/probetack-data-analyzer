@@ -47,11 +47,21 @@ describe('processed adhesion report', () => {
     expect(sheet.filterRows).toBe(1 + data.length * 5);
   });
 
+  it('90° Peel reports the steady-state force CV (%) on every summary sheet', () => {
+    const r = (id: string, cv: number) => ({ ...row(id, 1, 10), cvPct: cv });
+    const sheets = processedSheets('peel', [r('glass', 10), r('glass-v2', 20)], ['run', 'repeat', 'condition']);
+    for (const sh of sheets) expect(sh.rows.some((x) => x[0] === 'Steady-state force CV (%)')).toBe(true);
+    const cond = sheets[2].rows.find((x) => x[0] === 'Steady-state force CV (%)')!;
+    expect(cond[5]).toBeCloseTo(15); // mean of the two repeat CVs
+    expect(processedSheets('lapShear', [r('a', 10)], ['condition'])[0].rows.some((x) => x[0] === 'Steady-state force CV (%)')).toBe(false);
+  });
+
   it('Compare Gels draws bars even with one dwell time and gels that differ by concentration', () => {
     const at = (cr: string, conc: string, substrate: string) => ({ ...row(`${cr}${conc}${substrate}`, 1, 10), cond: { ...row('x', 1, 1).cond, chargeRatio: cr, concentration: conc, substrate, hold: '—' } });
     const [sheet] = processedSheets('peel', [at('0.25', '2.5', 'glass'), at('0.25', '2.98', 'glass'), at('0.25', '2.5', 'PET')], ['gel']);
     const bars = sheet.charts!.filter((c) => c.type === 'bar');
-    expect(bars).toHaveLength(4); // the four metrics not in gf
+    expect(bars).toHaveLength(5); // the metrics not in gf, including the steady-state force CV
+    expect(bars.map((c) => c.title)).toContain('Steady-state force CV (%): each gel, substrates side by side');
     expect(bars[0].series.map((x) => x.name)).toEqual(['PET', 'glass']);
     expect(bars[0].series[0].categories).toEqual(['CR 0.25 · 2.5 M', 'CR 0.25 · 2.98 M']);
     expect(sheet.charts!.some((c) => c.type !== 'bar')).toBe(false);

@@ -262,7 +262,7 @@ function TackFilePicker() {
           </div>
         ))}
       </div>
-      <p className="hint">Click a name to show only that file; tick to add files. Hide single curves with the run buttons below the graph — hiding a curve does not change the averages. To leave a run out of the analysis, untick <em>In average</em> in Data analysis.</p>
+      <p className="hint">Click a name to show only that file; tick to add files. Show, hide or highlight single runs in “Curves on this graph” above the plot — hiding a curve does not change the averages. To leave a run out of the analysis, untick <em>In average</em> in Data analysis.</p>
       <p className="hint ribbon-legend">
         <span className="ribbon"><i style={{ background: QC_COLORS.green, borderColor: QC_COLORS.green }} /><i style={{ background: 'transparent', borderColor: QC_COLORS.red }} /></span>
         One tick per run, coloured by flag. Hollow = left out of the average.

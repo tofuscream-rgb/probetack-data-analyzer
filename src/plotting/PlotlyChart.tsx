@@ -18,14 +18,16 @@ interface Props {
   onReady?: (el: PlotlyHTMLElement) => void;
   /** Layout changes made in the graph, e.g. a dragged shape. */
   onRelayout?: (e: Record<string, unknown>) => void;
+  /** Click on a legend entry; return false to stop Plotly's default (hiding the curve). */
+  onLegendClick?: (meta: unknown) => boolean;
   className?: string;
 }
 
-export function PlotlyChart({ data, layout, config, onSelected, onClick, onReady, onRelayout, className }: Props) {
+export function PlotlyChart({ data, layout, config, onSelected, onClick, onReady, onRelayout, onLegendClick, className }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
-  const handlers = useRef({ onSelected, onClick, onRelayout });
-  handlers.current = { onSelected, onClick, onRelayout };
+  const handlers = useRef({ onSelected, onClick, onRelayout, onLegendClick });
+  handlers.current = { onSelected, onClick, onRelayout, onLegendClick };
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +47,10 @@ export function PlotlyChart({ data, layout, config, onSelected, onClick, onReady
           el.on('plotly_selected', (e) => e && handlers.current.onSelected?.(e));
           el.on('plotly_click', (e) => handlers.current.onClick?.(e as never));
           el.on('plotly_relayout', (e) => handlers.current.onRelayout?.(e as unknown as Record<string, unknown>));
+          el.on('plotly_legendclick', ((e: { curveNumber: number; data: { meta?: unknown }[] }) => {
+            const h = handlers.current.onLegendClick;
+            return h ? h(e.data[e.curveNumber]?.meta) : true;
+          }) as never);
         }
         onReady?.(el);
       })

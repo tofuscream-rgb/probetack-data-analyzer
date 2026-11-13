@@ -45,11 +45,8 @@ export function useTackPlot() {
   const curves = ex.graphRuns;
   const nExcluded = curves.filter((r) => !isIncluded(r)).length;
   const isDrawn = (r: CycleResult) => !graph.hidden.includes(r.cycle.cycleId) && (isIncluded(r) || graph.showExcluded);
-  // One file: a colour per run. Several files: a colour per file, so files are easy to tell apart.
-  const colorOf = (r: CycleResult) => {
-    const k = multi ? ex.graphFiles.findIndex((e) => e.file.fileId === r.file.fileId) : curves.indexOf(r);
-    return CURVE_COLORS[Math.max(0, k) % CURVE_COLORS.length];
-  };
+  // A colour per run, also when several files are drawn (the legend and labels name the file).
+  const colorOf = (r: CycleResult) => CURVE_COLORS[Math.max(0, curves.indexOf(r)) % CURVE_COLORS.length];
   const nameOf = (r: CycleResult) => `${r.file.name} – Run ${r.cycle.cycleNumber}`;
 
   const drawnIds = curves.filter(isDrawn).map((r) => r.cycle.cycleId);
@@ -80,7 +77,7 @@ export function useTackPlot() {
         y: idx.map((i) => (r.include[i] ? ys[i] : null)),
         customdata: idx,
         meta,
-        legendgroup: multi ? r.file.fileId : meta,
+        legendgroup: meta,
         connectgaps: false,
         name,
         line: excluded ? { color, width, dash: 'dash' } : { color, width },
@@ -101,7 +98,7 @@ export function useTackPlot() {
             y: [ys[iMin]],
             customdata: [iMin],
             meta,
-            legendgroup: multi ? r.file.fileId : meta,
+            legendgroup: meta,
             showlegend: false,
             marker: { symbol: pos ? 'triangle-up' : 'triangle-down', size: excluded ? 8 : 11, color, line: { color: '#18263A', width: 1 } },
             opacity: dim ? 0.25 : 1,
@@ -251,7 +248,6 @@ export function GraphPanel() {
                   ref={(el) => { if (el) el.indeterminate = shown > 0 && shown < ids.length; }}
                   onChange={() => setHidden(ids, shown === ids.length)}
                 />
-                {multi && <span className="swatch" style={{ background: colorOf(e.runs[0]) }} />}
                 <strong title={e.file.path}>{e.file.name}</strong>
               </label>
               {e.runs.map((r) => {
@@ -259,7 +255,7 @@ export function GraphPanel() {
                 return (
                   <span key={r.cycle.cycleId} className={`curve ${hidden ? 'off' : ''} ${isIncluded(r) ? '' : 'excluded'} ${ui.focusId === r.cycle.cycleId ? 'focus' : ''}`}>
                     <input type="checkbox" checked={!hidden} aria-label={`Show ${nameOf(r)}`} onChange={() => setHidden([r.cycle.cycleId], !hidden)} />
-                    {!multi && <span className={`swatch ${isIncluded(r) ? '' : 'dashed'}`} style={isIncluded(r) ? { background: colorOf(r) } : undefined} />}
+                    <span className={`swatch ${isIncluded(r) ? '' : 'dashed'}`} style={isIncluded(r) ? { background: colorOf(r) } : undefined} />
                     <button className={`link curve-name ${highlight === r.cycle.cycleId ? 'on' : ''}`} aria-pressed={highlight === r.cycle.cycleId} disabled={hidden} onClick={() => toggleHighlight(r.cycle.cycleId)} title={`Highlight this run (click again to clear). ${QC_LABEL[r.qc]}. ${STATUS_LABEL[r.status]}.`}>
                       Run {r.cycle.cycleNumber}
                     </button>
@@ -277,6 +273,7 @@ export function GraphPanel() {
         data={data}
         layout={layout}
         onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') { toggleHighlight(m); setUi({ focusId: m }); } }}
+        onLegendClick={(m) => { if (typeof m !== 'string') return true; toggleHighlight(m); return false; }}
         onReady={(el) => (plotEl.current = el)}
         config={{ toImageButtonOptions: { format: 'png', filename: fileName, scale: 3 } }}
       />

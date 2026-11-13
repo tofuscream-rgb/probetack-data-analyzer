@@ -261,7 +261,7 @@ export function LapShearGraph() {
         </div>
       ) : (
         <>
-          <PlotlyChart data={data} layout={layout} onRelayout={(e) => { const a = areaFromRelayout(e, v.area); if (a && a.fromMm !== null && a.toMm !== null) set({ view: { ...v, area: { fromMm: +a.fromMm.toFixed(4), toMm: +a.toMm.toFixed(4) } } }); }} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onReady={(el) => (plotEl.current = el)} config={PLOT_CONFIG} />
+          <PlotlyChart data={data} layout={layout} onRelayout={(e) => { const a = areaFromRelayout(e, v.area); if (a && a.fromMm !== null && a.toMm !== null) set({ view: { ...v, area: { fromMm: +a.fromMm.toFixed(4), toMm: +a.toMm.toFixed(4) } } }); }} onClick={(e) => { const m = e.points[0]?.data.meta; if (typeof m === 'string') set({ view: { ...v, highlight: v.highlight === m ? null : m } }); }} onLegendClick={(m) => { if (typeof m !== 'string') return true; set({ view: { ...v, highlight: v.highlight === m ? null : m } }); return false; }} onReady={(el) => (plotEl.current = el)} config={PLOT_CONFIG} />
           <AreaTool area={v.area} setArea={(area) => set({ view: { ...v, area } })} xRangeMm={areaRange} rows={areaRows} perAreaLabel="Apparent W/A_overlap (J/m²)" note="Apparent work per overlap area A = L × W of each run; not fracture toughness." />
         </>
       )}

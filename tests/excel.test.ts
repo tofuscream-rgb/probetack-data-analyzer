@@ -50,7 +50,7 @@ describe('Excel export', () => {
       expect(stats).toContain(h);
     }
     expect(settings).toContain('Automatic run exclusion (QC classes)');
-    expect(settings).toContain('red, orange');
+    expect(settings).toMatch(/Automatic run exclusion \(QC classes\)<\/t><\/is><\/c><c r="B\d+" t="inlineStr"><is><t xml:space="preserve">none</);
     expect(settings).toContain('Manual run overrides');
     // Processed Data holds only points of runs that are included or kept manually
     const included = ids.filter((id) => isIncluded(d2.results.get(id)!));

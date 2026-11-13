@@ -150,7 +150,7 @@ export function DataAnalysis() {
             With fewer than {project.settings.cycle.minGroupSize} valid runs a condition is <em>not scored</em>.
             Runs are also checked for no negative force, no peak, weak response, probe start position and incomplete movement.{' '}
             {nOutliers ? `${nOutliers} run(s) are highlighted. ` : 'No runs are highlighted. '}
-            {excl.length ? `${excl.join(' and ').replace(/^./, (c) => c.toUpperCase())} runs are left out of the average without outliers.` : 'No runs are left out automatically.'}{' '}
+            {excl.length ? `${excl.join(' and ').replace(/^./, (c) => c.toUpperCase())} runs are left out of the average (Settings).` : 'Flags are warnings for review; exclusion is only by whole file/session, chosen manually (Tack metrics).'}{' '}
             Untick or tick <em>In average</em> to decide yourself; <em>Reset</em> returns a run to the automatic decision. Click a row for its curve and details.
           </p>
           <p className="note">W<sub>adh</sub> is tensile work. An asterisk marks a pull that ended before detachment was detected.</p>

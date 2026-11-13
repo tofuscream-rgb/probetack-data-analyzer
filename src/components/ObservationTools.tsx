@@ -125,7 +125,7 @@ export function ObservationGlossary({ test, title = 'Definitions & References', 
       <h4>References</h4>
       <ol className="citations">
         {used.map((r) => (
-          <li key={r.key}>{r.citation} <a href={r.url} target="_blank" rel="noreferrer noopener">{r.linkText}</a></li>
+          <li key={r.key}>{r.citation}{r.url && <> <a href={r.url} target="_blank" rel="noreferrer noopener">{r.linkText}</a></>}</li>
         ))}
       </ol>
     </section>

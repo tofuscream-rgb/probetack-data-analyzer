@@ -40,8 +40,9 @@ export function SettingsPanel() {
             </label>
           ))}
           <p className="note">
-            These runs stay highlighted but are left out of the “without outliers” averages; the “all runs” averages always use every run. Your own
-            choice in the Data analysis tab (the In average tick box) always wins over these rules. Flags themselves never depend on this setting.
+            Off by default: flags are warnings for review; exclusion is only by whole file/session, chosen manually (Tack metrics), or run by run with the
+            In average tick box in Data analysis. Ticking a colour here leaves runs with that flag out of the “included after review” averages; the
+            “all valid runs” averages always use every run. Your In average choice always wins. Flags themselves never depend on this setting.
           </p>
         </Section>
 

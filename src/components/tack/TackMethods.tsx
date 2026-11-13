@@ -58,13 +58,13 @@ export const TACK_METHOD_ITEMS: { title: string; tex: string; text: string; sour
   {
     title: 'Data-quality flags (warnings only)',
     tex: String.raw`n_{\text{steps}} = \frac{F_{\max}}{\Delta F_{\text{res}}} < ${LOW_RESOLUTION_STEPS}\;\Rightarrow\;\text{Low force resolution}`,
-    text: `ΔF_res = smallest step between distinct recorded force values in the run. Low force resolution: fewer than ${LOW_RESOLUTION_STEPS} steps at F_max, so the plateau and relaxation may be approximate. Incomplete detachment: F never fell to ≤ ${pct(TACK_DEFAULTS.endFraction)} F_max before the file ended, so W_adh is a lower bound and the failure displacement/strain are blank. Load tared after dwell: a Zero Load step between the Wait and the pull reset the load cell, so the pull force is referenced to the new zero. Flagged runs are never excluded automatically.`,
+    text: `ΔF_res = smallest step between distinct recorded force values in the run. Low force resolution: fewer than ${LOW_RESOLUTION_STEPS} steps at F_max, so the plateau and relaxation may be approximate. Incomplete detachment: F never fell to ≤ ${pct(TACK_DEFAULTS.endFraction)} F_max before the file ended, so W_adh is a lower bound and the failure displacement/strain are blank. Load tared after dwell: a Zero Load step between the Wait and the pull reset the load cell, so the pull force is referenced to the new zero. Flags are warnings for review; exclusion is only by whole file/session, chosen manually.`,
     source: { refs: [], note: `criteria defined by this analyzer (no literature source).` },
   },
   {
     title: 'Statistics and exclusions',
     tex: String.raw`\bar{x} = \frac{1}{n}\sum_{j=1}^{n} x_j,\qquad s = \sqrt{\frac{1}{n-1}\sum_{j=1}^{n} \left(x_j - \bar{x}\right)^2}`,
-    text: 'Per Repeat: mean ± sample SD over its runs; per condition (substrate × dwell): mean ± SD over the Repeat means, so each Repeat counts once. Both are reported before exclusion (all analysed runs) and after exclusion. Inclusion is shared with the Data analysis tab (one state): its automatic QC rule, the In average choices, and whole-Repeat or session exclusions made here; excluding or re-including a run in either tab updates both, with the reason kept. Excluded rows stay visible. Points are never removed.',
+    text: 'Per Repeat: mean ± sample SD over its runs; per condition (substrate × dwell): mean ± SD over the Repeat means, so each Repeat counts once. Both are reported before exclusion (all analysed runs) and after exclusion. Inclusion is shared with the Data analysis tab (one state): the In average choices, any flag colours you choose to exclude under Settings (none by default), and whole-Repeat or session exclusions made here; excluding or re-including a run in either tab updates both, with the reason kept. Excluded rows stay visible. Points are never removed.',
     source: { refs: [], note: `standard sample mean and standard deviation (n − 1); not adhesion-specific. The Repeat-level averaging is defined by this analyzer.` },
   },
   {
@@ -102,7 +102,7 @@ export function TackMethods({ n }: { n?: number }) {
         ))}
         <h4>References</h4>
         <ol className="citations">
-          {CITED.map((r) => <li key={r.key}>{r.citation} <a href={r.url} target="_blank" rel="noreferrer noopener">{r.linkText}</a></li>)}
+          {CITED.map((r) => <li key={r.key}>{r.citation}{r.url && <> <a href={r.url} target="_blank" rel="noreferrer noopener">{r.linkText}</a></>}</li>)}
         </ol>
         <p className="note">Equations are typeset with {KATEX_SOURCE}.</p>
       </div>

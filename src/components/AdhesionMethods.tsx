@@ -38,9 +38,10 @@ export function WorkMethods({ mode }: { mode: Mode }) {
         },
         ...(mode !== 'tack' ? [] : [{
           title: 'Modified Z-score and review',
-          tex: String.raw`Z_i=0.6745(x_i-\operatorname{median}(x))/\operatorname{MAD}(x)`,
-          text: 'MAD is the median absolute deviation from the median. The analyzer uses its existing mean absolute deviation fallback when MAD is zero. Flags are screening aids. Group summaries give mean ± sample SD and the number of finite observations for each metric.',
-          refs: ['nistOutliers'], note: 'Thresholds, minimum group size and the zero-MAD fallback are analyzer settings or conventions.',
+          tex: String.raw`Z_i=\frac{0.6745\,(x_i-\tilde{x})}{\operatorname{MAD}},\qquad \operatorname{MAD}=\operatorname{median}\lvert x_i-\tilde{x}\rvert;\qquad \lvert Z_i\rvert \ge 2.5\ \text{yellow},\ \ge 3.5\ \text{orange},\ \ge 5\ \text{red}`,
+          text: 'x = peak adhesion force of each run, x̃ = median of the runs with the same conditions. Flags are warnings for review; exclusion is only by whole file/session, chosen manually. A single run can also be left out by hand with In average. With the default settings no flag colour removes a run from the statistics.',
+          refs: ['iglewicz1993', 'nistOutliers', 'leys2013'],
+          note: 'Modified Z-score and the |Z| > 3.5 cut-off for potential outliers: Iglewicz & Hoaglin (1993), as given in the NIST/SEMATECH e-Handbook (§1.3.5.17). Yellow level 2.5: the moderately conservative median ± 2.5 MAD criterion of Leys et al. (2013) (their MAD is scaled by 1.4826 = 1/0.6745, so the two scales agree). The red level (5), the minimum of n = 4 valid runs per condition and the mean-absolute-deviation fallback when MAD = 0 are analyzer choices.',
         }]),
       ]} />
     </details>

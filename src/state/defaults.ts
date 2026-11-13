@@ -23,7 +23,8 @@ export function defaultSettings(): AnalysisSettings {
       startOffsetMm: 1.0,
       compareBy: ['chargeRatio', 'concentrationM', 'substrate', 'holdTimeS'],
     },
-    runExclusion: { excludeClasses: ['red', 'orange'] },
+    // Flags are warnings for review: no colour leaves a run out of the statistics by default.
+    runExclusion: { excludeClasses: [] },
     exclusionRule: 'keepAll', // advanced: point-level exclusion inside a run
     probe: { diameterMm: 5.5, thicknessMm: 0 }, // probe diameter 5.5 mm by default; gel thickness entered by the user
   };

@@ -31,7 +31,7 @@ export function EquationList({ items, title }: { items: EquationItem[]; title: s
         <>
           <h4>References</h4>
           <ol className="citations">
-            {cited.map((r) => <li key={r.key}>{r.citation} <a href={r.url} target="_blank" rel="noreferrer noopener">{r.linkText}</a></li>)}
+            {cited.map((r) => <li key={r.key}>{r.citation}{r.url && <> <a href={r.url} target="_blank" rel="noreferrer noopener">{r.linkText}</a></>}</li>)}
           </ol>
         </>
       )}

@@ -81,7 +81,9 @@ describe('project save and load', () => {
     expect(s.runOverrides['f1#c2']).toEqual({ action: 'exclude', reason: 'missed contact', at: '2026-01-02T03:04:05Z' });
     expect(s.runOverrides['f1#c3'].action).toBe('include'); // an explicit override wins over the legacy entry
     expect(s.excludedCycles).toBeUndefined();
-    expect(s.settings.runExclusion.excludeClasses).toEqual(['red', 'orange']);
+    expect(s.settings.runExclusion.excludeClasses).toEqual([]); // new default: no automatic run exclusion
+    // A project saved with an exclusion setting keeps it.
+    expect(migrateState({ settings: { runExclusion: { excludeClasses: ['red', 'orange'] } } } as never).settings.runExclusion.excludeClasses).toEqual(['red', 'orange']);
 
     const old = { format: 'mach1-analyzer-project', schemaVersion: 1, appVersion: '1.1.0', algorithmVersion: '1.0.0', savedAt: 't', mode: 'settings', sources: [],
       state: { name: 'old', excludedCycles: { 'f1#c1': { reason: 'bubble', at: 't' } }, settings: { peakMetric: 'min' } } };

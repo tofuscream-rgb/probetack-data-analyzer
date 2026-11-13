@@ -302,9 +302,21 @@ describe('repeat-file differences', () => {
 describe('run-level exclusion', () => {
   const weakAmongNine = () => load([...[40, 41, 39, 40.5, 39.5, 40, 42, 38.5].map((p) => curve(p)), curve(3)]);
 
-  it('excludes red and orange runs automatically by default and keeps yellow and green runs', async () => {
-    expect(defaultSettings().runExclusion.excludeClasses).toEqual(['red', 'orange']);
+  it('flags runs but leaves every run in the statistics by default (flags are warnings for review)', async () => {
+    expect(defaultSettings().runExclusion.excludeClasses).toEqual([]);
     const d = derive([await weakAmongNine()]);
+    const red = d.ordered[8];
+    expect(red.qc).toBe('red'); // flag colour and message unchanged
+    expect(red.flags.some((f) => f.code === 'modZ' && f.cls === 'red')).toBe(true);
+    expect(red.status).toBe('included');
+    expect(d.ordered.every((r) => r.status === 'included')).toBe(true);
+    expect(d.groups[0].raw.n).toBe(9);
+    expect(d.groups[0].processed.n).toBe(9);
+  });
+
+  it('excludes red and orange runs when those colours are chosen under Settings, and keeps yellow and green runs', async () => {
+    const proj = () => { const p = defaultProject(); p.settings.runExclusion.excludeClasses = ['red', 'orange']; return p; };
+    const d = derive([await weakAmongNine()], proj());
     const red = d.ordered[8];
     expect(red.qc).toBe('red');
     expect(red.status).toBe('excludedAuto');
@@ -316,13 +328,13 @@ describe('run-level exclusion', () => {
 
     const l = await load([curve(40), curve(41), curve(39), curve(40)]);
     l.cycles[2].z_mm = l.cycles[2].z_mm.map((z) => z - 2.3); // start-position flag (orange)
-    const orange = derive([l]).ordered[2];
+    const orange = derive([l], proj()).ordered[2];
     expect(orange.qc).toBe('orange');
     expect(orange.status).toBe('excludedAuto');
 
     const f = curve(40);
     f[70] += 15; // isolated spike: yellow run
-    const yellow = derive([await load([f])]).ordered[0];
+    const yellow = derive([await load([f])], proj()).ordered[0];
     expect(yellow.qc).toBe('yellow');
     expect(yellow.status).toBe('included');
   });
@@ -346,7 +358,7 @@ describe('run-level exclusion', () => {
     expect(d.ordered[0].status).toBe('excludedManual');
     expect(d.ordered[0].statusReason).toBe('Excluded manually: bubble seen');
     expect(d.groups[0].raw.n).toBe(9);
-    expect(d.groups[0].processed.n).toBe(7); // the green run and the automatically excluded red run
+    expect(d.groups[0].processed.n).toBe(8); // only the manually excluded run is left out (no automatic exclusion by default)
   });
 
   it('reports raw and processed group statistics side by side (hand-made example)', () => {

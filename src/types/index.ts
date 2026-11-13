@@ -254,6 +254,8 @@ export interface CompareSelection {
   holdTimes: string[] | null;
   /** Bar-chart panels: one gel with its charge ratios (default), or one charge ratio with its gels side by side. */
   panelBy?: 'gel' | 'chargeRatio';
+  /** Compared quantity: peak adhesion force (default), W_adh per probe area (J/m²) or W_adh (mJ). */
+  metric?: 'peak' | 'wJm2' | 'workMJ';
   /** Data set keys unticked in the list of matched sets. */
   hiddenSets: string[];
   /** Order of charge ratios inside each substrate panel. */

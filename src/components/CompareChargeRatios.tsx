@@ -9,6 +9,10 @@ import { PlotlyChart, loadPlotly } from '../plotting/PlotlyChart';
 import { PASTEL_COLORS } from '../plotting/colors';
 import { EXPORT_SIZE, FIG_FONT_FAMILY } from '../plotting/figureStyle';
 import type { CompareSelection } from '../types';
+import { metricsOf } from '../state/tackMetrics';
+import { mean, sampleSD } from '../analysis/stats';
+
+type CompareMetric = NonNullable<CompareSelection['metric']>;
 import { forceDigits, meanSd } from './common';
 
 type ListKey = 'substrates' | 'gels' | 'chargeRatios' | 'concentrations' | 'holdTimes';
@@ -52,6 +56,8 @@ export function CompareChargeRatios() {
   const f = displayFactor(project.settings);
   const fa = Math.abs(f); // SD is never negative
   const d = forceDigits(u);
+  const diameter = project.settings.probe.diameterMm;
+  const h0 = project.tackMetrics.h0;
   const plotEl = useRef<PlotlyHTMLElement | null>(null);
 
   const cmp: Comparison = useMemo(() => buildComparison(derived.ordered, sel, ex.substrate), [derived, sel, ex.substrate]);
@@ -70,7 +76,26 @@ export function CompareChargeRatios() {
 
   const visible = cmp.sets.filter((s) => !s.hidden);
   const holds = cmp.selected.holdTimes;
-  const st = (s: DataSet, h: string): SummaryStats | null => cmp.stats(s, h)?.[sel.which] ?? null;
+  // The compared quantity: peak adhesion force (as in Data analysis) or the tensile work W_adh of each run.
+  const metric: CompareMetric = sel.metric === 'wJm2' && !(diameter > 0) ? 'peak' : sel.metric ?? 'peak';
+  const workOf = (id: string): number => {
+    const r = derived.results.get(id);
+    if (!r) return NaN;
+    const m = metricsOf(r.cycle, diameter, h0[r.file.fileId] ?? null, true);
+    return metric === 'workMJ' ? m.workMJ : m.wJm2;
+  };
+  /** Mean ± sample SD (n) of one data set and dwell time, in display units. */
+  const st = (s: DataSet, h: string): { mean: number; sd: number; n: number } | null => {
+    const g = cmp.stats(s, h);
+    if (!g) return null;
+    if (metric === 'peak') {
+      const v: SummaryStats = g[sel.which];
+      return { mean: v.mean * f, sd: v.sd * fa, n: v.n };
+    }
+    // Work: all valid runs, or the runs included after review.
+    const values = (sel.which === 'raw' ? g.cycleIds : g.includedCycleIds).map(workOf).filter(Number.isFinite);
+    return { mean: mean(values), sd: sampleSD(values), n: values.length };
+  };
   const manyConc = new Set(visible.map((s) => s.concentration)).size > 1;
   const conc = (s: DataSet) => `${s.concentration} M${s.concentrationDefault ? '*' : ''}`;
   const manyGels = new Set(visible.map((s) => s.gel)).size > 1;
@@ -81,7 +106,10 @@ export function CompareChargeRatios() {
   const tick = (s: DataSet) => (manyConc ? `${tickMain(s)}<br>${conc(s)}` : tickMain(s));
   const panelOf = (s: DataSet) => (byCr ? `${s.substrateLabel} · CR ${s.chargeRatio}` : manyGels ? `${s.substrateLabel} · ${s.gelLabel}` : s.substrateLabel);
   const setName = (s: DataSet) => [s.substrateLabel, manyGels || s.gel !== '—' ? s.gelLabel : null, `CR ${s.chargeRatio}`, conc(s)].filter(Boolean).join(' · ');
-  const yTitle = `${peakLabel(project.settings)} (${u})`;
+  const metricLabel = metric === 'peak' ? peakLabel(project.settings) : metric === 'workMJ' ? 'W_adh' : 'W_adh / A';
+  const yTitle = metric === 'peak' ? `${peakLabel(project.settings)} (${u})` : metric === 'workMJ' ? 'W<sub>adh</sub> (mJ)' : 'W<sub>adh</sub> (J/m²)';
+  const unitText = metric === 'peak' ? u : metric === 'workMJ' ? 'mJ' : 'J/m²';
+  const digits = metric === 'peak' ? d : 3;
   const anyDefault = visible.some((s) => s.concentrationDefault);
 
   // Bar chart in the style of published tack plots: substrate panels, one bar per holding time.
@@ -93,11 +121,11 @@ export function CompareChargeRatios() {
         type: 'bar',
         name: `${h} s`,
         x,
-        y: vals.map((v) => (v && v.n > 0 ? v.mean * f : null)),
-        error_y: { type: 'data', array: vals.map((v) => (v && v.n > 1 ? v.sd * fa : 0)), visible: true, color: '#18263A', thickness: 1.2, width: 4 },
+        y: vals.map((v) => (v && v.n > 0 ? v.mean : null)),
+        error_y: { type: 'data', array: vals.map((v) => (v && v.n > 1 ? v.sd : 0)), visible: true, color: '#18263A', thickness: 1.2, width: 4 },
         customdata: visible.map((s, i) => [setName(s), vals[i]?.n ?? 0]),
         marker: { color: PASTEL_COLORS[k % PASTEL_COLORS.length], line: { color: '#18263A', width: 1 } },
-        hovertemplate: `%{customdata[0]}<br>${h} s dwell: %{y:.3f} ± %{error_y.array:.3f} (SD), n = %{customdata[1]}<extra></extra>`,
+        hovertemplate: `%{customdata[0]}<br>${h} s dwell: %{y:.3f} ± %{error_y.array:.3f} ${unitText} (SD), n = %{customdata[1]}<extra></extra>`,
       } as unknown as Data;
     });
     // Headroom above the highest bar (mean + SD) for the substrate labels and the legend.
@@ -106,8 +134,8 @@ export function CompareChargeRatios() {
     for (const h of holds) for (const s of visible) {
       const v = st(s, h);
       if (!v || v.n === 0) continue;
-      top = Math.max(top, v.mean * f + (v.n > 1 ? v.sd * fa : 0));
-      bottom = Math.min(bottom, v.mean * f - (v.n > 1 ? v.sd * fa : 0));
+      top = Math.max(top, v.mean + (v.n > 1 ? v.sd : 0));
+      bottom = Math.min(bottom, v.mean - (v.n > 1 ? v.sd : 0));
     }
     const range = bottom >= 0 && top > 0 ? [0, top * 1.22] : undefined;
     // Dashed separators and labels for each substrate panel.
@@ -137,7 +165,7 @@ export function CompareChargeRatios() {
     };
     return { data, layout };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cmp, sel.which, f, yTitle, manyConc, byCr, manyGels]);
+  }, [cmp, sel.which, f, yTitle, manyConc, byCr, manyGels, metric, diameter, h0]);
 
   // Line chart: one line per data set across holding times.
   const lines = useMemo(() => {
@@ -150,12 +178,12 @@ export function CompareChargeRatios() {
         mode: 'lines+markers',
         name,
         x: pts.map((p) => Number(p.h)),
-        y: pts.map((p) => p.v!.mean * f),
-        error_y: { type: 'data', array: pts.map((p) => (p.v!.n > 1 ? p.v!.sd * fa : 0)), visible: true, color: '#18263A', thickness: 1, width: 3 },
+        y: pts.map((p) => p.v!.mean),
+        error_y: { type: 'data', array: pts.map((p) => (p.v!.n > 1 ? p.v!.sd : 0)), visible: true, color: '#18263A', thickness: 1, width: 3 },
         text: pts.map((p) => `n = ${p.v!.n}`),
         line: { color, width: 2.4 },
         marker: { color, size: 9, line: { color: '#18263A', width: 1 } },
-        hovertemplate: `${name}<br>%{x} s dwell<br>%{y:.3f} ± %{error_y.array:.3f} (SD)<br>%{text}<extra></extra>`,
+        hovertemplate: `${name}<br>%{x} s dwell<br>%{y:.3f} ± %{error_y.array:.3f} ${unitText} (SD)<br>%{text}<extra></extra>`,
       } as unknown as Data;
     });
     const layout: Partial<Layout> = {
@@ -168,7 +196,7 @@ export function CompareChargeRatios() {
     };
     return { data, layout };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cmp, sel.which, f, yTitle]);
+  }, [cmp, sel.which, f, yTitle, metric, diameter, h0]);
 
   const save = async (format: 'png' | 'svg') => {
     if (!plotEl.current) return;
@@ -207,6 +235,14 @@ export function CompareChargeRatios() {
       </details>
 
       <div className="table-actions compare-controls">
+        <label className="field inline">
+          <span>Compare</span>
+          <select value={metric} onChange={(e) => set({ metric: e.target.value as CompareMetric })} aria-label="Quantity to compare">
+            <option value="peak">{peakLabel(project.settings)} ({u})</option>
+            <option value="wJm2" disabled={!(diameter > 0)}>W_adh per probe area (J/m²){diameter > 0 ? '' : ' — enter the probe diameter in Settings'}</option>
+            <option value="workMJ">W_adh (mJ)</option>
+          </select>
+        </label>
         <div className="segmented small" role="group" aria-label="Which runs">
           <button className={sel.which === 'processed' ? 'on' : ''} onClick={() => set({ which: 'processed' })}>Included runs after review</button>
           <button className={sel.which === 'raw' ? 'on' : ''} onClick={() => set({ which: 'raw' })}>All valid runs</button>
@@ -228,7 +264,7 @@ export function CompareChargeRatios() {
         </div>
       </div>
       <p className="note">
-        Each data set is one substrate, gel, charge ratio and concentration; bars show mean ± sample SD of the {peakLabel(project.settings).toLowerCase()}, one value per run, for each dwell time.
+        Each data set is one substrate, gel, charge ratio and concentration; bars show mean ± sample SD of the {metric === 'peak' ? peakLabel(project.settings).toLowerCase() : metric === 'workMJ' ? 'tensile work Wadh (mJ)' : 'tensile work per probe area Wadh/A (J/m²)'}, one value per run, for each dwell time.{metric !== 'peak' ? ' Wadh is integrated from the tensile onset to detachment, or to the end of the recording when no detachment was detected (Methods in Data analysis). ' : ' '}
         Concentrations and gels are never averaged together. A missing bar or “—” means no runs for that combination. Runs on the same specimen are not independent replicates.
         {anyDefault ? ' * No concentration in the folder name, so 2.1 M is assumed.' : ''}
       </p>
@@ -243,7 +279,7 @@ export function CompareChargeRatios() {
               <thead>
                 <tr>
                   <th>Substrate</th>{hasGels && <th>Gel</th>}<th>Charge ratio</th><th>Concentration</th>
-                  {holds.map((h) => <th key={h} className="num">{h === '—' ? 'Dwell unknown' : `${h} s dwell`} ({u})</th>)}
+                  {holds.map((h) => <th key={h} className="num">{h === '—' ? 'Dwell unknown' : `${h} s dwell`} ({unitText})</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -255,7 +291,7 @@ export function CompareChargeRatios() {
                     <td>{conc(s)}</td>
                     {holds.map((h) => {
                       const v = st(s, h);
-                      return <td key={h} className="num">{v && v.n > 0 ? meanSd(v.mean * f, v.sd * fa, v.n, d) : '—'}</td>;
+                      return <td key={h} className="num">{v && v.n > 0 ? meanSd(v.mean, v.sd, v.n, digits) : '—'}</td>;
                     })}
                   </tr>
                 ))}
@@ -263,7 +299,7 @@ export function CompareChargeRatios() {
             </table>
           </div>
           <section>
-            <h3>Peak force vs dwell time</h3>
+            <h3>{metric === 'peak' ? 'Peak force' : metricLabel} vs dwell time</h3>
             <PlotlyChart data={lines.data} layout={lines.layout} className="plot summary" />
           </section>
         </>

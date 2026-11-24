@@ -9,7 +9,7 @@ import { uniqueFileNames, useExperiment } from './experiment';
 import { groupValue, isIncluded, sessionOf, type CycleResult } from '../analysis/engine';
 import { withOverrideReason, withRunInclusion } from './inclusion';
 import { LOW_RESOLUTION_STEPS, TACK_DEFAULTS, analyzeTack, meanSd, type TackMetrics } from '../analysis/tackMetrics';
-import { bySubstrate, canonicalSubstrate } from '../analysis/substrates';
+import { bySubstrate } from '../analysis/substrates';
 import type { Cycle, DatasetExclusion, FailureMode, ParsedFile, TackMetricsState, TackMorphology, TackObservation } from '../types';
 import { FAILURE_MODES, TACK_MORPHOLOGIES, optionLabel } from '../analysis/observations';
 
@@ -185,7 +185,7 @@ export function useTackMetrics() {
         file: first.file,
         name: names.get(fileId) ?? first.file.name,
         substrate,
-        substrateLabel: canonicalSubstrate(substrate) ?? substrate,
+        substrateLabel: substrate, // already the substrate group (ss, PET, glass, …), the same name as in every other tab
         dwellS: first.holdTimeS,
         group: [`CR ${groupValue(first, 'chargeRatio') === '—' ? 'unknown' : groupValue(first, 'chargeRatio')}`, `${groupValue(first, 'concentrationM')} M`, groupValue(first, 'gel') === '—' ? 'gel unspecified' : groupValue(first, 'gel')].join(' · '),
         session,

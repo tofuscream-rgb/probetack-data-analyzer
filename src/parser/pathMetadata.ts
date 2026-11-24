@@ -16,6 +16,7 @@
  */
 import type { ExperimentMeta, MetaField, MetaOverride, MetaSource } from '../types';
 import { DEFAULT_CONCENTRATION_M } from '../types';
+import { canonicalSubstrate } from '../analysis/substrates';
 
 const SUBSTRATE_WORDS = [
   'glass', 'steel', 'stainless', 'aluminum', 'aluminium', 'ptfe', 'teflon', 'pet', 'pmma', 'acrylic',
@@ -24,6 +25,31 @@ const SUBSTRATE_WORDS = [
 ];
 
 const field = <T>(value: T | null, source: MetaSource): MetaField<T> => ({ value, source });
+
+const MONTHS = /(?:^|[^a-z])(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*$/i;
+
+/**
+ * Substrate group of a name read from folders or files: extra words such as dates, notes or
+ * "reused gel" are dropped so that every variant lands in one group.
+ *   "ss_nov", "SS-reused gel", "ss note", "Stainless steel", "steel" → "ss"
+ *   "trial PET", "plastic PET", "PET_dec" → "PET"
+ *   "glass_dec", "glass-reused gel", "glass v2" → "glass"
+ *   any other known substrate word keeps just that word ("PTFE old" → "PTFE"); unknown names are kept.
+ */
+export function substrateGroup(name: string): string {
+  const raw = name.trim();
+  const c = canonicalSubstrate(raw);
+  if (c === 'PET') return 'PET';
+  if (c === 'stainless steel') return 'ss';
+  if (c === 'glass') return 'glass';
+  const lower = raw.toLowerCase();
+  for (const w of SUBSTRATE_WORDS) {
+    if (w === 'substrate') continue;
+    const m = new RegExp(`(^|[^a-z])(${w})([^a-z]|$)`).exec(lower);
+    if (m) return raw.substr(m.index + m[1].length, w.length);
+  }
+  return raw;
+}
 
 /** "0,5" → "0.5" (decimal comma between digits). */
 const decimalPoint = (t: string) => t.replace(/(\d),(\d)/g, '$1.$2');
@@ -151,7 +177,9 @@ export function inferMetadata(path: string): ExperimentMeta {
 
   // Substrate named in the file itself ("glass.txt", "PET-2.txt" = PET, repeat 2).
   // "PETv2", "PET v3", "PET_v4" are versions (repeats) of PET, not other substrates.
-  const numbered = stem.match(/^(.*?)[\s_-]+(\d{1,3})$/) ?? stem.match(/^(.*?)\s*\((\d{1,3})\)$/);
+  const numbered0 = stem.match(/^(.*?)[\s_-]+(\d{1,3})$/) ?? stem.match(/^(.*?)\s*\((\d{1,3})\)$/);
+  // "ss_nov_13" = a date (13 November), not repeat 13.
+  const numbered = numbered0 && MONTHS.test(numbered0[1]) ? null : numbered0;
   const ver = splitVersion(numbered && numbered[1] ? numbered[1] : stem);
   const fileBase = ver.base;
   let fileRepeat: number | null = null;
@@ -197,6 +225,15 @@ export function inferMetadata(path: string): ExperimentMeta {
   const { base, repeat, explicit } = splitRepeat(stem);
   const hold = findHoldTime(base);
   if (hold === null) notes.push('No holding time found in the file name; the Wait duration recorded in the file is used per run.');
+
+  // One group per substrate, whatever extra words the name carries.
+  if (substrate.value !== null) {
+    const g = substrateGroup(substrate.value);
+    if (g !== substrate.value) {
+      notes.push(`Substrate "${substrate.value}" is grouped as "${g}". Correct it below if it is a different substrate.`);
+      substrate = field(g, substrate.source);
+    }
+  }
 
   return {
     chargeRatio,

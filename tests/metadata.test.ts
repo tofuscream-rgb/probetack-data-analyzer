@@ -5,7 +5,7 @@ describe('folder and file name metadata', () => {
   it('reads charge ratio, substrate, hold time and repeat from a typical path', () => {
     const m = inferMetadata('Hydrogel Experiments/0.25/Glass/60s-2.txt');
     expect(m.chargeRatio.value).toBe(0.25);
-    expect(m.substrate.value).toBe('Glass');
+    expect(m.substrate.value).toBe('glass'); // substrate group
     expect(m.nominalHoldS.value).toBe(60);
     expect(m.repeat.value).toBe(2);
     expect(m.baseName).toBe('60s');
@@ -67,9 +67,9 @@ describe('folder and file name metadata', () => {
     const gelFirst = inferMetadata('probe tack October/0.25 2.5M/glass/1s.txt');
     expect([gelFirst.chargeRatio.value, gelFirst.concentrationM.value, gelFirst.substrate.value]).toEqual([0.25, 2.5, 'glass']);
     const subFirst = inferMetadata('after conference/stainless steel/0.75/30s-2.txt');
-    expect([subFirst.chargeRatio.value, subFirst.concentrationM.value, subFirst.substrate.value, subFirst.nominalHoldS.value, subFirst.repeat.value]).toEqual([0.75, 2.1, 'stainless steel', 30, 2]);
+    expect([subFirst.chargeRatio.value, subFirst.concentrationM.value, subFirst.substrate.value, subFirst.nominalHoldS.value, subFirst.repeat.value]).toEqual([0.75, 2.1, 'ss', 30, 2]);
     expect(subFirst.concentrationM.source).toBe('default'); // no concentration in the old folder names
-    expect(inferMetadata('after conference/SS/1.05 2.5M/1s.txt').substrate.value).toBe('SS');
+    expect(inferMetadata('after conference/SS/1.05 2.5M/1s.txt').substrate.value).toBe('ss');
     // A substrate name that is not a known word, in either order:
     expect(inferMetadata('after conference/Nitrile/0.75/1s.txt').substrate.value).toBe('Nitrile');
     expect(inferMetadata('probe tack October/0.25 2.5M/Nitrile/1s.txt').substrate.value).toBe('Nitrile');
@@ -115,14 +115,33 @@ describe('lap-shear and peel folder layouts', () => {
     expect(m.concentrationM.value).toBe(2.98);
     expect(m.substrate).toEqual({ value: 'glass', source: 'filename' });
     expect(inferMetadata('peel 2026 Oct/0.25 2.5M/PET.txt').substrate.value).toBe('PET');
-    expect(inferMetadata('x/0.25 2.98M 90/SS-reused gel.txt').substrate.value).toBe('SS-reused gel');
+    expect(inferMetadata('x/0.25 2.98M 90/SS-reused gel.txt').substrate.value).toBe('ss'); // grouped with ss
     expect(inferMetadata('0.5/PET-2.txt')).toMatchObject({ chargeRatio: { value: 0.5 }, substrate: { value: 'PET' }, repeat: { value: 2 } });
   });
 
   it('keeps reading the probe-tack layouts as before', () => {
-    expect(inferMetadata('Hydrogel Experiments/0.25/Glass/60s-2.txt')).toMatchObject({ chargeRatio: { value: 0.25 }, substrate: { value: 'Glass', source: 'path' }, nominalHoldS: { value: 60 } });
+    expect(inferMetadata('Hydrogel Experiments/0.25/Glass/60s-2.txt')).toMatchObject({ chargeRatio: { value: 0.25 }, substrate: { value: 'glass', source: 'path' }, nominalHoldS: { value: 60 } });
     expect(inferMetadata('0.25 (2.5M)/Glass/30s.txt')).toMatchObject({ chargeRatio: { value: 0.25 }, concentrationM: { value: 2.5 } });
     expect(inferMetadata('2026 Oct/60s.txt').chargeRatio.value).toBeNull(); // a date is not a charge ratio
     expect(inferMetadata('Gels 2026/60s.txt').chargeRatio.value).toBeNull();
+  });
+});
+
+describe('substrate groups', () => {
+  it('groups name variants into one substrate everywhere', async () => {
+    const { substrateGroup } = await import('../src/parser/pathMetadata');
+    const sub = (p: string) => inferMetadata(p).substrate.value;
+    // ss: dates, notes, reuse and spelling variants
+    expect(['peel/0.25 2.98M/ss_nov_13.txt', 'x/0.25/SS-reused gel.txt', 'peel/f=0.75/ss note.txt', 'peel/f= 0.5/ss v4.txt', 'x/0.25/Stainless steel.txt', 'tack/0.25 2.98M/ss/30s-3.txt'].map(sub)).toEqual(['ss', 'ss', 'ss', 'ss', 'ss', 'ss']);
+    expect(['peel/0.25 2.1M/trial PET.txt', 'Full data/plastic PET/0.5/PET 60s.txt', 'peel/0.25 2.5M/PETv2.txt'].map(sub)).toEqual(['PET', 'PET', 'PET']);
+    expect(['peel/0.25 2.5M/glass-reused gel.txt', 'x/0.25/glass_dec.txt', 'peel/f=0.75/glass v2.txt', 'x/0.25/Glass/1s.txt'].map(sub)).toEqual(['glass', 'glass', 'glass', 'glass']);
+    expect(sub('x/CR 0.5/PTFE old/1s.txt')).toBe('PTFE');
+    expect(substrateGroup('some new coating')).toBe('some new coating'); // unknown names are kept
+    expect(inferMetadata('peel/0.25 2.98M/ss_nov_13.txt').notes.join(' ')).toMatch(/Substrate "ss_nov_13" is grouped as "ss"/);
+  });
+
+  it('a month name before a number is a date, not a repeat number', () => {
+    expect(inferMetadata('peel/0.25 2.98M/ss_nov_13.txt').repeat.value).toBe(1);
+    expect(inferMetadata('peel/0.25 2.98M/ss_13.txt').repeat.value).toBe(13);
   });
 });

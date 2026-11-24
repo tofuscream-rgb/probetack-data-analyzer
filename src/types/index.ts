@@ -53,6 +53,8 @@ export type MetaSource = 'path' | 'filename' | 'file' | 'default' | 'user' | 'un
 export interface MetaField<T> {
   value: T | null;
   source: MetaSource;
+  /** Substrate only: the name read from the folder/file (or typed) when `value` is its group's label. */
+  original?: string;
 }
 
 export interface ExperimentMeta {

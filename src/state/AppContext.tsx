@@ -5,7 +5,7 @@ import { dedupeByMode, duplicateNotice, duplicateReason, loadedDuplicateNotice, 
 import type { LoadedFile, SkippedEntry, SourceFile } from '../parser/loader';
 import { collectFromFileList, guessMode } from '../parser/loader';
 import { parseInBackground } from '../parser/workerClient';
-import { applyOverride, inferMetadata } from '../parser/pathMetadata';
+import { applyOverride, groupSubstrates, inferMetadata } from '../parser/pathMetadata';
 import { computeDerived, type Derived } from '../analysis/engine';
 import { defaultProject, newGraph } from './defaults';
 import { loadProjectZip, matchSources, migrateState, remapState, saveProjectZip, sourceKey } from '../storage/project';
@@ -139,10 +139,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const update = useCallback((fn: (p: ProjectState) => ProjectState) => setProject((p) => fn(p)), []);
 
-  const allFiles = useMemo(() => [...filesByMode.tack, ...filesByMode.lapShear, ...filesByMode.peel], [filesByMode]);
+  // Metadata of every file; substrate variants of one test are grouped (each file keeps its own name).
   const meta = useMemo(
-    () => new Map(allFiles.map((l) => [l.parsed.fileId, applyOverride(inferMetadata(l.parsed.path), project.overrides[l.parsed.fileId])])),
-    [allFiles, project.overrides],
+    () => groupSubstrates(EXPERIMENT_MODES.flatMap((mode) => filesByMode[mode].map((l) => ({
+      id: l.parsed.fileId, mode, meta: applyOverride(inferMetadata(l.parsed.path), project.overrides[l.parsed.fileId]),
+    })))),
+    [filesByMode, project.overrides],
   );
 
   // Probe-tack analysis: only probe-tack files; deselected files stay listed but take no part.

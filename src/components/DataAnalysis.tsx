@@ -453,7 +453,7 @@ function RunDetail({ r, onClose }: { r: CycleResult; onClose: () => void }) {
       <dl className="meta-grid">
         <dt>Charge ratio</dt><dd>{m.chargeRatio.value ?? '—'} <small>{m.chargeRatio.source}</small></dd>
         <dt>Concentration</dt><dd>{m.concentrationM.value} M <small className={m.concentrationM.source === 'default' ? 'warn' : ''}>{m.concentrationM.source}</small></dd>
-        <dt>Substrate</dt><dd>{m.substrate.value ?? '—'} <small>{m.substrate.source}</small></dd>
+        <dt>Substrate</dt><dd>{m.substrate.value ?? '—'}{m.substrate.original && m.substrate.original !== m.substrate.value ? <small> (group; this file: “{m.substrate.original}”)</small> : null} <small>{m.substrate.source}</small></dd>
         <dt>Holding time</dt><dd>{r.holdTimeS ?? '—'} s <small>{r.cycle.holdTimeS !== null ? 'from Wait block' : 'from file name'}</small></dd>
         <dt>Repeat</dt><dd>{m.repeat.value}</dd>
         <dt>Movement</dt><dd>{r.cycle.operation}, {r.cycle.amplitudeMm ?? '—'} mm at {r.cycle.velocityMmS ?? '—'} mm/s</dd>

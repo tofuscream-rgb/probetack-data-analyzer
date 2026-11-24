@@ -226,15 +226,6 @@ export function inferMetadata(path: string): ExperimentMeta {
   const hold = findHoldTime(base);
   if (hold === null) notes.push('No holding time found in the file name; the Wait duration recorded in the file is used per run.');
 
-  // One group per substrate, whatever extra words the name carries.
-  if (substrate.value !== null) {
-    const g = substrateGroup(substrate.value);
-    if (g !== substrate.value) {
-      notes.push(`Substrate "${substrate.value}" is grouped as "${g}". Correct it below if it is a different substrate.`);
-      substrate = field(g, substrate.source);
-    }
-  }
-
   return {
     chargeRatio,
     concentrationM,
@@ -245,6 +236,38 @@ export function inferMetadata(path: string): ExperimentMeta {
     baseName: base,
     notes,
   };
+}
+
+/**
+ * Put substrate name variants of one test into one group without renaming anything: each file keeps
+ * its own substrate name (`substrate.original`), and every file of a group gets the group's label —
+ * the name most of its files use (ties: the shortest, then alphabetical). "ss", "SS.txt", "ss v2",
+ * "ss_nov_13" and "SS-reused gel" form one group labelled "ss"; a folder "plastic PET" stays
+ * "plastic PET". All grouping, filtering, comparing and exporting uses the label.
+ */
+export function groupSubstrates(entries: { id: string; mode: string; meta: ExperimentMeta }[]): Map<string, ExperimentMeta> {
+  const keyOf = (e: { mode: string; meta: ExperimentMeta }) => `${e.mode}|${substrateGroup(e.meta.substrate.value!).toLowerCase()}`;
+  const counts = new Map<string, Map<string, number>>();
+  for (const e of entries) {
+    if (e.meta.substrate.value === null) continue;
+    const k = keyOf(e);
+    const m = counts.get(k) ?? new Map<string, number>();
+    const raw = e.meta.substrate.value.trim();
+    m.set(raw, (m.get(raw) ?? 0) + 1);
+    counts.set(k, m);
+  }
+  const label = new Map([...counts].map(([k, m]) => [k, [...m].sort((a, b) => b[1] - a[1] || a[0].length - b[0].length || a[0].localeCompare(b[0]))[0][0]]));
+  return new Map(entries.map((e) => {
+    const raw = e.meta.substrate.value;
+    if (raw === null) return [e.id, e.meta];
+    const l = label.get(keyOf(e))!;
+    const same = l === raw.trim();
+    return [e.id, {
+      ...e.meta,
+      substrate: { ...e.meta.substrate, value: l, original: raw },
+      notes: same ? e.meta.notes : [...e.meta.notes, `Substrate "${raw}" is in the "${l}" group (same substrate, other spelling or extra words); the file keeps its name. Correct it below if it is a different substrate.`],
+    }];
+  }));
 }
 
 /** Apply user corrections on top of inferred values. */

@@ -66,7 +66,7 @@ export function AdhesionRunDetail({ row, run, included, overridden, onInclude, o
       <dl className="meta-grid">
         <dt>Charge ratio</dt><dd>{m?.chargeRatio.value ?? '—'} <small>{m?.chargeRatio.source}</small></dd>
         <dt>Concentration</dt><dd>{m?.concentrationM.value ?? '—'} M <small className={m?.concentrationM.source === 'default' ? 'warn' : ''}>{m?.concentrationM.source}</small></dd>
-        <dt>Substrate</dt><dd>{m?.substrate.value ?? '—'} <small>{m?.substrate.source}</small></dd>
+        <dt>Substrate</dt><dd>{m?.substrate.value ?? '—'}{m?.substrate.original && m.substrate.original !== m.substrate.value ? <small> (group; this file: “{m.substrate.original}”)</small> : null} <small>{m?.substrate.source}</small></dd>
         {m?.gel.value && <><dt>Gel</dt><dd>{m.gel.value} <small>{m.gel.source}</small></dd></>}
         <dt>Dwell time</dt><dd>{row.cond.hold === '—' ? '—' : `${row.cond.hold} s`} <small>{c.holdTimeS !== null ? 'from Wait block' : row.cond.hold !== '—' ? 'from file name' : ''}</small></dd>
         <dt>Repeat</dt><dd>{m?.repeat.value ?? '—'}</dd>

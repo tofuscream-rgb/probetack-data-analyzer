@@ -96,7 +96,7 @@ export function PeelWorkspace() {
           </button>
         ))}
       </div>
-      <div className={`main-body tab-${ps.tab === 'graph' ? 'graph' : ps.tab === 'files' ? 'files' : 'summary'}`} role="tabpanel">
+      <div className={`main-body tab-${ps.tab === 'graph' ? 'graph' : ps.tab === 'files' ? 'files' : ps.tab === 'analysis' ? 'analysis' : 'summary'}`} role="tabpanel">
         {ps.tab === 'graph' && <PeelGraph />}
         {ps.tab === 'analysis' && <PeelAnalysis />}
         {ps.tab === 'results' && <PeelResults />}

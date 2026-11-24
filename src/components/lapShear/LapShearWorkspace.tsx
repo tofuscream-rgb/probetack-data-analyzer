@@ -93,7 +93,7 @@ export function LapShearWorkspace() {
           </button>
         ))}
       </div>
-      <div className={`main-body tab-${ls.tab === 'graph' ? 'graph' : ls.tab === 'files' ? 'files' : 'summary'}`} role="tabpanel">
+      <div className={`main-body tab-${ls.tab === 'graph' ? 'graph' : ls.tab === 'files' ? 'files' : ls.tab === 'analysis' ? 'analysis' : 'summary'}`} role="tabpanel">
         {ls.tab === 'graph' && <LapShearGraph />}
         {ls.tab === 'analysis' && <LapShearAnalysis />}
         {ls.tab === 'results' && <LapShearResults />}

@@ -127,6 +127,7 @@ function ImportSummary() {
   const unusable = files.filter((l) => l.parsed.status === 'error' || l.cycles.length === 0).length;
   const warnings = files.filter((l) => l.parsed.status === 'warning').length;
   const openFiles = () => update((p) => project.mode === 'tack' ? { ...p, mainTab: 'files' } : project.mode === 'lapShear' ? { ...p, lapShear: { ...p.lapShear, tab: 'files' } } : { ...p, peel: { ...p.peel, tab: 'files' } });
+  const nDup = skipped.filter((s) => s.duplicate).length;
   const problems = unusable + skipped.length + warnings;
   return (
     <div className="import-summary" role="status">
@@ -134,7 +135,7 @@ function ImportSummary() {
       <span className="note">{files.length} imported{off.size ? `, ${files.length - off.size} enabled` : ', all enabled'}</span>
       {problems > 0 && (
         <span className="note warn">
-          {[unusable && `${unusable} without usable data`, warnings && `${warnings} with warnings`, skipped.length && `${skipped.length} non-TXT skipped`].filter(Boolean).join(' · ')}{' '}
+          {[unusable && `${unusable} without usable data`, warnings && `${warnings} with warnings`, nDup && `${nDup} duplicate${nDup === 1 ? '' : 's'} not added`, skipped.length - nDup && `${skipped.length - nDup} non-TXT skipped`].filter(Boolean).join(' · ')}{' '}
           <button className="link small" onClick={openFiles}>Details</button>
         </span>
       )}

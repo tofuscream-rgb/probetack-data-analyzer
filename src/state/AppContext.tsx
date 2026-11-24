@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ExperimentMeta, ExperimentMode, GraphConfig, ProjectState, SourceFileRecord } from '../types';
 import { EXPERIMENT_MODES } from '../types';
+import { duplicateNotice, duplicateReason, splitDuplicates } from './duplicates';
 import type { LoadedFile, SkippedEntry, SourceFile } from '../parser/loader';
 import { collectFromFileList, guessMode } from '../parser/loader';
 import { parseInBackground } from '../parser/workerClient';
@@ -222,20 +223,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
       setBusy(`Reading ${sources.length} file(s)…`);
-      const out: LoadedFile[] = [];
+      const parsed: LoadedFile[] = [];
       for (let i = 0; i < sources.length; i++) {
         setBusy(`Reading ${i + 1} of ${sources.length}: ${sources[i].path}`);
-        out.push(await parseInBackground(sources[i]));
+        parsed.push(await parseInBackground(sources[i]));
       }
-      const map = new Map(filesRef.current[mode].map((l) => [l.parsed.fileId, l]));
-      let dup = 0;
-      for (const l of out) {
-        if (map.has(l.parsed.fileId)) dup++;
-        map.set(l.parsed.fileId, l);
+      // Identical data (same SHA-256, whatever the name) already imported in any test, or repeated in
+      // this upload, is not added again, so no run is counted twice.
+      const known = EXPERIMENT_MODES.flatMap((m) => filesRef.current[m].map((l) => ({ sha256: l.parsed.sha256, path: l.parsed.path, mode: m })));
+      const { fresh: out, duplicates } = splitDuplicates(known, parsed, mode);
+      const dupEntries: SkippedEntry[] = duplicates.map((d) => ({ path: d.file.parsed.path, reason: duplicateReason(d, mode, MODE_LABEL), duplicate: true }));
+      setSkippedByMode((s) => ({ ...s, [mode]: [...s[mode], ...skippedEntries, ...dupEntries] }));
+      if (duplicates.length) notify('warning', duplicateNotice(parsed.length, out.length, duplicates, mode, MODE_LABEL));
+      if (!out.length) {
+        setBusy(null);
+        return;
       }
-      if (dup) notify('info', `${dup} file(s) were already imported and were refreshed.`);
-      storeFiles({ ...filesRef.current, [mode]: [...map.values()].sort(byPath) });
-      setSkippedByMode((s) => ({ ...s, [mode]: [...s[mode], ...skippedEntries] }));
+      storeFiles({ ...filesRef.current, [mode]: [...filesRef.current[mode], ...out].sort(byPath) });
 
       // Reconnect a settings-only project if one is waiting for its files.
       const waiting = pendingOf(pendingAll, mode);
@@ -255,7 +259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const nCycles = out.reduce((s, l) => s + l.cycles.length, 0);
       const bad = out.filter((l) => l.parsed.status === 'error').length;
       const warn = out.filter((l) => l.parsed.status === 'warning').length;
-      notify(
+      if (!duplicates.length) notify(
         bad || warn ? 'warning' : 'success',
         `Imported ${out.length} file(s) with ${nCycles} run(s) for ${MODE_LABEL[mode]}.` +
           (bad ? ` ${bad} file(s) had no usable data.` : '') +

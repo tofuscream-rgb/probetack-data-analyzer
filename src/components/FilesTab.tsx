@@ -7,13 +7,15 @@ export function ImportStatus() {
   const ok = files.filter((f) => f.parsed.status === 'ok').length;
   const warn = files.filter((f) => f.parsed.status === 'warning').length;
   const err = files.filter((f) => f.parsed.status === 'error').length;
+  const nDup = skipped.filter((s) => s.duplicate).length;
   if (!files.length && !skipped.length && !pending.length) return <p className="note">No files imported yet.</p>;
   return (
     <div className="import-status">
       <p className="summary-line">
         <span className="pill ok">{ok} imported</span> <span className="pill warning">{warn} with warnings</span>{' '}
         <span className="pill error">{err} unreadable or empty</span> <span className="pill">{files.reduce((s, f) => s + f.cycles.length, 0)} runs</span>
-        {skipped.length > 0 && <span className="pill">{skipped.length} non-TXT files skipped</span>}
+        {nDup > 0 && <span className="pill warning">{nDup} duplicate{nDup === 1 ? '' : 's'} not added</span>}
+        {skipped.length - nDup > 0 && <span className="pill">{skipped.length - nDup} non-TXT files skipped</span>}
       </p>
       <table className="grid">
         <thead>
@@ -38,8 +40,8 @@ export function ImportStatus() {
             </tr>
           ))}
           {skipped.map((s, i) => (
-            <tr key={`s${i}`} className="muted">
-              <td>Skipped</td>
+            <tr key={`s${i}`} className={s.duplicate ? 'warning' : 'muted'}>
+              <td>{s.duplicate ? <span className="status warning">Duplicate</span> : 'Skipped'}</td>
               <td>{s.path}</td>
               <td colSpan={4}>{s.reason}</td>
             </tr>

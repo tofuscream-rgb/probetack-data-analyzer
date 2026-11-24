@@ -21,6 +21,8 @@ export interface LoadedFile {
 export interface SkippedEntry {
   path: string;
   reason: string;
+  /** Identical content to a file already imported (not added). */
+  duplicate?: boolean;
 }
 
 const IGNORED = /(^|\/)(__MACOSX|\.DS_Store|Thumbs\.db|desktop\.ini)(\/|$)|(^|\/)\._/;

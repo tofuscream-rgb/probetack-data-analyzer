@@ -11,6 +11,7 @@ import type { FailureMode, PeelMorphology, PeelRunMeta } from '../../types';
 import { CURVE_COLORS } from '../../plotting/colors';
 import { fmt } from '../common';
 import { NumberField } from '../lapShear/NumberField';
+import { TareBadge } from './TareCheck';
 import { BulkAssignBar, ObservationGlossary, useRunSelection, type SelectableRow } from '../ObservationTools';
 
 function Row({ r, color, checked, onCheck, focus, onFocus, included, onInclude }: { r: PeelRun; color: string; checked: boolean; onCheck: (on: boolean) => void; focus: boolean; onFocus: () => void; included: boolean; onInclude: (on: boolean) => void }) {
@@ -30,6 +31,10 @@ function Row({ r, color, checked, onCheck, focus, onFocus, included, onInclude }
       <td className="num">{fmt(x.initiationPeak?.dispMm, 2)}</td>
       <td className="num">{fmt(x.initiation.gPreJm2, 2)}</td>
       <td className="num">{fmt(x.initiation.ratio, 3)}</td>
+      <td className="num" title={x.tare?.reason || undefined}>{fmt(x.tare?.residualGf, 2)}</td>
+      <td className="num">{fmt(x.tare?.residualPctPlateau, 1)}</td>
+      <td>{x.tare ? (x.tare.status === 'flagged' ? 'possible offset' : x.tare.status === 'ok' ? 'ok' : 'can’t check') : 'off'} <TareBadge t={x.tare} applied={x.tare?.applied === true} /></td>
+      <td>{x.tare?.applied ? 'yes' : 'no'}</td>
       <td className="num">{fmt(x.peelRateMmS, 3)}</td>
       <td>{fmt(x.window.fromMm, 1)}–{fmt(x.window.toMm, 1)} ({x.window.n})</td>
       <td>
@@ -82,10 +87,12 @@ export function PeelResults() {
   const base = (project.name.replace(/[^\w.-]+/g, '_') || 'peel') + '_90_peel';
   const label = (list: { value: string; label: string }[], v: string | undefined) => list.find((k) => k.value === v)?.label ?? v ?? '';
   const runCsv = () => [
-    ['Repeat (file)', 'Path', 'Condition', 'Run', 'In average', 'Gel length (mm)', 'Gel width (mm)', 'Gel thickness (mm)', 'Peel angle (°)', ...PEEL_PROPERTIES.map((p) => `${p.label} (${p.unit})`), 'Window from (mm)', 'Window to (mm)', 'Detachment (mm)', 'Detachment source', 'Failure mode', 'Debonding morphology', 'Observation', 'S (mm)', 'a_f (mm)', 'Notes'],
+    ['Repeat (file)', 'Path', 'Condition', 'Run', 'In average', 'Gel length (mm)', 'Gel width (mm)', 'Gel thickness (mm)', 'Peel angle (°)', ...PEEL_PROPERTIES.map((p) => `${p.label} (${p.unit})`), 'Window from (mm)', 'Window to (mm)', 'Detachment (mm)', 'Detachment source', 'Failure mode', 'Debonding morphology', 'Observation', 'S (mm)', 'a_f (mm)', 'Residual after detachment (gf)', 'Residual (J/m²)', 'Residual (% of plateau)', 'Residual drift (gf)', 'Residual window from (mm)', 'Residual window to (mm)', 'Force before Zero load (gf)', 'Tare check', 'Tare corrected', 'Notes'],
     ...ok.map((r) => [r.file.name, r.file.path, conditionTitle(analysis.get(r.id)!), r.cycle.cycleNumber, included.has(r.id) ? 'yes' : 'no', r.meta.lengthMm, r.meta.widthMm, r.meta.thicknessMm, r.meta.angleDeg,
       ...PEEL_PROPERTIES.map((p) => p.get(r.result)), r.result.window.fromMm, r.result.window.toMm, r.result.detach.dispMm, r.result.detach.source,
-      label(FAILURE_MODES, r.meta.failureMode), label(PEEL_MORPHOLOGIES, r.meta.peelMorphology), r.meta.observation ?? '', r.meta.fibrilZoneMm ?? null, r.meta.maxFibrilMm ?? null, r.result.warnings.join(' · ')]),
+      label(FAILURE_MODES, r.meta.failureMode), label(PEEL_MORPHOLOGIES, r.meta.peelMorphology), r.meta.observation ?? '', r.meta.fibrilZoneMm ?? null, r.meta.maxFibrilMm ?? null,
+      r.result.tare?.residualGf ?? null, r.result.tare?.residualJm2 ?? null, r.result.tare?.residualPctPlateau ?? null, r.result.tare?.driftGf ?? null, r.result.tare?.windowFromMm ?? null, r.result.tare?.windowToMm ?? null, r.result.tare?.preTareGf ?? null,
+      r.result.tare ? (r.result.tare.status === 'flagged' ? 'possible tare offset' : r.result.tare.status === 'ok' ? 'ok' : r.result.tare.reason) : 'check off', r.result.tare?.applied ? 'yes' : 'no', r.result.warnings.join(' · ')]),
   ];
 
   return (
@@ -102,7 +109,7 @@ export function PeelResults() {
             <thead>
               <tr>
                 <th title="Select for bulk assignment">Sel.</th><th title="Same choice as In average in Data analysis">In average</th><th className="sticky-col">Run</th><th>Width (mm)</th><th>F̄<sub>ss</sub> (N)</th><th>G<sub>peel</sub> (J/m²)</th><th>CV (%)</th>
-                <th title="Largest force for 0 ≤ travel < start of the steady-state window">F<sub>pre,max</sub> (N)</th><th>Travel at F<sub>pre,max</sub> (mm)</th><th title="Apparent initiation energy F_pre,max / w × (1 − cos θ); not a steady-state fracture energy">G<sub>pre</sub> (J/m²)</th><th title="F_pre,max / F̄ss">F<sub>pre,max</sub>/F̄<sub>ss</sub> (–)</th><th>Rate (mm/s)</th><th>Window mm (n)</th><th>Failure mode</th><th>Debonding morphology</th><th>Observation</th><th>S (mm)</th><th>a<sub>f</sub> (mm)</th>
+                <th title="Largest force for 0 ≤ travel < start of the steady-state window">F<sub>pre,max</sub> (N)</th><th>Travel at F<sub>pre,max</sub> (mm)</th><th title="Apparent initiation energy F_pre,max / w × (1 − cos θ); not a steady-state fracture energy">G<sub>pre</sub> (J/m²)</th><th title="F_pre,max / F̄ss">F<sub>pre,max</sub>/F̄<sub>ss</sub> (–)</th><th title="Mean tensile force after detachment (uncorrected trace)">Residual after detachment (gf)</th><th>Residual (% of plateau)</th><th>Tare check</th><th title="Residual subtracted from the whole trace before every result of this run">Tare corrected</th><th>Rate (mm/s)</th><th>Window mm (n)</th><th>Failure mode</th><th>Debonding morphology</th><th>Observation</th><th>S (mm)</th><th>a<sub>f</sub> (mm)</th>
               </tr>
             </thead>
             <tbody>
@@ -120,7 +127,7 @@ export function PeelResults() {
                     onInclude={(on) => setIncluded(r.id, on)}
                   />
                 ) : (
-                  <tr key={r.id}><td /><td /><td>{r.label}</td><td colSpan={15}>{r.result.error}</td></tr>
+                  <tr key={r.id}><td /><td /><td>{r.label}</td><td colSpan={19}>{r.result.error}</td></tr>
                 ),
               )}
             </tbody>

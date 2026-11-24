@@ -219,6 +219,19 @@ Choose **Experiment type → 90° Peel** and open your peel files. A Mach-1 file
 
 Force, displacement, baseline, loading direction, data-quality handling and work integration are the same as in Lap Shear mode.
 
+
+### Post-detachment tare check (90° peel)
+
+The clamp is tightened before the test and presses on the single-axis load cell. *Zero load* tares this force out of the reading, but the load is still physically there: once peeling starts it is replaced by the strip tension, and after the strip detaches it is released, so the reading settles at about minus the tared value instead of 0 (for example, a Wait block read Fz = +22.9 gf before Zero load and the force settled at +22.4 gf tensile after detachment). If this offset is constant during the peel, the whole curve is shifted and G_peel is over- or underestimated by the same amount.
+
+For every run the residual is the mean tensile force from the detachment point + 1.5 mm to the end of stage travel (Settings → *Tare check after detachment*; defaults: flag above 2 gf, window at least 2 mm, drift between its two halves at most 2 gf). When no detachment is detected — an offset can keep the force above the detection threshold — the start of the final settled stretch is used, and a level above half the peel force is not treated as an offset. Runs are marked *possible tare offset* (amber), *can't check* (grey: the stage stopped at detachment, or the force is still drifting) or *tare corrected*. When a stationary block such as a Wait precedes Zero load, the residual it predicts (minus its mean Fz, tensile sign) is shown next to the measured one.
+
+Nothing is corrected automatically. Use *Correct for tare offset* in a run's details, or *Correct all flagged* / *Undo all corrections* in the banner. A correction subtracts the residual from the whole tensile-force trace before every calculation (plateau, G_peel, CV, work, exports): residual = mean force in the window; G_corrected = G_raw − residual × 0.00980665 / width (× (1 − cos θ)). The residual (gf, J/m², % of plateau) and a *Tare corrected* yes/no column are in the Peel metrics table, the CSV and every Excel sheet. Corrections are saved per run (project schema 6); older projects open with every correction off.
+
+### Duplicate runs when adding files
+
+Every run (data block) has a fingerprint: the SHA-256 of its numeric rows and its recording date and time; fingerprints are saved with each file in the project and recomputed for older projects. When files, folders or ZIPs are added to a loaded project (and within one upload), a file identical to one already loaded is refused (“Already in project as …”), a file whose runs are all loaded already is refused (“All runs already loaded from …”), and of a file with some loaded runs only the new runs are imported (“Imported runs …, skipped runs … (already loaded from …)”). One summary lists imported, partly imported and refused files. Loaded runs are never replaced or removed, and runs left out stay out after reopening the project.
+
 ## Custom area under the curve
 
 An additional tool in Probe Tack (Tack metrics plot), Lap Shear and 90° Peel (Graph tab); the automatic results are not changed. Click **Set boundaries** (or type **From δ₁ / To δ₂** in mm), then drag the two dashed vertical lines on the graph; the area under each curve between them is shaded and the selected work is recalculated live:

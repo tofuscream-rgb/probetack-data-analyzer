@@ -18,6 +18,13 @@ export interface DetailRun {
   endLabel: string;
   /** Test-specific facts (dimensions, window, …) shown under Metadata. */
   facts: [string, ReactNode][];
+  /** 90° Peel: the tare-check section shown under the curve. */
+  extra?: ReactNode;
+  /**
+   * 90° Peel tare check on the plot: residual window (shaded), residual level of the uncorrected trace
+   * (dashed), and the uncorrected trace (dotted) when the correction is on.
+   */
+  residual?: { fromMm: number; toMm: number; levelGf: number; rawCurve?: LapShearResult };
 }
 
 /**
@@ -57,6 +64,7 @@ export function AdhesionRunDetail({ row, run, included, overridden, onInclude, o
       </div>
       <p className="big-number">{fmt(row.primary, primary.digits)} <span>N</span> <small>{primary.label}</small> <small>{fmt(row.primary / GF_TO_N, 2)} gf</small></p>
       <DetailCurve run={run} />
+      {run.extra}
 
       <h4>Notes</h4>
       {notes.length === 0 ? <p className="note ok">No issues found for this run.</p> : <ul className="flags">{notes.map((n) => <li key={n}><span className="qc-dot yellow" /> {n}</li>)}</ul>}
@@ -103,10 +111,24 @@ function DetailCurve({ run }: { run: DetailRun }) {
     const y: number[] = [];
     const step = Math.max(1, Math.floor(s.dispMm.length / 3000));
     for (let i = 0; i < s.dispMm.length; i += step) { x.push(s.dispMm[i]); y.push(s.loadGf[i] * GF_TO_N); }
-    const traces: Data[] = [{ type: 'scatter', mode: 'lines', x, y, line: { color: '#1F4E9C', width: 1.6 }, hovertemplate: 'δ = %{x:.3f} mm<br>F = %{y:.4f} N<extra></extra>' } as unknown as Data];
+    const traces: Data[] = [];
+    const rs = run.residual;
+    if (rs?.rawCurve) {
+      const r0 = rs.rawCurve.series;
+      const rx: number[] = [];
+      const ry: number[] = [];
+      for (let i = 0; i < r0.dispMm.length; i += step) { rx.push(r0.dispMm[i]); ry.push(r0.loadGf[i] * GF_TO_N); }
+      traces.push({ type: 'scatter', mode: 'lines', x: rx, y: ry, line: { color: '#9AA6B5', width: 1.2, dash: 'dot' }, hovertemplate: 'uncorrected<br>δ = %{x:.3f} mm<br>F = %{y:.4f} N<extra></extra>' } as unknown as Data);
+    }
+    traces.push({ type: 'scatter', mode: 'lines', x, y, line: { color: '#1F4E9C', width: 1.6 }, hovertemplate: `${rs?.rawCurve ? 'tare corrected<br>' : ''}δ = %{x:.3f} mm<br>F = %{y:.4f} N<extra></extra>` } as unknown as Data);
     const pk = run.curve.peak;
     if (pk) traces.push({ type: 'scatter', mode: 'markers', x: [pk.dispMm], y: [pk.forceN], marker: { symbol: 'triangle-up', size: 11, color: '#1F4E9C', line: { color: '#18263A', width: 1 } }, hovertemplate: 'Peak %{y:.4f} N<extra></extra>' } as unknown as Data);
-    const shapes = run.endMm !== null ? [{ type: 'line', xref: 'x', yref: 'paper', x0: run.endMm, x1: run.endMm, y0: 0, y1: 1, line: { color: '#C62828', width: 1.2, dash: 'dash' } }] : [];
+    const shapes: Record<string, unknown>[] = run.endMm !== null ? [{ type: 'line', xref: 'x', yref: 'paper', x0: run.endMm, x1: run.endMm, y0: 0, y1: 1, line: { color: '#C62828', width: 1.2, dash: 'dash' } }] : [];
+    if (rs && Number.isFinite(rs.fromMm) && Number.isFinite(rs.toMm)) {
+      // Residual window (shaded) and the residual level of the uncorrected trace (dashed).
+      shapes.push({ type: 'rect', xref: 'x', yref: 'paper', x0: rs.fromMm, x1: rs.toMm, y0: 0, y1: 1, fillcolor: 'rgba(224,112,0,0.12)', line: { width: 0 }, layer: 'below' });
+      if (Number.isFinite(rs.levelGf)) shapes.push({ type: 'line', xref: 'x', yref: 'y', x0: rs.fromMm, x1: rs.toMm, y0: rs.levelGf * GF_TO_N, y1: rs.levelGf * GF_TO_N, line: { color: '#E07000', width: 1.5, dash: 'dash' } });
+    }
     const lay: Partial<Layout> = {
       margin: { l: 56, r: 8, t: 8, b: 40 },
       font: { family: 'IBM Plex Sans, system-ui, sans-serif', size: 11, color: '#18263A' },

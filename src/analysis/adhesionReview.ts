@@ -23,6 +23,11 @@ export interface AnalysisRow {
   preTravelMm?: number;
   gPreJm2?: number;
   preRatio?: number;
+  /** 90° Peel tare check (uncorrected trace) and whether this run is tare corrected. */
+  tareResidualGf?: number;
+  tareResidualJm2?: number;
+  tareResidualPct?: number;
+  tareCorrected?: boolean;
 }
 
 export const groupKey = ({ cond: c, gel }: AnalysisRow) => JSON.stringify([
@@ -91,7 +96,11 @@ export function peelAnalysisRow(r: PeelRun, gel: string | null): AnalysisRow {
     preTravelMm: r.result.initiationPeak?.dispMm ?? NaN,
     gPreJm2: r.result.initiation.gPreJm2,
     preRatio: r.result.initiation.ratio,
+    tareResidualGf: r.result.tare?.residualGf ?? NaN,
+    tareResidualJm2: r.result.tare?.residualJm2 ?? NaN,
+    tareResidualPct: r.result.tare?.residualPctPlateau ?? NaN,
+    tareCorrected: r.result.tare?.applied === true,
     incomplete: r.result.ok && r.result.work.toDetachMJ === null,
-    note: [r.result.error, ...r.result.warnings].filter(Boolean).join(' · '),
+    note: [r.result.error, ...r.result.warnings, r.result.tare?.status === 'flagged' && !r.result.tare.applied ? `Possible tare offset: ${r.result.tare.residualGf.toFixed(2)} gf after detachment` : ''].filter(Boolean).join(' · '),
   };
 }

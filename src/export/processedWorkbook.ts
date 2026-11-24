@@ -29,6 +29,9 @@ function columnsFor(mode: ExperimentMode): { label: string; value: (row: Process
     { label: 'Travel at F_pre,max (mm)', value: (r) => r.preTravelMm ?? NaN },
     { label: 'Peak energy G_pre (J/m²)', value: (r) => r.gPreJm2 ?? NaN },
     { label: 'Peak/steady ratio F_pre,max/F̄ss (–)', value: (r) => r.preRatio ?? NaN },
+    { label: 'Post-detachment residual (gf)', value: (r) => r.tareResidualGf ?? NaN },
+    { label: 'Post-detachment residual (J/m²)', value: (r) => r.tareResidualJm2 ?? NaN },
+    { label: 'Post-detachment residual (% of plateau)', value: (r) => r.tareResidualPct ?? NaN },
   ];
   return [
     ...columns,
@@ -82,25 +85,35 @@ export function processedSheets(mode: ExperimentMode, rows: ProcessedRow[], sele
   };
   const partialWork = (runs: ProcessedRow[]) => runs.some((r) => r.incomplete && Number.isFinite(r.workMJ)) ? 'Includes recorded-end work' : null;
   const isWork = (c: { label: string }) => c.label.startsWith('Measured work');
+  // 90° Peel: whether values come from tare-corrected traces, on every row, so corrected and raw values are never mixed silently.
+  const tare = mode === 'peel';
+  const tareCell = (runs: ProcessedRow[]): CellValue[] => {
+    if (!tare) return [];
+    const k = runs.filter((r) => r.tareCorrected).length;
+    return [k === 0 ? 'no' : k === runs.length ? 'yes' : `mixed (${k} of ${runs.length})`];
+  };
+  const tareHead = tare ? ['Tare corrected'] : [];
+  const tareW = tare ? [10] : [];
 
   // Every sheet lists one metric at a time, so its values for all conditions sit together.
-  if (selected.includes('run')) add('run', ['Metric', ...condHeader, 'Repeat / source file', 'Run', 'Value', 'Work endpoint'],
+  if (selected.includes('run')) add('run', ['Metric', ...condHeader, 'Repeat / source file', 'Run', 'Value', 'Work endpoint', ...tareHead],
     columns.flatMap((c) => conditions.flatMap((files) => files.flatMap((runs) => runs.map((r) => [
       c.label, ...condCells(r), r.path, r.number, numeric(c.value(r)),
       isWork(c) && Number.isFinite(r.workMJ) ? r.incomplete ? 'Recorded end' : 'Failure / detachment' : null,
-    ])))), [26, ...condWidths, 28, 6, 12, 14]);
+      ...tareCell([r]),
+    ])))), [26, ...condWidths, 28, 6, 12, 14, ...tareW]);
 
-  if (selected.includes('repeat')) add('repeat', ['Metric', ...condHeader, 'Repeat / source file', 'Mean', 'SD', 'Work note'],
+  if (selected.includes('repeat')) add('repeat', ['Metric', ...condHeader, 'Repeat / source file', 'Mean', 'SD', 'Work note', ...tareHead],
     columns.flatMap((c) => conditions.flatMap((files) => files.map((runs) => [
-      c.label, ...condCells(runs[0]), runs[0].path, ...stats(runs.map(c.value)), isWork(c) ? partialWork(runs) : null,
-    ]))), [26, ...condWidths, 28, 12, 12, 16]);
+      c.label, ...condCells(runs[0]), runs[0].path, ...stats(runs.map(c.value)), isWork(c) ? partialWork(runs) : null, ...tareCell(runs),
+    ]))), [26, ...condWidths, 28, 12, 12, 16, ...tareW]);
 
-  if (selected.includes('condition')) add('condition', ['Metric', ...condHeader, 'Mean', 'SD', 'Work note'],
+  if (selected.includes('condition')) add('condition', ['Metric', ...condHeader, 'Mean', 'SD', 'Work note', ...tareHead],
     columns.flatMap((c) => conditions.map((files) => [
-      c.label, ...condCells(files[0][0]), ...stats(files.map((runs) => mean(runs.map(c.value)))), isWork(c) ? partialWork(files.flat()) : null,
-    ])), [26, ...condWidths, 12, 12, 16]);
+      c.label, ...condCells(files[0][0]), ...stats(files.map((runs) => mean(runs.map(c.value)))), isWork(c) ? partialWork(files.flat()) : null, ...tareCell(files.flat()),
+    ])), [26, ...condWidths, 12, 12, 16, ...tareW]);
 
-  if (selected.includes('gel')) sheets.push(compareSheet(columns, conditions, hasGel, partialWork));
+  if (selected.includes('gel')) sheets.push(compareSheet(columns, conditions, hasGel, partialWork, tareCell, tareHead));
   return sheets;
 }
 
@@ -115,7 +128,7 @@ type Column = { label: string; value: (row: ProcessedRow) => number };
  *      side by side, across the chart all gels. Error bars are the sample SD of repeat means.
  *   3. When dwell times vary: per metric, each gel on each substrate vs dwell time (lines).
  */
-function compareSheet(columns: Column[], conditions: ProcessedRow[][][], hasGel: boolean, partialWork: (runs: ProcessedRow[]) => string | null): SheetSpec {
+function compareSheet(columns: Column[], conditions: ProcessedRow[][][], hasGel: boolean, partialWork: (runs: ProcessedRow[]) => string | null, tareCell: (runs: ProcessedRow[]) => CellValue[] = () => [], tareHead: string[] = []): SheetSpec {
   const gelOf = (r: ProcessedRow) => [r.cond.chargeRatio === '—' ? 'CR unknown' : `CR ${r.cond.chargeRatio}`, r.cond.concentration === '—' ? '' : `${r.cond.concentration} M${r.cond.concentrationDefault ? ' (assumed)' : ''}`, hasGel ? r.gel?.trim() || '' : ''].filter(Boolean).join(' · ');
   const subOf = (r: ProcessedRow) => (r.cond.substrate === '—' ? 'substrate unknown' : r.cond.substrate.trim());
   const dwellVaries = new Set(conditions.map((f) => f[0][0].cond.hold).filter((h) => h !== '—')).size > 1;
@@ -124,7 +137,7 @@ function compareSheet(columns: Column[], conditions: ProcessedRow[][][], hasGel:
     const means = files.map((runs) => mean(runs.map(c.value)));
     return [numeric(mean(means)), numeric(sampleSD(means))] as const;
   };
-  const header = ['Metric', 'Gel', 'Charge ratio', 'Concentration (M)', 'Substrate', 'Dwell (s)', 'Mean', 'SD', 'Work note'];
+  const header = ['Metric', 'Gel', 'Charge ratio', 'Concentration (M)', 'Substrate', 'Dwell (s)', 'Mean', 'SD', 'Work note', ...tareHead];
   const out: CellValue[][] = [header];
   const charts: ChartSpec[] = [];
   const conds = conditions.map((files) => ({ r: files[0][0], files })); // already in condition order
@@ -140,7 +153,7 @@ function compareSheet(columns: Column[], conditions: ProcessedRow[][][], hasGel:
       const [m, sd] = stat(c, files);
       const dwell = numberOf(r.cond.hold);
       out.push([c.label, gelOf(r), numberOf(r.cond.chargeRatio), r.cond.concentration === '—' ? 'unknown' : r.cond.concentrationDefault ? `${r.cond.concentration} (assumed)` : numberOf(r.cond.concentration),
-        subOf(r), dwell, m, sd, c.label.startsWith('Measured work') ? partialWork(files.flat()) : null]);
+        subOf(r), dwell, m, sd, c.label.startsWith('Measured work') ? partialWork(files.flat()) : null, ...tareCell(files.flat())]);
       if (!dwellVaries || dwell === null || m === null) { last = ''; continue; }
       const key = `${gelOf(r)} · ${subOf(r)}`;
       if (key !== last) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { duplicateNotice, duplicateReason, splitDuplicates } from '../src/state/duplicates';
+import { duplicateReason, splitDuplicates } from '../src/state/duplicates';
 import { MODE_LABEL } from '../src/state/AppContext';
 
 const f = (path: string, sha256: string) => ({ parsed: { path, sha256 } });
@@ -25,13 +25,6 @@ describe('duplicate files on import', () => {
     expect(r.duplicates).toHaveLength(0);
   });
 
-  it('messages: one duplicate, all duplicates, and a folder with new and duplicate files', () => {
-    const d = (p: string, of: string) => ({ file: f(p, 'x'), of: { path: of, mode: 'peel' as const, sameUpload: false } });
-    expect(duplicateNotice(1, 0, [d('a/glass.txt', 'b/glass.txt')], 'peel', MODE_LABEL)).toBe('This data has already been imported: glass.txt = b/glass.txt. Nothing new was added.');
-    expect(duplicateNotice(2, 0, [d('a/1.txt', 'b/1.txt'), d('a/2.txt', 'b/2.txt')], 'peel', MODE_LABEL)).toMatch(/^This data has already been imported: all 2 files are identical/);
-    expect(duplicateNotice(5, 3, [d('a/1.txt', 'b/1.txt'), d('a/2.txt', 'b/2.txt')], 'peel', MODE_LABEL))
-      .toBe('Only 3 of 5 files were imported. The remaining 2 are duplicates of data already here (identical content) and were skipped: 1.txt = b/1.txt; 2.txt = b/2.txt.');
-  });
 });
 
 describe('duplicates inside a project or restored session', () => {

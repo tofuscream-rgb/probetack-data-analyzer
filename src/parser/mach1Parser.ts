@@ -365,6 +365,24 @@ export function extractCycles(file: ParsedFile): Cycle[] {
       }
     }
     if (!hold && !isScriptBlock(block.type)) issues.push({ severity: 'info', message: 'No Wait (holding) block precedes this movement.' });
+    // Force that the <Zero Load> tared out: the mean Fz of the block right before it, when that block is
+    // stationary (stage still, e.g. a Wait). A moving block (the previous run) does not count.
+    let preTareGf: number | null = null;
+    if (zeroBlock && prev?.data && prev.data.rowCount >= 3) {
+      const izp = findColumn(prev.data.columns, /position\s*\(z\)/i);
+      const ifp = findColumn(prev.data.columns, /^fz\b/i);
+      if (izp >= 0 && ifp >= 0) {
+        const zs = prev.data.values[izp];
+        let lo = Infinity, hi = -Infinity;
+        for (const z of zs) if (Number.isFinite(z)) { lo = Math.min(lo, z); hi = Math.max(hi, z); }
+        if (hi - lo < 0.05) {
+          const unit = prev.data.columns[ifp].split(',')[1]?.trim().toLowerCase() ?? 'gf';
+          const v = Array.from(prev.data.values[ifp]).filter(Number.isFinite);
+          const raw = v.reduce((a, x) => a + x, 0) / v.length;
+          if (v.length) preTareGf = unit === 'n' ? raw / GF_TO_N : unit === 'kgf' ? raw * 1000 : unit === 'mn' ? raw / 1000 / GF_TO_N : raw;
+        }
+      }
+    }
 
     const cycleId = `${file.fileId}#c${moveCount}`;
     const empty = new Float64Array(0);
@@ -429,6 +447,7 @@ export function extractCycles(file: ParsedFile): Cycle[] {
       moveBlockIndex: block.index,
       holdBlockIndex: hold ? hold.index : null,
       zeroedGf,
+      preTareGf,
       operation: block.type,
       holdTimeS: hold ? parseDuration(hold.params['Wait'] ?? Object.values(hold.params)[0]) : null,
       amplitudeMm: parseNumberParam(block.params, /amplitude/i) ?? scriptCommand(block.params['Script'], 'PR'),

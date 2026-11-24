@@ -14,7 +14,16 @@ export interface PickableRun {
   peakGf: number | null;
   /** Left out of the average in Data analysis. */
   leftOut?: boolean;
+  /** 90° Peel tare check: possible offset, cannot check, or corrected. */
+  tare?: 'flagged' | 'cannotCheck' | 'corrected' | null;
 }
+
+const TARE_BADGE = {
+  flagged: { cls: 'flagged', text: 'tare offset?', title: 'Possible tare offset: the force did not return to zero after detachment' },
+  cannotCheck: { cls: 'cannot', text: 'can’t check', title: 'The tare check could not be done for this run (see its details)' },
+  corrected: { cls: 'corrected', text: 'tare corrected', title: 'The residual force after detachment is subtracted from this run' },
+} as const;
+const TareTag = ({ k }: { k: PickableRun['tare'] }) => (k ? <span className={`tare-badge ${TARE_BADGE[k].cls}`} title={TARE_BADGE[k].title}>{TARE_BADGE[k].text}</span> : null);
 
 /**
  * Step 2 of Lap Shear and 90° Peel: tick any number of files (all their runs) or
@@ -62,7 +71,7 @@ export function RunPicker({ files, runs, selectedIds, setSelected, hint, nameOf,
             aria-label={`Analyse ${l.parsed.name}`}
           />
           <button className="disclose" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [l.parsed.fileId]: !isOpen }))}>
-            <span className="caret">{isOpen ? '▾' : '▸'}</span> <span className="fl-name">{l.parsed.name}{context(l) && <small className="fl-context"> {context(l)}</small>}</span>
+            <span className="caret">{isOpen ? '▾' : '▸'}</span> <span className="fl-name">{l.parsed.name}{context(l) && <small className="fl-context"> {context(l)}</small>} <TareTag k={list.some((r) => r.tare === 'flagged') ? 'flagged' : list.some((r) => r.tare === 'corrected') ? 'corrected' : list.length > 0 && list.every((r) => r.tare === 'cannotCheck') ? 'cannotCheck' : null} /></span>
           </button>
           <small>{n}/{ids.length} run{ids.length === 1 ? '' : 's'}</small>
           {list.length > 0 && (
@@ -76,7 +85,7 @@ export function RunPicker({ files, runs, selectedIds, setSelected, hint, nameOf,
           <div key={r.id}>
             <label className={`fl-file ${r.ok ? '' : 'off'}`} title={r.leftOut ? 'Left out of the average (In average unticked in Data analysis); still drawn grey dashed if ticked here' : ''}>
               <input type="checkbox" checked={selectedIds.includes(r.id)} disabled={!r.ok} onChange={(e) => toggle([r.id], e.target.checked)} />
-              <span className="fl-name">Run {r.cycleNumber}{r.leftOut && <small className="left-out"> · left out</small>}</span>
+              <span className="fl-name">Run {r.cycleNumber}{r.leftOut && <small className="left-out"> · left out</small>} <TareTag k={r.tare} /></span>
               <small>{r.peakGf !== null ? `${fmt(r.peakGf, 1)} gf` : '—'}</small>
             </label>
             {!r.ok && <p className="run-error">{r.error}</p>}

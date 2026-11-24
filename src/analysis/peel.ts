@@ -53,6 +53,38 @@ export interface PeelResult {
   toughnessJm2: number;
   work: { fullMJ: number; toDetachMJ: number | null; selectedMJ: number; selectedFromMm: number; selectedToMm: number; perPeeledAreaJm2: number };
   peelRateMmS: number;
+  /** Post-detachment tare check of the uncorrected trace (null when the check is switched off). */
+  tare: TareResult | null;
+}
+
+export interface TareResult {
+  /** 'flagged' = possible tare offset; 'ok' = back to zero; 'cannotCheck' = no valid residual. */
+  status: 'ok' | 'flagged' | 'cannotCheck';
+  /** Why the run could not be checked (or '' ). */
+  reason: string;
+  /** Mean tensile force in the residual window (gf, tensile sign). */
+  residualGf: number;
+  /** Residual normalised like G_peel: residual × (gf→N) / w × (1 − cos θ), J/m². */
+  residualJm2: number;
+  /** Residual as % of the uncorrected steady-state plateau force. */
+  residualPctPlateau: number;
+  /** Mean of the second half of the window minus mean of the first half (gf). */
+  driftGf: number;
+  windowFromMm: number;
+  windowToMm: number;
+  nWindow: number;
+  /** Where the window starts from: the detected (or typed) detachment, or where the force settles at the end. */
+  detachFrom: 'detected' | 'settled' | 'none';
+  detachMm: number | null;
+  /** Mean Fz of the stationary block before <Zero Load> (as recorded), and the residual it predicts (tensile sign). */
+  preTareGf: number | null;
+  expectedGf: number | null;
+  /** |expected − measured| > threshold. */
+  mismatch: boolean;
+  /** The residual can be subtracted (status ok or flagged). */
+  valid: boolean;
+  /** The correction is applied to this result. */
+  applied: boolean;
 }
 
 const rad = (deg: number) => (deg * Math.PI) / 180;
@@ -69,7 +101,92 @@ function curveSettings(s: PeelSettings): LapShearSettings {
   };
 }
 
-export function analyzePeel(run: RunInput, meta: PeelRunMeta, s: PeelSettings): PeelResult {
+/**
+ * Peel analysis with the post-detachment tare check. The check always looks at the uncorrected
+ * trace; when the run's tare correction is on and the residual is valid, the residual is subtracted
+ * from the whole tensile-force trace and every result (plateau, G_peel, CV, work, …) is recomputed.
+ */
+export function analyzePeel(run: RunInput & { preTareGf?: number | null }, meta: PeelRunMeta, s: PeelSettings): PeelResult {
+  const raw = analyzePeelCore(run, meta, s);
+  const tc = s.tareCheck;
+  if (!tc?.enabled || !raw.ok) return raw;
+  const tare = checkTare(raw, run.preTareGf ?? null, tc);
+  if (!(meta.tareCorrection?.applied && tare.valid)) return { ...raw, tare };
+  // F_tensile' = F_tensile − r, and F_tensile = sign × Fz, so Fz' = Fz − sign × r.
+  const sign = raw.curve.loadingSign;
+  const force = Float64Array.from(run.force_gf, (v) => v - sign * tare.residualGf);
+  const corrected = analyzePeelCore({ ...run, force_gf: force }, meta, { ...s, direction: sign < 0 ? 'negative' : 'positive' });
+  return {
+    ...corrected,
+    warnings: [...corrected.warnings, `Tare corrected: ${tare.residualGf.toFixed(2)} gf subtracted from the whole tensile force trace.`],
+    tare: { ...tare, applied: true },
+  };
+}
+
+/**
+ * Residual force after detachment. Window: from detachment + offset to the end of stage travel.
+ * Detachment is the detected (or typed) one; when none was found — a constant offset can keep the
+ * force above the detection threshold — it is where the force settles for good at the end.
+ */
+export function checkTare(r: PeelResult, preTareGf: number | null, tc: PeelSettings['tareCheck']): TareResult {
+  const { dispMm, loadGf } = r.curve.series;
+  const ip = r.curve.peak?.index ?? -1;
+  const valid: number[] = [];
+  for (let i = Math.max(0, ip); i < dispMm.length; i++) if (Number.isFinite(dispMm[i]) && Number.isFinite(loadGf[i])) valid.push(i);
+  let maxDisp = -Infinity;
+  for (const i of valid) maxDisp = Math.max(maxDisp, dispMm[i]);
+  const w = r.dims.widthMm;
+  const factor = 1 - Math.cos(rad(r.dims.angleDeg));
+  const expectedGf = preTareGf !== null ? -r.curve.loadingSign * preTareGf : null;
+  const base: TareResult = {
+    status: 'cannotCheck', reason: '', residualGf: NaN, residualJm2: NaN, residualPctPlateau: NaN, driftGf: NaN,
+    windowFromMm: NaN, windowToMm: NaN, nWindow: 0, detachFrom: 'none', detachMm: null, preTareGf, expectedGf, mismatch: false, valid: false, applied: false,
+  };
+  if (ip < 0 || valid.length < 3) return { ...base, reason: 'Cannot check: no peak or too few points.' };
+
+  let detachMm: number | null = r.detach.dispMm;
+  let detachFrom: TareResult['detachFrom'] = detachMm !== null ? 'detected' : 'none';
+  if (detachMm === null) {
+    // Settled level: median over the last minimum-window length of travel; detachment = start of the
+    // final stretch within ±band of it (band: twice the threshold, or 5% of the peak height).
+    const tail = valid.filter((i) => dispMm[i] >= maxDisp - Math.max(tc.minWindowMm, 0.5)).map((i) => loadGf[i]);
+    const level = median(tail);
+    const band = Math.max(2 * tc.thresholdGf, 0.05 * Math.abs(r.curve.peak!.forceGf - level));
+    let k = valid.length - 1;
+    while (k > 0 && Math.abs(loadGf[valid[k - 1]] - level) <= band) k--;
+    if (valid[k] > ip) { detachMm = dispMm[valid[k]]; detachFrom = 'settled'; }
+  }
+  if (detachMm === null) return { ...base, reason: 'Cannot check: no detachment found.' };
+  const from = detachMm + tc.windowOffsetMm;
+  const to = maxDisp;
+  const win = valid.filter((i) => dispMm[i] >= from && dispMm[i] <= to);
+  const placed = { ...base, windowFromMm: from, windowToMm: to, nWindow: win.length, detachFrom, detachMm };
+  if (!(to - from >= tc.minWindowMm) || win.length < 4) return { ...placed, reason: 'Cannot check: stage stopped at detachment.' };
+
+  const vals = win.map((i) => loadGf[i]);
+  const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+  const residualGf = mean(vals);
+  const half = Math.floor(vals.length / 2);
+  const driftGf = mean(vals.slice(half)) - mean(vals.slice(0, half));
+  const measured = {
+    ...placed,
+    residualGf,
+    driftGf,
+    residualJm2: ((residualGf * GF_TO_N) / w) * 1000 * factor,
+    residualPctPlateau: (residualGf / r.plateau.meanGf) * 100,
+    mismatch: expectedGf !== null && Math.abs(expectedGf - residualGf) > tc.thresholdGf,
+  };
+  if (Math.abs(driftGf) > tc.maxDriftGf) return { ...measured, reason: 'Cannot check: force still drifting.' };
+  // Without a detected detachment, a level close to the peel force means the strip may still be
+  // attached at the end: not a tare offset, and subtracting it would remove the peel force itself.
+  if (detachFrom === 'settled' && Math.abs(measured.residualPctPlateau) > 50) {
+    return { ...measured, reason: 'Cannot check: no clear detachment (the force at the end is more than half the peel force).' };
+  }
+  const flagged = Math.abs(residualGf) > tc.thresholdGf;
+  return { ...measured, status: flagged ? 'flagged' : 'ok', reason: flagged ? 'Possible tare offset' : '', valid: true };
+}
+
+function analyzePeelCore(run: RunInput, meta: PeelRunMeta, s: PeelSettings): PeelResult {
   const curve = analyzeLapShear(
     run,
     { lengthMm: meta.lengthMm, widthMm: meta.widthMm, thicknessMm: meta.thicknessMm, failureMode: meta.failureMode, manualFailureMm: meta.manualDetachMm },
@@ -98,6 +215,7 @@ export function analyzePeel(run: RunInput, meta: PeelRunMeta, s: PeelSettings): 
     peelStrengthNmm: NaN,
     peelStrengthNm: NaN,
     toughnessJm2: NaN,
+    tare: null,
     work: { fullMJ: NaN, toDetachMJ: null, selectedMJ: NaN, selectedFromMm: NaN, selectedToMm: NaN, perPeeledAreaJm2: NaN },
     peelRateMmS: NaN,
   };
@@ -193,7 +311,7 @@ export function analyzePeel(run: RunInput, meta: PeelRunMeta, s: PeelSettings): 
 }
 
 export function analyzePeelCycle(c: Cycle, meta: PeelRunMeta, s: PeelSettings): PeelResult {
-  return analyzePeel({ time_s: c.time_s, z_mm: c.z_mm, force_gf: c.force_gf, amplitudeMm: c.amplitudeMm }, meta, s);
+  return analyzePeel({ time_s: c.time_s, z_mm: c.z_mm, force_gf: c.force_gf, amplitudeMm: c.amplitudeMm, preTareGf: c.preTareGf ?? null }, meta, s);
 }
 
 /** Results of a run, with the names shown in the app, in Excel and in Compare (keys are stored in projects and never change). */
@@ -231,6 +349,13 @@ export const PEEL_EQUATIONS: { title: string; tex?: string; text: string; refs: 
     text: 's_F = sample SD of the force in the window. It describes force variation but does not by itself prove stick–slip.',
     refs: [],
     note: 'standard coefficient of variation; not adhesion-specific.',
+  },
+  {
+    title: 'Post-detachment tare check and correction',
+    tex: String.raw`F_{\text{res}} = \frac{1}{n}\sum_{i \in [\delta_{\text{det}} + \Delta,\ \delta_{\text{end}}]} F_i,\qquad G_{\text{corrected}} = G_{\text{raw}} - \frac{F_{\text{res}}\,(\text{gf}\rightarrow\text{N})}{w}\,(1-\cos\theta)`,
+    text: 'The clamp is tightened before the test and presses on the single-axis load cell; Zero load tares this force out of the reading, but it is still there. Once peeling starts it is replaced by the strip tension, and after detachment it is released, so the reading settles at about minus the tared value instead of 0. F_res = mean tensile force from the detachment point + Δ (default 1.5 mm) to the end of stage travel (in gf; the window must be at least 2 mm long, and the force must not drift by more than 2 gf between its two halves). |F_res| > 2 gf flags a possible tare offset. When a stationary block (e.g. a Wait) precedes Zero load, the expected residual is minus its mean Fz (tensile sign) and is shown for comparison. If detachment was not detected, the start of the final settled stretch is used, and a level above half the peel force is not treated as an offset. The correction (only by choice, run by run) subtracts F_res from the whole tensile-force trace before every calculation, so at 90° G_peel falls by F_res × 0.00980665 / w; the residual and whether a run is corrected are listed in every table and export.',
+    refs: [],
+    note: 'instrument check defined by this analyzer (no literature source); 1 gf = 0.00980665 N.',
   },
   {
     title: 'Initiation: pre-peak force, its travel, peak energy and peak/steady ratio',

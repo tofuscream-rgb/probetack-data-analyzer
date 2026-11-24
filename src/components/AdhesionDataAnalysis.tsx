@@ -1,3 +1,4 @@
+import { useApp } from '../state/AppContext';
 import { useMemo, useState } from 'react';
 import { mean, sampleSD } from '../analysis/stats';
 import { reviewGroups, type AnalysisRow } from '../analysis/adhesionReview';
@@ -21,7 +22,10 @@ export function AdhesionDataAnalysis({ mode, rows, graphed, inclusion, setInclus
   detailOf: (id: string) => DetailRun | null;
 }) {
   const [scope, setScope] = useState<'experiment' | 'graph'>('experiment');
-  const [focusId, setFocusId] = useState<string | null>(null);
+  // The open run is kept in the shared UI state, so other places (e.g. the tare banner's Review) can open it.
+  const { ui, setUi } = useApp();
+  const focusId = ui.focusId;
+  const setFocusId = (id: string | null) => setUi({ focusId: id });
   const focusRow = focusId ? rows.find((r) => r.id === focusId) ?? null : null;
   const focusRun = focusRow ? detailOf(focusRow.id) : null;
   const graphIds = new Set(graphed);

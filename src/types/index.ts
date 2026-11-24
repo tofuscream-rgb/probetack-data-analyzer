@@ -1,10 +1,10 @@
 /** Shared data types. Raw measurement arrays are never mutated after parsing. */
 
-export const APP_VERSION = '1.18.1';
+export const APP_VERSION = '1.19.0';
 /** Bump whenever a calculation, scoring rule or default changes results. */
-export const ALGORITHM_VERSION = '1.2.0';
+export const ALGORITHM_VERSION = '1.3.0'; // 1.3.0: 90° peel post-detachment tare check and optional correction
 /** 2: per-run overrides (runOverrides) replace excludedCycles; older projects are migrated on load. */
-export const PROJECT_SCHEMA_VERSION = 5; // 3: forceSign, distance displacement; 4: files kept per test, 90° peel
+export const PROJECT_SCHEMA_VERSION = 6; // 3: forceSign, distance displacement; 4: files kept per test, 90° peel; 6: peel tare check/correction, run fingerprints, duplicate runs
 export const GF_TO_N = 0.00980665;
 export const DEFAULT_CONCENTRATION_M = 2.1;
 
@@ -91,6 +91,10 @@ export interface Cycle {
   holdForce_gf: Float64Array | null;
   /** Force reading (gf) removed by a <Zero Load> step between the hold and this movement; null if none. */
   zeroedGf?: number | null;
+  /** Mean Fz (gf) of the stationary block (e.g. a Wait) right before a <Zero Load>: the force that was tared out. */
+  preTareGf?: number | null;
+  /** SHA-256 of the run block's numeric rows plus its INFO Date and Time (duplicate-run detection). */
+  fingerprint?: string;
   issues: ParseIssue[];
 }
 
@@ -403,6 +407,34 @@ export interface PeelRunMeta {
   maxFibrilMm?: number | null;
   /** Detachment (end of peeling) picked by hand (mm); overrides the automatic criterion. */
   manualDetachMm: number | null;
+  /**
+   * Post-detachment tare correction of this run. When `applied`, the residual force is subtracted
+   * from the whole tensile-force trace before every calculation. The other fields record the check
+   * at the time it was applied (gf and mm). Absent = not corrected (projects before 1.19).
+   */
+  tareCorrection?: TareCorrection;
+}
+
+export interface TareCorrection {
+  applied: boolean;
+  residualGf: number;
+  driftGf: number;
+  preTareGf: number | null;
+  windowFromMm: number;
+  windowToMm: number;
+}
+
+/** Post-detachment tare check of 90° peel runs (see the Methods panel). */
+export interface TareCheckSettings {
+  enabled: boolean;
+  /** |residual| above this (gf) flags a possible tare offset; also the allowed difference from −preTare. */
+  thresholdGf: number;
+  /** The residual window starts this far (mm) after the detachment point. */
+  windowOffsetMm: number;
+  /** A residual window shorter than this (mm) cannot be checked. */
+  minWindowMm: number;
+  /** |mean(second half) − mean(first half)| above this (gf) = force still drifting: cannot check. */
+  maxDriftGf: number;
 }
 
 export interface PeelSettings {
@@ -415,6 +447,7 @@ export interface PeelSettings {
   direction: 'auto' | 'negative' | 'positive';
   gapFactor: number;
   defaults: { lengthMm: number; widthMm: number; thicknessMm: number; angleDeg: number };
+  tareCheck: TareCheckSettings;
 }
 
 export interface PeelState {
@@ -445,6 +478,11 @@ export interface ExperimentPick {
 
 export interface ProjectState {
   schemaVersion: number;
+  /**
+   * Runs of a file that were not imported because the same run was already loaded from another file
+   * (fileId → run numbers in the file). They stay out after reloading the project or session.
+   */
+  duplicateRuns?: Record<string, number[]>;
   name: string;
   settings: AnalysisSettings;
   overrides: Record<string, MetaOverride>;
@@ -478,4 +516,6 @@ export interface SourceFileRecord {
   sizeBytes: number;
   /** Test the file was imported for (missing in projects saved before files were kept per test). */
   mode?: ExperimentMode;
+  /** Fingerprint of each run of the file, in run order (schema 6; recomputed from the data for older projects). */
+  runFingerprints?: string[];
 }

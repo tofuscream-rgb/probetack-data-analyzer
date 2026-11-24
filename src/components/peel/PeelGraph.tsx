@@ -52,6 +52,7 @@ export function usePeelPlot() {
     const traces: Data[] = [];
     const annotations: Partial<Layout>['annotations'] = [];
     const labelSeries: LabelSeries[] = [];
+    const tareShapes: Record<string, unknown>[] = [];
     const ids = runs.map((r) => r.id);
     const short = v.labels === 'curve' ? shortLabels(runs.map((r) => ({ label: r.label, cycleNumber: r.cycle.cycleNumber, cond: r.cond }))) : runs.map((r) => r.label);
     const avoid: number[] = [];
@@ -69,7 +70,13 @@ export function usePeelPlot() {
       const xs = series.dispMm;
       const idx = displayIndices(r, xs);
       const y = (i: number) => series.loadGf[i] * f;
-      const name = (v.names[r.id]?.trim() || short[k]) + (out ? ' (left out of the average)' : '');
+      const name = (v.names[r.id]?.trim() || short[k]) + (res.tare?.applied ? ' (tare corrected)' : '') + (out ? ' (left out of the average)' : '');
+      // Highlighted run: its post-detachment residual window (shaded) and residual level of the uncorrected trace (dashed).
+      const tr = res.tare;
+      if (v.highlight === r.id && tr && Number.isFinite(tr.windowFromMm) && Number.isFinite(tr.windowToMm)) {
+        tareShapes.push({ type: 'rect', xref: 'x', yref: 'paper', x0: tr.windowFromMm, x1: tr.windowToMm, y0: 0, y1: 1, fillcolor: 'rgba(224,112,0,0.10)', line: { width: 0 }, layer: 'below', editable: false });
+        if (Number.isFinite(tr.residualGf)) tareShapes.push({ type: 'line', xref: 'x', yref: 'y', x0: tr.windowFromMm, x1: tr.windowToMm, y0: tr.residualGf * f, y1: tr.residualGf * f, line: { color: '#E07000', width: 2, dash: 'dash' }, editable: false });
+      }
       labelSeries.push({ id: r.id, name, color, x: idx.map((i) => xs[i]), y: idx.map(y) });
       // Custom area (additional tool): shaded under this curve between the dashed boundaries.
       const areaFill = areaFillTrace(idx.map((i) => xs[i]), idx.map(y), v.area, rgba(color, 0.22), r.id);
@@ -124,7 +131,7 @@ export function usePeelPlot() {
       dragmode: 'zoom',
       hovermode: 'closest',
       uirevision: unit,
-      shapes: areaShapes(v.area),
+      shapes: [...(areaShapes(v.area) ?? []), ...tareShapes] as Layout['shapes'],
     };
     return { data: traces, layout: lay };
     // eslint-disable-next-line react-hooks/exhaustive-deps

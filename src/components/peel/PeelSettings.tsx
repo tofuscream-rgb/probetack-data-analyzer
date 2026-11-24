@@ -64,6 +64,25 @@ export function PeelSettings() {
           </label>
           <p className="note">Peel force is shown as a positive magnitude; the original signed values are kept and exported. 1 gf = 0.00980665 N.</p>
         </Section>
+        <Section title="Tare check after detachment">
+          <label className="check-row">
+            <input type="checkbox" checked={s.tareCheck.enabled} onChange={(e) => sub('tareCheck', { enabled: e.target.checked })} /> Check that the force returns to zero after detachment
+          </label>
+          <div className="pair">
+            <NumberField label="Flag if |residual| above (gf)" value={s.tareCheck.thresholdGf} min={0} onCommit={(v) => v !== null && sub('tareCheck', { thresholdGf: v })} />
+            <NumberField label="Window starts after detachment (mm)" value={s.tareCheck.windowOffsetMm} min={0} onCommit={(v) => v !== null && sub('tareCheck', { windowOffsetMm: v })} />
+            <NumberField label="Shortest window (mm)" value={s.tareCheck.minWindowMm} min={0} onCommit={(v) => v !== null && sub('tareCheck', { minWindowMm: v })} />
+            <NumberField label="Largest drift in the window (gf)" value={s.tareCheck.maxDriftGf} min={0} onCommit={(v) => v !== null && sub('tareCheck', { maxDriftGf: v })} />
+          </div>
+          <p className="note">
+            The clamp is tightened before the test and presses on the single-axis load cell. <em>Zero load</em> tares this force out of the reading,
+            but the load is still physically there: once peeling starts it is replaced by the strip tension, and after the strip detaches it is
+            released, so the reading settles at about minus the tared value instead of 0 (for example, a Wait block read +22.9 gf before Zero load and
+            the force settled at +22.4 gf tensile after detachment). If this offset is constant during the peel, the whole curve is shifted and G<sub>peel</sub> is
+            over- or underestimated by the same amount. The residual is the mean force from detachment + the offset to the end of stage travel. Flagged runs
+            are never corrected automatically: use <em>Correct for tare offset</em> in a run’s details, or the banner.
+          </p>
+        </Section>
         <Section title="Default gel dimensions">
           <div className="pair">
             <NumberField label="Gel length (mm)" value={s.defaults.lengthMm} positive onCommit={(v) => v !== null && sub('defaults', { lengthMm: v })} />

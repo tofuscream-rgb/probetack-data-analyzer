@@ -25,7 +25,7 @@ export interface PeelRun {
 const cache = new WeakMap<Cycle, { key: string; settings: PeelSettings; result: PeelResult }>();
 
 function cachedResult(c: Cycle, meta: PeelRunMeta, s: PeelSettings): PeelResult {
-  const key = `${meta.lengthMm}|${meta.widthMm}|${meta.thicknessMm}|${meta.angleDeg}|${meta.manualDetachMm}`;
+  const key = `${meta.lengthMm}|${meta.widthMm}|${meta.thicknessMm}|${meta.angleDeg}|${meta.manualDetachMm}|${meta.tareCorrection?.applied === true}`;
   const hit = cache.get(c);
   if (hit && hit.key === key && hit.settings === s) return hit.result;
   const result = analyzePeelCycle(c, meta, s);
@@ -92,6 +92,30 @@ export function usePeel() {
       }),
     [update],
   );
+  /**
+   * Switch the tare correction of runs on or off. Only runs whose check gave a valid residual can be
+   * corrected; the check values are recorded with the choice (residual, drift, pre-tare, window).
+   */
+  const setTareCorrection = useCallback(
+    (ids: string[], on: boolean) =>
+      update((p) => {
+        const next = { ...p.peel.runs };
+        for (const id of ids) {
+          const r = runs.find((x) => x.id === id);
+          const t = r?.result.tare;
+          const m = peelMeta(p.peel, id);
+          if (on && !(t && t.valid)) continue;
+          next[id] = {
+            ...m,
+            tareCorrection: t && t.valid
+              ? { applied: on, residualGf: t.residualGf, driftGf: t.driftGf, preTareGf: t.preTareGf, windowFromMm: t.windowFromMm, windowToMm: t.windowToMm }
+              : { ...(m.tareCorrection ?? { residualGf: NaN, driftGf: NaN, preTareGf: null, windowFromMm: NaN, windowToMm: NaN }), applied: false },
+          };
+        }
+        return { ...p, peel: { ...p.peel, runs: next } };
+      }),
+    [update, runs],
+  );
   const setSelected = useCallback((ids: string[]) => set({ selected: ids }), [set]);
   /** Tick runs of the chosen experiment; ticks of other experiments are kept. */
   const setPickedSelected = useCallback(
@@ -103,5 +127,5 @@ export function usePeel() {
   );
   const setPick = useCallback((patch: Partial<ExperimentPick>) => set({ pick: normalizePick(conds, { ...pick, ...patch }) }), [conds, pick, set]);
 
-  return { ps, runs, valid, picked, pick, options, setPick, selected, selectedIds, selectedAll, set, setSettings, setMeta, setSelected, setPickedSelected };
+  return { ps, runs, valid, picked, pick, options, setPick, selected, selectedIds, selectedAll, set, setSettings, setMeta, setTareCorrection, setSelected, setPickedSelected };
 }

@@ -3,7 +3,7 @@
  * Mach-1 files. Runs entirely in the browser; nothing is sent anywhere.
  */
 import { unzipSync } from 'fflate';
-import type { Cycle, ExperimentMode, ParsedFile } from '../types';
+import type { Cycle, ExperimentMode, OperationBlock, ParsedFile } from '../types';
 import { decodeText, sha256Hex } from './hash';
 import { extractCycles, isScriptBlock, parseMach1Text } from './mach1Parser';
 
@@ -47,7 +47,26 @@ export function expandZip(zipName: string, bytes: Uint8Array): { files: SourceFi
 export async function parseSource(src: SourceFile): Promise<LoadedFile> {
   const sha = await sha256Hex(src.bytes);
   const parsed = parseMach1Text(decodeText(src.bytes), src.path, sha, src.bytes.length);
-  return { parsed, cycles: extractCycles(parsed), bytes: src.bytes };
+  const cycles = extractCycles(parsed);
+  // A fingerprint per run, to recognise runs already loaded from another file.
+  for (const c of cycles) {
+    const block = parsed.blocks[c.moveBlockIndex];
+    if (block) c.fingerprint = await runFingerprint(block, parsed.header['Date']);
+  }
+  return { parsed, cycles, bytes: src.bytes };
+}
+
+/**
+ * SHA-256 of one run block: its INFO Date and Time and every numeric row (all columns, e.g. time,
+ * z, x, y, Fz), so the same run is recognised whatever the file is called or whatever else it holds.
+ */
+export async function runFingerprint(block: OperationBlock, fileDate?: string): Promise<string> {
+  const lines = [`date\t${block.info['Date'] ?? fileDate ?? ''}`, `time\t${block.info['Time'] ?? ''}`];
+  const d = block.data;
+  if (d) {
+    for (let r = 0; r < d.rowCount; r++) lines.push(d.values.map((col) => String(col[r])).join('\t'));
+  }
+  return sha256Hex(new TextEncoder().encode(lines.join('\n')));
 }
 
 /** Collect browser File objects (from an <input>, folder picker or drop) into SourceFiles. */

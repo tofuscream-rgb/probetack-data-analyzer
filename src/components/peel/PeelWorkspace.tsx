@@ -10,7 +10,8 @@ import { RunCompare } from '../RunCompare';
 import { AdhesionDataAnalysis } from '../AdhesionDataAnalysis';
 import { includedRuns, peelAnalysisRow } from '../../analysis/adhesionReview';
 import { useMemo } from 'react';
-import { PEEL_PROPERTIES } from '../../analysis/peel';
+import { PEEL_PROPERTIES, analyzePeelCycle } from '../../analysis/peel';
+import { TareBanner, TarePanel } from './TareCheck';
 import { FAILURE_MODES } from '../../analysis/observations';
 import { fmt } from '../common';
 
@@ -19,7 +20,7 @@ const METRICS = PEEL_PROPERTIES.filter((p) => p.key !== 'rate').map((p) => ({ ke
 
 function PeelAnalysis() {
   const { meta, update } = useApp();
-  const { ps, picked, selected } = usePeel();
+  const { ps, picked, selected, setTareCorrection } = usePeel();
   return (
     <AdhesionDataAnalysis
       mode="peel"
@@ -30,8 +31,13 @@ function PeelAnalysis() {
         const r = picked.find((x) => x.id === id);
         if (!r) return null;
         const x = r.result;
+        const t = x.tare;
+        // The uncorrected trace, drawn dotted under the corrected one when the correction is on.
+        const raw = t?.applied ? analyzePeelCycle(r.cycle, { ...r.meta, tareCorrection: undefined }, ps.settings).curve : undefined;
         return {
           file: r.file, cycle: r.cycle, curve: x.curve, endMm: x.detach.dispMm, endLabel: x.detach.source === 'manual' ? 'detachment (typed)' : 'detachment',
+          extra: <TarePanel run={r} onToggle={(on) => setTareCorrection([r.id], on)} />,
+          residual: t ? { fromMm: t.windowFromMm, toMm: t.windowToMm, levelGf: t.residualGf, rawCurve: raw } : undefined,
           facts: [
             ['Gel', `${fmt(r.meta.lengthMm, 1)} × ${fmt(r.meta.widthMm, 2)} × ${fmt(r.meta.thicknessMm, 2)} mm (L × w × t), peel angle ${fmt(r.meta.angleDeg, 0)}°`],
             ['Steady-state window', `${fmt(x.window.fromMm, 1)}–${fmt(x.window.toMm, 1)} mm (${x.window.n} points), CV ${fmt(x.plateau.cv * 100, 1)} %`],
@@ -82,12 +88,23 @@ const TABS: { id: PeelState['tab']; label: string; minor?: boolean }[] = [
 
 /** Main area in 90° peel mode. */
 export function PeelWorkspace() {
-  const { files } = useApp();
-  const { ps, set } = usePeel();
+  const { files, setUi } = useApp();
+  const { ps, set, runs, setTareCorrection, setPick } = usePeel();
   const problems = files.filter((f) => f.parsed.status !== 'ok').length;
   return (
     <section className="main-area">
       <ContextBar />
+      <TareBanner
+        runs={runs}
+        onCorrectAll={() => setTareCorrection(runs.filter((r) => r.result.tare?.status === 'flagged').map((r) => r.id), true)}
+        onUndoAll={() => setTareCorrection(runs.filter((r) => r.meta.tareCorrection?.applied).map((r) => r.id), false)}
+        onReview={() => {
+          const first = runs.find((r) => r.result.tare?.status === 'flagged' && !r.meta.tareCorrection?.applied) ?? runs.find((r) => r.result.tare?.status === 'flagged');
+          setPick({ chargeRatio: null, concentration: null, substrate: null, gel: null, hold: null });
+          set({ tab: 'analysis' });
+          if (first) setUi({ focusId: first.id });
+        }}
+      />
       <div className="main-tabs" role="tablist" aria-label="90° peel views">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={ps.tab === t.id} className={`tab ${ps.tab === t.id ? 'active' : ''} ${t.minor ? 'minor' : ''}`} onClick={() => set({ tab: t.id })}>

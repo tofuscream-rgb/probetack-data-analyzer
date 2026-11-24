@@ -8,7 +8,7 @@
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { RUN_TABS } from '../types';
-import type { RunGraphView, ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord, TackMetricsState, DatasetExclusion, FailureMode, TackMorphology, TackObservation } from '../types';
+import type { RunGraphView, ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord, TackMetricsState, DatasetExclusion, FailureMode, TackMorphology, TackObservation, TareCheckSettings, TareCorrection } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
 import { defaultCompare, defaultExperiment, defaultLapShear, defaultPeel, defaultProject, defaultSettings } from '../state/defaults';
 
@@ -163,6 +163,8 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
       fibrilZoneMm: typeof m.fibrilZoneMm === 'number' && Number.isFinite(m.fibrilZoneMm) && m.fibrilZoneMm >= 0 ? m.fibrilZoneMm : null,
       maxFibrilMm: typeof m.maxFibrilMm === 'number' && Number.isFinite(m.maxFibrilMm) && m.maxFibrilMm >= 0 ? m.maxFibrilMm : null,
       manualDetachMm: typeof m.manualDetachMm === 'number' && Number.isFinite(m.manualDetachMm) ? m.manualDetachMm : null,
+      // Projects before schema 6 have no tare correction: it stays off.
+      ...(m.tareCorrection && typeof m.tareCorrection === 'object' ? { tareCorrection: migrateTare(m.tareCorrection) } : {}),
     };
   }
   return {
@@ -174,6 +176,7 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
       direction: s.direction === 'negative' || s.direction === 'positive' ? s.direction : 'auto',
       gapFactor: pos(s.gapFactor, d.settings.gapFactor),
       defaults: { ...d.settings.defaults, ...(s.defaults ?? {}) },
+      tareCheck: migrateTareCheck(d.settings.tareCheck, s.tareCheck),
     },
     runs,
     pick: migrateExperimentPick(r.pick),
@@ -184,6 +187,32 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
     tab: r.tab && RUN_TABS.includes(r.tab) ? r.tab : 'graph',
     compare: { ...d.compare, ...(r.compare ?? {}) },
     disabledFiles: Array.isArray(r.disabledFiles) ? r.disabledFiles : [],
+  };
+}
+
+const finite = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/** Stored tare correction of a peel run; damaged values switch the correction off. */
+function migrateTare(t: Partial<TareCorrection>): TareCorrection {
+  const residualGf = finite(t.residualGf);
+  return {
+    applied: t.applied === true && residualGf !== null,
+    residualGf: residualGf ?? NaN,
+    driftGf: finite(t.driftGf) ?? NaN,
+    preTareGf: finite(t.preTareGf),
+    windowFromMm: finite(t.windowFromMm) ?? NaN,
+    windowToMm: finite(t.windowToMm) ?? NaN,
+  };
+}
+
+function migrateTareCheck(d: TareCheckSettings, t: Partial<TareCheckSettings> | undefined): TareCheckSettings {
+  const nonNeg = (v: unknown, fb: number) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fb);
+  return {
+    enabled: typeof t?.enabled === 'boolean' ? t.enabled : d.enabled,
+    thresholdGf: nonNeg(t?.thresholdGf, d.thresholdGf),
+    windowOffsetMm: nonNeg(t?.windowOffsetMm, d.windowOffsetMm),
+    minWindowMm: nonNeg(t?.minWindowMm, d.minWindowMm),
+    maxDriftGf: nonNeg(t?.maxDriftGf, d.maxDriftGf),
   };
 }
 
@@ -251,6 +280,7 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
       displacementMode: (raw.schemaVersion ?? 0) < 3 && (s.displacementMode ?? 'signed') === 'signed' ? ds.displacementMode : s.displacementMode ?? ds.displacementMode,
     },
     overrides: raw.overrides ?? {},
+    duplicateRuns: Object.fromEntries(Object.entries(raw.duplicateRuns ?? {}).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, (v as unknown[]).filter((n): n is number => typeof n === 'number' && Number.isInteger(n))])),
     runOverrides,
     disabledFiles: Array.isArray(raw.disabledFiles) ? raw.disabledFiles : [],
     excludedPoints: raw.excludedPoints ?? {},
@@ -348,6 +378,7 @@ export function remapState(state: ProjectState, idMap: Map<string, string>): Pro
   return {
     ...state,
     overrides: remapKeys(state.overrides, (k) => idMap.get(k) ?? k),
+    duplicateRuns: remapKeys(state.duplicateRuns ?? {}, (k) => idMap.get(k) ?? k),
     runOverrides: remapKeys(state.runOverrides, mapCycle),
     disabledFiles: state.disabledFiles.map((id) => idMap.get(id) ?? id),
     lapShear: {

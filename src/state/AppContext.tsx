@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ExperimentMeta, ExperimentMode, GraphConfig, ProjectState, SourceFileRecord } from '../types';
 import { EXPERIMENT_MODES } from '../types';
-import { dedupeByMode, duplicateNotice, duplicateReason, loadedDuplicateNotice, splitDuplicates } from './duplicates';
+import { dedupeByMode, duplicateReason, loadedDuplicateNotice, planImport } from './duplicates';
 import type { LoadedFile, SkippedEntry, SourceFile } from '../parser/loader';
 import { collectFromFileList, guessMode } from '../parser/loader';
 import { parseInBackground } from '../parser/workerClient';
@@ -33,6 +33,9 @@ interface Ctx {
   /** Remove files from the shown test. */
   removeFiles: (fileIds: string[]) => void;
   skipped: SkippedEntry[];
+  /** Summary of the last upload that refused files or skipped runs (shown in a dialog); null = none. */
+  importReport: ImportReport | null;
+  closeImportReport: () => void;
   project: ProjectState;
   update: (fn: (p: ProjectState) => ProjectState) => void;
   meta: Map<string, ExperimentMeta>;
@@ -55,6 +58,14 @@ interface Ctx {
   saveProject: (mode: 'settings' | 'complete') => void;
   loadProject: (file: File) => Promise<void>;
   exportExcel: (cycleIds: string[], graphs: GraphConfig[], processed: boolean, sheets: SheetKey[]) => void;
+}
+
+/** What an upload added: files imported whole, partly imported (some runs already loaded), or refused. */
+export interface ImportReport {
+  test: string;
+  imported: { path: string; message: string }[];
+  partial: { path: string; message: string }[];
+  refused: { path: string; message: string }[];
 }
 
 const AppContext = createContext<Ctx | null>(null);
@@ -84,7 +95,21 @@ const toRecord = (l: LoadedFile, mode?: ExperimentMode): SourceFileRecord => ({
   sha256: l.parsed.sha256,
   sizeBytes: l.parsed.sizeBytes,
   ...(mode ? { mode } : {}),
+  runFingerprints: l.cycles.map((c) => c.fingerprint ?? ''),
 });
+
+/**
+ * Leave out runs recorded as already loaded from another file (project.duplicateRuns), and say so in
+ * the file's messages. Used after an upload and when a project or session is reopened.
+ */
+function withoutDuplicateRuns(l: LoadedFile, skip: number[] | undefined, note?: string): LoadedFile {
+  if (!skip?.length) return l;
+  const cycles = l.cycles.filter((c) => !skip.includes(c.cycleNumber));
+  const msg = note ?? `Run${skip.length === 1 ? '' : 's'} ${skip.join(', ')} not imported: the same data is already loaded from another file.`;
+  return { ...l, cycles, parsed: { ...l.parsed, issues: [...l.parsed.issues, { severity: 'info', message: msg }] } };
+}
+const applyDuplicateRuns = (by: ByMode<LoadedFile[]>, dup: Record<string, number[]> | undefined): ByMode<LoadedFile[]> =>
+  dup && Object.keys(dup).length ? (Object.fromEntries(EXPERIMENT_MODES.map((m) => [m, by[m].map((l) => withoutDuplicateRuns(l, dup[l.parsed.fileId]))])) as ByMode<LoadedFile[]>) : by;
 
 type ByMode<T> = Record<ExperimentMode, T>;
 const emptyByMode = <T,>(make: () => T): ByMode<T> => ({ tack: make(), lapShear: make(), peel: make() });
@@ -106,6 +131,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Every test has its own imported files: files opened for probe tack are not shown for lap shear or 90° peel.
   const [filesByMode, setFilesByMode] = useState<ByMode<LoadedFile[]>>(() => emptyByMode(() => []));
   const [skippedByMode, setSkippedByMode] = useState<ByMode<SkippedEntry[]>>(() => emptyByMode(() => []));
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
   const [project, setProject] = useState<ProjectState>(defaultProject);
   const [pendingAll, setPending] = useState<SourceFileRecord[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -230,13 +256,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setBusy(`Reading ${i + 1} of ${sources.length}: ${sources[i].path}`);
         parsed.push(await parseInBackground(sources[i]));
       }
-      // Identical data (same SHA-256, whatever the name) already imported in any test, or repeated in
-      // this upload, is not added again, so no run is counted twice.
-      const known = EXPERIMENT_MODES.flatMap((m) => filesRef.current[m].map((l) => ({ sha256: l.parsed.sha256, path: l.parsed.path, mode: m })));
-      const { fresh: out, duplicates } = splitDuplicates(known, parsed, mode);
-      const dupEntries: SkippedEntry[] = duplicates.map((d) => ({ path: d.file.parsed.path, reason: duplicateReason(d, mode, MODE_LABEL), duplicate: true }));
+      // Nothing loaded is ever replaced: an identical file, or a file whose runs are all loaded already
+      // (in any test, from any file), is refused; of a file with some loaded runs only the new runs are added.
+      const knownFiles = EXPERIMENT_MODES.flatMap((m) => filesRef.current[m].map((l) => ({ sha256: l.parsed.sha256, path: l.parsed.path, mode: m })));
+      const knownRuns = new Map(EXPERIMENT_MODES.flatMap((m) => filesRef.current[m].flatMap((l) => l.cycles.filter((c) => c.fingerprint).map((c) => [c.fingerprint!, { path: l.parsed.path, cycleNumber: c.cycleNumber, mode: m }] as const))));
+      const plan = planImport(knownFiles, knownRuns, parsed, mode, MODE_LABEL);
+      const refused = plan.filter((p) => p.outcome === 'refused');
+      const partial = plan.filter((p) => p.outcome === 'partial');
+      const out = plan.filter((p) => p.outcome !== 'refused').map((p) => withoutDuplicateRuns(p.file, p.skipped.map((x) => x.cycleNumber), p.outcome === 'partial' ? p.message.replace(/^Imported /, 'Only the new runs were imported: ') : undefined));
+      const dupEntries: SkippedEntry[] = refused.map((p) => ({ path: p.file.parsed.path, reason: `Not added: ${p.message}`, duplicate: true }));
       setSkippedByMode((s) => ({ ...s, [mode]: [...s[mode], ...skippedEntries, ...dupEntries] }));
-      if (duplicates.length) notify('warning', duplicateNotice(parsed.length, out.length, duplicates, mode, MODE_LABEL));
+      if (partial.length) {
+        setProject((p) => ({ ...p, duplicateRuns: { ...(p.duplicateRuns ?? {}), ...Object.fromEntries(partial.map((x) => [x.file.parsed.fileId, x.skipped.map((k) => k.cycleNumber)])) } }));
+      }
+      const duplicates = [...refused, ...partial];
+      if (duplicates.length) {
+        setImportReport({
+          test: MODE_LABEL[mode],
+          imported: plan.filter((p) => p.outcome === 'imported').map((p) => ({ path: p.file.parsed.path, message: p.message })),
+          partial: partial.map((p) => ({ path: p.file.parsed.path, message: p.message })),
+          refused: refused.map((p) => ({ path: p.file.parsed.path, message: p.message })),
+        });
+      }
       if (!out.length) {
         setBusy(null);
         return;
@@ -360,11 +401,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!session) return;
       setRestorable(null);
       autosaveReady.current = true;
-      setProject(migrateState(session.state));
+      const restoredState = migrateState(session.state);
+      setProject(restoredState);
       if (stored.length) {
         const { by: parsedBy, guessed } = await parseIntoModes(stored);
         setSkippedByMode(emptyByMode(() => []));
-        const by = dedupeLoaded(parsedBy, 'session');
+        const by = dedupeLoaded(applyDuplicateRuns(parsedBy, restoredState.duplicateRuns), 'session');
         storeFiles(by);
         notify(
           'success',
@@ -413,7 +455,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // Files stored per test keep their test; tack-layout files take the test of their source record, else are sorted by content.
           const recMode = new Map(lp.json.sources.map((r) => [r.path, r.mode]));
           const { by: parsedBy } = await parseIntoModes(lp.files.map((f) => ({ ...f, mode: f.mode ?? recMode.get(f.path) })));
-          const by = dedupeLoaded(parsedBy, 'project');
+          const by = dedupeLoaded(applyDuplicateRuns(parsedBy, lp.json.state.duplicateRuns), 'project');
           const all = EXPERIMENT_MODES.flatMap((m) => by[m]);
           const m = matchSources(lp.json.sources, all.map((l) => toRecord(l)));
           if (m.idMap.size) setProject(remapState(lp.json.state, m.idMap));
@@ -457,7 +499,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const value: Ctx = {
-    files, filesByMode, removeFiles, skipped, project, update, meta, derived, ui, setUi, busy, notices, notify, dismiss, pending,
+    files, filesByMode, removeFiles, skipped, importReport, closeImportReport: () => setImportReport(null), project, update, meta, derived, ui, setUi, busy, notices, notify, dismiss, pending,
     restorable, storageNote, importFiles, importSources, loadExample, removeAllData, restoreSession, discardSession,
     saveProject, loadProject, exportExcel,
   };

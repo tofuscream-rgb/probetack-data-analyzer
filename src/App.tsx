@@ -1,4 +1,5 @@
 import { ContextBar } from './components/ContextBar';
+import { ImportReportDialog } from './components/ImportReportDialog';
 import { useEffect, useState, type DragEvent } from 'react';
 import { loadPlotly } from './plotting/PlotlyChart';
 import { warmUpWorker } from './parser/workerClient';
@@ -132,6 +133,7 @@ function Shell() {
           </>
         )}
       </main>
+      <ImportReportDialog />
       <div className="notices" aria-live="polite">
         {notices.map((n) => (
           <div key={n.id} className={`notice ${n.kind}`}>

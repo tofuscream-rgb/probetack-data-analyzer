@@ -82,6 +82,7 @@ export function defaultPeel(): PeelState {
       direction: 'auto',
       gapFactor: 5,
       defaults: { lengthMm: 60, widthMm: 10, thicknessMm: 1, angleDeg: 90 },
+      tareCheck: { enabled: true, thresholdGf: 2, windowOffsetMm: 1.5, minWindowMm: 2, maxDriftGf: 2 },
     },
     runs: {},
     selected: null,

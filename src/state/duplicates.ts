@@ -36,24 +36,11 @@ export function splitDuplicates<T extends { parsed: { sha256: string; path: stri
   return { fresh, duplicates };
 }
 
-const name = (path: string) => path.split('/').pop() ?? path;
 
 /** "glass-v2.txt = glass.txt (already in 90° Peel)" for the message and the Files tab. */
 export function duplicateReason(d: Duplicate<{ parsed: { path: string } }>, mode: ExperimentMode, label: Record<ExperimentMode, string>): string {
   const where = d.of.sameUpload ? 'earlier in this upload' : d.of.mode === mode ? 'already imported' : `already imported in ${label[d.of.mode]}`;
   return `Duplicate: identical data to ${d.of.path} (${where}); not added.`;
-}
-
-/** The notice after an upload that contained duplicates. */
-export function duplicateNotice(total: number, added: number, duplicates: Duplicate<{ parsed: { path: string } }>[], mode: ExperimentMode, label: Record<ExperimentMode, string>): string {
-  const list = duplicates.slice(0, 3).map((d) => `${name(d.file.parsed.path)} = ${d.of.path}${d.of.mode !== mode && !d.of.sameUpload ? ` (${label[d.of.mode]})` : ''}`).join('; ');
-  const more = duplicates.length > 3 ? `; and ${duplicates.length - 3} more (see the Files tab)` : '';
-  if (added === 0) {
-    return duplicates.length === 1
-      ? `This data has already been imported: ${list}. Nothing new was added.`
-      : `This data has already been imported: all ${total} files are identical to files already here (${list}${more}). Nothing new was added.`;
-  }
-  return `Only ${added} of ${total} files were imported. The remaining ${duplicates.length} ${duplicates.length === 1 ? 'is a duplicate' : 'are duplicates'} of data already here (identical content) and ${duplicates.length === 1 ? 'was' : 'were'} skipped: ${list}${more}.`;
 }
 
 /**
@@ -83,4 +70,67 @@ export function loadedDuplicateNotice(dropped: (Duplicate<{ parsed: { path: stri
   const list = dropped.slice(0, 3).map((d) => `${d.file.parsed.path} = ${d.of.path}${d.of.mode !== d.mode ? ` (${label[d.of.mode]})` : ''}`).join('; ');
   const more = dropped.length > 3 ? `; and ${dropped.length - 3} more (see the Files tab)` : '';
   return `This ${what} contained ${dropped.length} duplicate file${dropped.length === 1 ? '' : 's'} (identical data); only one copy of each was loaded, so no run is counted twice. Not loaded: ${list}${more}. Save the project again to remove ${dropped.length === 1 ? 'it' : 'them'} from the file.`;
+}
+
+/** A run already loaded: where it came from (for the messages). */
+export interface KnownRun {
+  path: string;
+  cycleNumber: number;
+  mode: ExperimentMode;
+}
+
+export interface ImportPlanItem<T> {
+  file: T;
+  /** 'imported' = every run is new; 'partial' = only the new runs are imported; 'refused' = nothing is imported. */
+  outcome: 'imported' | 'partial' | 'refused';
+  /** Run numbers (as in the file) that are imported. */
+  keep: number[];
+  /** Runs not imported because the same run is already loaded (or earlier in this upload). */
+  skipped: { cycleNumber: number; of: KnownRun }[];
+  /** Message shown in the import summary. */
+  message: string;
+}
+
+const runList = (ns: number[]) => `run${ns.length === 1 ? '' : 's'} ${ns.join(', ')}`;
+
+/**
+ * Decide, file by file, what an upload adds to the project, without ever touching what is loaded:
+ *   1. identical file (same SHA-256 as a loaded file or an earlier file of the upload) → refused;
+ *   2. every run already loaded (same run fingerprint) → refused;
+ *   3. some runs already loaded → only the new runs are imported;
+ *   4. otherwise the whole file is imported.
+ * Files and runs accepted earlier in the same upload count as loaded for the later ones.
+ */
+export function planImport<T extends { parsed: { sha256: string; path: string }; cycles: { cycleNumber: number; fingerprint?: string }[] }>(
+  knownFiles: KnownFile[],
+  knownRuns: Map<string, KnownRun>,
+  incoming: T[],
+  mode: ExperimentMode,
+  label: Record<ExperimentMode, string>,
+): ImportPlanItem<T>[] {
+  const files = new Map(knownFiles.map((k) => [k.sha256, k]));
+  const runs = new Map(knownRuns);
+  const where = (k: { path: string; mode: ExperimentMode }) => `${k.path}${k.mode !== mode ? ` (${label[k.mode]})` : ''}`;
+  return incoming.map((f) => {
+    const same = files.get(f.parsed.sha256);
+    if (same) return { file: f, outcome: 'refused' as const, keep: [], skipped: [], message: `Already in project as ${where(same)}.` };
+    const skipped: ImportPlanItem<T>['skipped'] = [];
+    const keep: number[] = [];
+    for (const c of f.cycles) {
+      const hit = c.fingerprint ? runs.get(c.fingerprint) : undefined;
+      if (hit) skipped.push({ cycleNumber: c.cycleNumber, of: hit });
+      else keep.push(c.cycleNumber);
+    }
+    const sources = [...new Set(skipped.map((s) => where(s.of)))];
+    if (f.cycles.length > 0 && keep.length === 0) {
+      return { file: f, outcome: 'refused' as const, keep, skipped, message: `All runs already loaded from ${sources.join(', ')}.` };
+    }
+    files.set(f.parsed.sha256, { sha256: f.parsed.sha256, path: f.parsed.path, mode });
+    for (const c of f.cycles) if (c.fingerprint && keep.includes(c.cycleNumber)) runs.set(c.fingerprint, { path: f.parsed.path, cycleNumber: c.cycleNumber, mode });
+    if (skipped.length) {
+      const bySource = sources.map((src) => `${runList(skipped.filter((s) => where(s.of) === src).map((s) => s.cycleNumber))} (already loaded from ${src})`).join(', ');
+      return { file: f, outcome: 'partial' as const, keep, skipped, message: `Imported ${runList(keep)}, skipped ${bySource}.` };
+    }
+    return { file: f, outcome: 'imported' as const, keep, skipped, message: `Imported ${keep.length} run${keep.length === 1 ? '' : 's'}.` };
+  });
 }

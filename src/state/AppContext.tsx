@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ExperimentMeta, ExperimentMode, GraphConfig, ProjectState, SourceFileRecord } from '../types';
 import { EXPERIMENT_MODES } from '../types';
-import { duplicateNotice, duplicateReason, splitDuplicates } from './duplicates';
+import { dedupeByMode, duplicateNotice, duplicateReason, loadedDuplicateNotice, splitDuplicates } from './duplicates';
 import type { LoadedFile, SkippedEntry, SourceFile } from '../parser/loader';
 import { collectFromFileList, guessMode } from '../parser/loader';
 import { parseInBackground } from '../parser/workerClient';
@@ -337,6 +337,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { by, guessed };
   }, []);
 
+  /** Keep one copy of identical files loaded together (project or session); list the others as duplicates. */
+  const dedupeLoaded = useCallback((by: ByMode<LoadedFile[]>, what: string): ByMode<LoadedFile[]> => {
+    const r = dedupeByMode(by, EXPERIMENT_MODES);
+    if (r.dropped.length) {
+      setSkippedByMode((s) => {
+        const next = { ...s };
+        for (const d of r.dropped) next[d.mode] = [...next[d.mode], { path: d.file.parsed.path, reason: duplicateReason(d, d.mode, MODE_LABEL), duplicate: true }];
+        return next;
+      });
+      notify('warning', loadedDuplicateNotice(r.dropped, MODE_LABEL, what));
+    }
+    return r.by;
+  }, [notify]);
+
   const restoreSession = useCallback(async () => {
     setBusy('Restoring previous session…');
     try {
@@ -346,7 +360,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       autosaveReady.current = true;
       setProject(migrateState(session.state));
       if (stored.length) {
-        const { by, guessed } = await parseIntoModes(stored);
+        const { by: parsedBy, guessed } = await parseIntoModes(stored);
+        setSkippedByMode(emptyByMode(() => []));
+        const by = dedupeLoaded(parsedBy, 'session');
         storeFiles(by);
         notify(
           'success',
@@ -362,7 +378,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setBusy(null);
     }
-  }, [notify, parseIntoModes, storeFiles]);
+  }, [notify, parseIntoModes, storeFiles, dedupeLoaded]);
 
   const discardSession = useCallback(async () => {
     setRestorable(null);
@@ -394,13 +410,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (lp.files.length) {
           // Files stored per test keep their test; tack-layout files take the test of their source record, else are sorted by content.
           const recMode = new Map(lp.json.sources.map((r) => [r.path, r.mode]));
-          const { by } = await parseIntoModes(lp.files.map((f) => ({ ...f, mode: f.mode ?? recMode.get(f.path) })));
+          const { by: parsedBy } = await parseIntoModes(lp.files.map((f) => ({ ...f, mode: f.mode ?? recMode.get(f.path) })));
+          const by = dedupeLoaded(parsedBy, 'project');
           const all = EXPERIMENT_MODES.flatMap((m) => by[m]);
           const m = matchSources(lp.json.sources, all.map((l) => toRecord(l)));
           if (m.idMap.size) setProject(remapState(lp.json.state, m.idMap));
           storeFiles(by);
           setPending([]);
-          notify('success', `Project "${lp.json.state.name}" opened with ${lp.files.length} data file(s).`);
+          const nLoaded = EXPERIMENT_MODES.reduce((n, mm) => n + by[mm].length, 0);
+          notify('success', `Project "${lp.json.state.name}" opened with ${nLoaded} data file(s).`);
         } else {
           setPending(lp.json.sources);
           notify('info', `Project "${lp.json.state.name}" opened. Now select the original folder or files (${lp.json.sources.length}) to reconnect the data.`);
@@ -412,7 +430,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setBusy(null);
       }
     },
-    [notify, parseIntoModes, setUi, storeFiles],
+    [notify, parseIntoModes, setUi, storeFiles, dedupeLoaded],
   );
 
   const exportExcel = useCallback(

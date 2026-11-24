@@ -55,3 +55,32 @@ export function duplicateNotice(total: number, added: number, duplicates: Duplic
   }
   return `Only ${added} of ${total} files were imported. The remaining ${duplicates.length} ${duplicates.length === 1 ? 'is a duplicate' : 'are duplicates'} of data already here (identical content) and ${duplicates.length === 1 ? 'was' : 'were'} skipped: ${list}${more}.`;
 }
+
+/**
+ * Remove identical copies from files loaded together (a project or a restored session saved before
+ * duplicates were blocked). The first copy is kept: tests in the order Probe Tack, Lap Shear, 90° Peel,
+ * files in path order within a test.
+ */
+export function dedupeByMode<T extends { parsed: { sha256: string; path: string } }>(
+  by: Record<ExperimentMode, T[]>,
+  modes: ExperimentMode[],
+): { by: Record<ExperimentMode, T[]>; dropped: (Duplicate<T> & { mode: ExperimentMode })[] } {
+  const known: KnownFile[] = [];
+  const out = {} as Record<ExperimentMode, T[]>;
+  const dropped: (Duplicate<T> & { mode: ExperimentMode })[] = [];
+  for (const m of modes) {
+    const sorted = [...by[m]].sort((a, b) => a.parsed.path.localeCompare(b.parsed.path));
+    const r = splitDuplicates(known, sorted, m);
+    out[m] = by[m].filter((f) => r.fresh.includes(f));
+    for (const d of r.duplicates) dropped.push({ ...d, of: { ...d.of, sameUpload: false }, mode: m });
+    known.push(...r.fresh.map((f) => ({ sha256: f.parsed.sha256, path: f.parsed.path, mode: m })));
+  }
+  return { by: out, dropped };
+}
+
+/** The notice after opening a project or restoring a session that contained identical copies. */
+export function loadedDuplicateNotice(dropped: (Duplicate<{ parsed: { path: string } }> & { mode: ExperimentMode })[], label: Record<ExperimentMode, string>, what: string): string {
+  const list = dropped.slice(0, 3).map((d) => `${d.file.parsed.path} = ${d.of.path}${d.of.mode !== d.mode ? ` (${label[d.of.mode]})` : ''}`).join('; ');
+  const more = dropped.length > 3 ? `; and ${dropped.length - 3} more (see the Files tab)` : '';
+  return `This ${what} contained ${dropped.length} duplicate file${dropped.length === 1 ? '' : 's'} (identical data); only one copy of each was loaded, so no run is counted twice. Not loaded: ${list}${more}. Save the project again to remove ${dropped.length === 1 ? 'it' : 'them'} from the file.`;
+}

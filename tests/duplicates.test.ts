@@ -33,3 +33,23 @@ describe('duplicate files on import', () => {
       .toBe('Only 3 of 5 files were imported. The remaining 2 are duplicates of data already here (identical content) and were skipped: 1.txt = b/1.txt; 2.txt = b/2.txt.');
   });
 });
+
+describe('duplicates inside a project or restored session', () => {
+  it('keeps the first copy (path order) and reports the others, within and across tests', async () => {
+    const { dedupeByMode, loadedDuplicateNotice } = await import('../src/state/duplicates');
+    const by = {
+      tack: [f('t/1s.txt', 't1')],
+      lapShear: [f('l/glass.txt', 'same-as-tack')].map((x) => ({ ...x, parsed: { ...x.parsed, sha256: 't1' } })),
+      peel: [f('post conference/90 peel 2026 Oct/0.25 2.98M/glass.txt', 'g'), f('0.25 2.98M/glass.txt', 'g'), f('0.25 2.98M/PET.txt', 'p')],
+    };
+    const r = dedupeByMode(by, ['tack', 'lapShear', 'peel']);
+    expect(r.by.tack.map((x) => x.parsed.path)).toEqual(['t/1s.txt']);
+    expect(r.by.lapShear).toHaveLength(0);
+    expect(r.by.peel.map((x) => x.parsed.path)).toEqual(['0.25 2.98M/glass.txt', '0.25 2.98M/PET.txt']);
+    expect(r.dropped.map((d) => [d.mode, d.file.parsed.path, d.of.path])).toEqual([
+      ['lapShear', 'l/glass.txt', 't/1s.txt'],
+      ['peel', 'post conference/90 peel 2026 Oct/0.25 2.98M/glass.txt', '0.25 2.98M/glass.txt'],
+    ]);
+    expect(loadedDuplicateNotice(r.dropped, MODE_LABEL, 'project')).toMatch(/^This project contained 2 duplicate files \(identical data\); only one copy of each was loaded/);
+  });
+});

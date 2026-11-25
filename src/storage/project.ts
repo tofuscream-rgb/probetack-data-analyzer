@@ -150,6 +150,13 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
   const s: Partial<PeelSettings> = r.settings ?? {};
   const pos = (v: unknown, fb: number) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fb);
   const runs: Record<string, PeelRunMeta> = {};
+  // Defaults saved with the project. Before 1.19.1 a run stored the defaults of the moment whenever
+  // anything was set for it (failure mode, tare correction, …); dimensions equal to the saved defaults
+  // are read as following the defaults, others as set for the run.
+  const saved = { ...d.settings.defaults, ...(s.defaults ?? {}) };
+  const OLD_DEFAULT = { lengthMm: 60, widthMm: 10, thicknessMm: 1, angleDeg: 90 };
+  const sameDims = (a: { lengthMm: number; widthMm: number; thicknessMm: number; angleDeg: number }, b: typeof a) =>
+    a.lengthMm === b.lengthMm && a.widthMm === b.widthMm && a.thicknessMm === b.thicknessMm && a.angleDeg === b.angleDeg;
   for (const [id, m] of Object.entries(r.runs ?? {})) {
     if (!m || typeof m !== 'object') continue;
     runs[id] = {
@@ -163,6 +170,7 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
       fibrilZoneMm: typeof m.fibrilZoneMm === 'number' && Number.isFinite(m.fibrilZoneMm) && m.fibrilZoneMm >= 0 ? m.fibrilZoneMm : null,
       maxFibrilMm: typeof m.maxFibrilMm === 'number' && Number.isFinite(m.maxFibrilMm) && m.maxFibrilMm >= 0 ? m.maxFibrilMm : null,
       manualDetachMm: typeof m.manualDetachMm === 'number' && Number.isFinite(m.manualDetachMm) ? m.manualDetachMm : null,
+      ownDims: typeof m.ownDims === 'boolean' ? m.ownDims : !sameDims({ lengthMm: m.lengthMm, widthMm: m.widthMm, thicknessMm: m.thicknessMm, angleDeg: m.angleDeg } as typeof saved, saved),
       // Projects before schema 6 have no tare correction: it stays off.
       ...(m.tareCorrection && typeof m.tareCorrection === 'object' ? { tareCorrection: migrateTare(m.tareCorrection) } : {}),
     };
@@ -175,7 +183,8 @@ export function migratePeel(raw: Partial<PeelState> | undefined): PeelState {
       detach: { ...d.settings.detach, ...(s.detach ?? {}) },
       direction: s.direction === 'negative' || s.direction === 'positive' ? s.direction : 'auto',
       gapFactor: pos(s.gapFactor, d.settings.gapFactor),
-      defaults: { ...d.settings.defaults, ...(s.defaults ?? {}) },
+      // Projects still on the old built-in default (60 × 10 mm) take the new one (50 × 20 mm).
+      defaults: sameDims(saved, OLD_DEFAULT) ? { ...d.settings.defaults } : saved,
       tareCheck: migrateTareCheck(d.settings.tareCheck, s.tareCheck),
     },
     runs,

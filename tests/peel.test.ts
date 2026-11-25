@@ -175,9 +175,31 @@ describe('90° peel', () => {
   });
 
   it('opens older projects with empty 90° peel state and keeps saved peel dimensions', () => {
-    expect(migrateState({}).peel.settings.defaults).toEqual({ lengthMm: 60, widthMm: 10, thicknessMm: 1, angleDeg: 90 });
+    expect(migrateState({}).peel.settings.defaults).toEqual({ lengthMm: 50, widthMm: 20, thicknessMm: 1, angleDeg: 90 });
     const s = migrateState({ mode: 'peel', peel: { runs: { 'f#c1': meta({ widthMm: 12, failureMode: 'cohesive' }) } } as never });
     expect(s.mode).toBe('peel');
-    expect(s.peel.runs['f#c1']).toMatchObject({ widthMm: 12, failureMode: 'cohesive', angleDeg: 90 });
+    expect(s.peel.runs['f#c1']).toMatchObject({ widthMm: 12, failureMode: 'cohesive', angleDeg: 90, ownDims: true });
+  });
+
+  it('default gel dimensions are 50 × 20 mm (length × width); runs follow them unless set for the run', async () => {
+    const { peelMeta } = await import('../src/state/peel');
+    const { defaultPeel } = await import('../src/state/defaults');
+    expect(defaultPeel().settings.defaults).toEqual({ lengthMm: 50, widthMm: 20, thicknessMm: 1, angleDeg: 90 });
+    // A project saved on the old default 60 × 10: the default becomes 50 × 20, and runs that only stored the
+    // old default (e.g. after a tare correction) follow it; dimensions set for a run are kept.
+    const old = migrateState({ peel: { settings: { defaults: { lengthMm: 60, widthMm: 10, thicknessMm: 1, angleDeg: 90 } }, runs: {
+      a: meta({ lengthMm: 60, widthMm: 10, tareCorrection: { applied: true, residualGf: 9.4, driftGf: 0, preTareGf: null, windowFromMm: 55, windowToMm: 62 } }),
+      b: meta({ lengthMm: 50, widthMm: 20 }),
+      c: meta({ lengthMm: 25, widthMm: 10 }),
+    } } } as never);
+    expect(old.peel.settings.defaults).toMatchObject({ lengthMm: 50, widthMm: 20 });
+    expect(peelMeta(old.peel, 'a')).toMatchObject({ lengthMm: 50, widthMm: 20, tareCorrection: { applied: true } });
+    expect(peelMeta(old.peel, 'c')).toMatchObject({ lengthMm: 25, widthMm: 10 });
+    expect(peelMeta(old.peel, 'never-edited')).toMatchObject({ lengthMm: 50, widthMm: 20 });
+    // Defaults the user changed are kept, and runs follow them.
+    const custom = migrateState({ peel: { settings: { defaults: { lengthMm: 40, widthMm: 15, thicknessMm: 1, angleDeg: 90 } }, runs: { a: meta({ lengthMm: 40, widthMm: 15 }) } } } as never);
+    expect(custom.peel.settings.defaults).toMatchObject({ lengthMm: 40, widthMm: 15 });
+    const changed = { ...custom.peel, settings: { ...custom.peel.settings, defaults: { ...custom.peel.settings.defaults, widthMm: 25 } } };
+    expect(peelMeta(changed, 'a').widthMm).toBe(25);
   });
 });

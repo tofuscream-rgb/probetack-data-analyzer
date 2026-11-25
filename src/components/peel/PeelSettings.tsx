@@ -90,7 +90,7 @@ export function PeelSettings() {
             <NumberField label="Gel thickness (mm)" value={s.defaults.thicknessMm} positive onCommit={(v) => v !== null && sub('defaults', { thicknessMm: v })} />
             <NumberField label="Peel angle (°)" value={s.defaults.angleDeg} positive onCommit={(v) => v !== null && sub('defaults', { angleDeg: v })} />
           </div>
-          <p className="note">Used for runs whose dimensions you have not set.</p>
+          <p className="note">Default 50 × 20 mm (length × width). Every run follows these values unless you set its own dimensions (sidebar step 4, or the width in Peel metrics); changing them here updates all those runs.</p>
         </Section>
       </div>
       <button className="link" onClick={() => set({ settings: defaultPeel().settings })}>Reset 90° peel settings to defaults</button>

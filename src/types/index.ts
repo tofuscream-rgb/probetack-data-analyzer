@@ -408,6 +408,11 @@ export interface PeelRunMeta {
   /** Detachment (end of peeling) picked by hand (mm); overrides the automatic criterion. */
   manualDetachMm: number | null;
   /**
+   * True when the dimensions were set for this run (sidebar Apply or a width typed in Peel metrics).
+   * Otherwise the run follows the default dimensions in Settings, also after they change.
+   */
+  ownDims?: boolean;
+  /**
    * Post-detachment tare correction of this run. When `applied`, the residual force is subtracted
    * from the whole tensile-force trace before every calculation. The other fields record the check
    * at the time it was applied (gf and mm). Absent = not corrected (projects before 1.19).

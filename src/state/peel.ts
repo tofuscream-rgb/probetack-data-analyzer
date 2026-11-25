@@ -33,9 +33,18 @@ function cachedResult(c: Cycle, meta: PeelRunMeta, s: PeelSettings): PeelResult 
   return result;
 }
 
+/**
+ * A run's dimensions and observations. Dimensions come from the run only when they were set for it
+ * (ownDims); otherwise from the current defaults, so changing the defaults updates those runs.
+ */
 export function peelMeta(ps: PeelState, id: string): PeelRunMeta {
-  return ps.runs[id] ?? { ...ps.settings.defaults, failureMode: 'unspecified', peelMorphology: 'unspecified', observation: '', fibrilZoneMm: null, maxFibrilMm: null, manualDetachMm: null };
+  const d = ps.settings.defaults;
+  const stored = ps.runs[id];
+  if (!stored) return { ...d, failureMode: 'unspecified', peelMorphology: 'unspecified', observation: '', fibrilZoneMm: null, maxFibrilMm: null, manualDetachMm: null };
+  return stored.ownDims ? stored : { ...stored, lengthMm: d.lengthMm, widthMm: d.widthMm, thicknessMm: d.thicknessMm, angleDeg: d.angleDeg };
 }
+
+const DIM_KEYS = ['lengthMm', 'widthMm', 'thicknessMm', 'angleDeg'] as const;
 
 export function usePeel() {
   const { filesByMode, project, update, meta } = useApp();
@@ -87,7 +96,9 @@ export function usePeel() {
     (ids: string[], patch: Partial<PeelRunMeta>) =>
       update((p) => {
         const next = { ...p.peel.runs };
-        for (const id of ids) next[id] = { ...peelMeta(p.peel, id), ...patch };
+        // Setting a dimension makes the run keep its own dimensions; other edits leave them following the defaults.
+        const setsDims = DIM_KEYS.some((k) => k in patch);
+        for (const id of ids) next[id] = { ...peelMeta(p.peel, id), ...patch, ownDims: setsDims || p.peel.runs[id]?.ownDims === true };
         return { ...p, peel: { ...p.peel, runs: next } };
       }),
     [update],

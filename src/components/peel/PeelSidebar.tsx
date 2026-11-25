@@ -69,7 +69,7 @@ export function PeelSidebar() {
           <h2>3. Runs on the graph</h2>
           <RunPicker
             files={files}
-            runs={picked.map((r) => ({ id: r.id, fileId: r.file.fileId, cycleNumber: r.cycle.cycleNumber, ok: r.result.ok, error: r.result.error, peakGf: r.result.peak?.forceGf ?? null, leftOut: (ps.analysisInclusion ?? {})[r.id] === false, tare: r.result.tare ? (r.meta.tareCorrection?.applied && r.result.tare.valid ? 'corrected' : r.result.tare.status === 'flagged' ? 'flagged' : r.result.tare.status === 'cannotCheck' ? 'cannotCheck' : null) : null }))}
+            runs={picked.map((r) => ({ id: r.id, fileId: r.file.fileId, cycleNumber: r.cycle.cycleNumber, ok: r.result.ok, error: r.result.error, peakGf: r.result.peak?.forceGf ?? null, leftOut: (ps.analysisInclusion ?? {})[r.id] === false, tare: r.result.tare ? (r.meta.tareCorrection?.applied && r.result.tare.valid ? 'corrected' : r.result.tare.status === 'flagged' ? 'flagged' : r.result.tare.status === 'cannotCheck' ? 'cannotCheck' : null) : null, tareNote: r.result.tare?.reason || undefined }))}
             selectedIds={selectedIds}
             setSelected={setPickedSelected}
             nameOf={(l) => names.get(l.parsed.fileId) ?? l.parsed.name}

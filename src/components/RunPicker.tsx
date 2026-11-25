@@ -16,6 +16,8 @@ export interface PickableRun {
   leftOut?: boolean;
   /** 90° Peel tare check: possible offset, cannot check, or corrected. */
   tare?: 'flagged' | 'cannotCheck' | 'corrected' | null;
+  /** The run's tare-check reason (hover text of its badge). */
+  tareNote?: string;
 }
 
 const TARE_BADGE = {
@@ -23,7 +25,7 @@ const TARE_BADGE = {
   cannotCheck: { cls: 'cannot', text: 'can’t check', title: 'The tare check could not be done for this run (see its details)' },
   corrected: { cls: 'corrected', text: 'tare corrected', title: 'The residual force after detachment is subtracted from this run' },
 } as const;
-const TareTag = ({ k }: { k: PickableRun['tare'] }) => (k ? <span className={`tare-badge ${TARE_BADGE[k].cls}`} title={TARE_BADGE[k].title}>{TARE_BADGE[k].text}</span> : null);
+const TareTag = ({ k, note }: { k: PickableRun['tare']; note?: string }) => (k ? <span className={`tare-badge ${TARE_BADGE[k].cls}`} title={note || TARE_BADGE[k].title}>{TARE_BADGE[k].text}</span> : null);
 
 /**
  * Step 2 of Lap Shear and 90° Peel: tick any number of files (all their runs) or
@@ -71,7 +73,7 @@ export function RunPicker({ files, runs, selectedIds, setSelected, hint, nameOf,
             aria-label={`Analyse ${l.parsed.name}`}
           />
           <button className="disclose" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [l.parsed.fileId]: !isOpen }))}>
-            <span className="caret">{isOpen ? '▾' : '▸'}</span> <span className="fl-name">{l.parsed.name}{context(l) && <small className="fl-context"> {context(l)}</small>} <TareTag k={list.some((r) => r.tare === 'flagged') ? 'flagged' : list.some((r) => r.tare === 'corrected') ? 'corrected' : list.length > 0 && list.every((r) => r.tare === 'cannotCheck') ? 'cannotCheck' : null} /></span>
+            <span className="caret">{isOpen ? '▾' : '▸'}</span> <span className="fl-name">{l.parsed.name}{context(l) && <small className="fl-context"> {context(l)}</small>} <TareTag k={list.some((r) => r.tare === 'flagged') ? 'flagged' : list.some((r) => r.tare === 'corrected') ? 'corrected' : list.length > 0 && list.every((r) => r.tare === 'cannotCheck') ? 'cannotCheck' : null} note={list.length > 0 && list.every((r) => r.tare === 'cannotCheck') ? 'None of this file’s runs could be tare checked; open the file to see the reason for each run' : undefined} /></span>
           </button>
           <small>{n}/{ids.length} run{ids.length === 1 ? '' : 's'}</small>
           {list.length > 0 && (
@@ -85,7 +87,7 @@ export function RunPicker({ files, runs, selectedIds, setSelected, hint, nameOf,
           <div key={r.id}>
             <label className={`fl-file ${r.ok ? '' : 'off'}`} title={r.leftOut ? 'Left out of the average (In average unticked in Data analysis); still drawn grey dashed if ticked here' : ''}>
               <input type="checkbox" checked={selectedIds.includes(r.id)} disabled={!r.ok} onChange={(e) => toggle([r.id], e.target.checked)} />
-              <span className="fl-name">Run {r.cycleNumber}{r.leftOut && <small className="left-out"> · left out</small>} <TareTag k={r.tare} /></span>
+              <span className="fl-name">Run {r.cycleNumber}{r.leftOut && <small className="left-out"> · left out</small>} <TareTag k={r.tare} note={r.tareNote} /></span>
               <small>{r.peakGf !== null ? `${fmt(r.peakGf, 1)} gf` : '—'}</small>
             </label>
             {!r.ok && <p className="run-error">{r.error}</p>}

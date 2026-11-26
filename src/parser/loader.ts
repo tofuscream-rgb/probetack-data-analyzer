@@ -96,13 +96,57 @@ export async function collectFromFileList(
   return { files, skipped };
 }
 
+/** How an upload decided which test a file belongs to. */
+export type ModeSource = 'content' | 'name' | 'speed' | 'current';
+
+/** Test names in folder or file names; the closest name to the file wins. */
+const NAME_HINTS: [RegExp, ExperimentMode][] = [
+  [/lap[\s_-]*shear|\bshear\b/i, 'lapShear'],
+  [/\bpeel/i, 'peel'],
+  [/tack|\bprobe\b/i, 'tack'],
+];
+
+export function modeFromPath(path: string): ExperimentMode | null {
+  const parts = path.split('/').reverse();
+  for (const part of parts) {
+    const hits = NAME_HINTS.filter(([re]) => re.test(part)).map(([, m]) => m);
+    if (hits.length === 1) return hits[0];
+  }
+  return null;
+}
+
+/** Fastest stage speed (mm/s) of the moves of a file, or null if none is given. */
+function fastestMove(l: LoadedFile): number | null {
+  const v = l.parsed.blocks
+    .filter((b) => /^move/i.test(b.type))
+    .map((b) => Math.abs(parseFloat(Object.entries(b.params).find(([k]) => /^velocity/i.test(k))?.[1] ?? '')))
+    .filter(Number.isFinite);
+  return v.length ? Math.max(...v) : null;
+}
+
+/** Lap shear pulls slowly (typically 5 mm/min ≈ 0.08 mm/s); probe tack retracts at mm/s. */
+const TACK_MIN_SPEED = 1;
+
 /**
- * Test a file most likely belongs to, for sessions and projects saved before files
- * were kept per test: hold (Wait) blocks before the moves = probe tack, a Script
- * block = 90° peel, otherwise lap shear.
+ * Test a file belongs to, so one upload can hold files of every test:
+ *   1. a Script block → 90° peel (the peel protocol runs as a script);
+ *   2. a test named in the nearest folder or file name ("lap-shear 2026 Oct", "90 peel", "tack");
+ *   3. hold (Wait) blocks before the moves → probe tack;
+ *   4. moves faster than 1 mm/s → probe tack, slower → lap shear;
+ *   5. otherwise (no runs, e.g. a note) the test that is open.
  */
+export function detectMode(l: LoadedFile, fallback: ExperimentMode): { mode: ExperimentMode; by: ModeSource } {
+  if (l.parsed.blocks.some((b) => isScriptBlock(b.type))) return { mode: 'peel', by: 'content' };
+  const named = modeFromPath(l.parsed.path);
+  if (named) return { mode: named, by: 'name' };
+  if (l.cycles.some((c) => c.holdBlockIndex !== null)) return { mode: 'tack', by: 'content' };
+  if (!l.cycles.length) return { mode: fallback, by: 'current' };
+  const v = fastestMove(l);
+  if (v !== null) return { mode: v >= TACK_MIN_SPEED ? 'tack' : 'lapShear', by: 'speed' };
+  return { mode: fallback, by: 'current' };
+}
+
+/** Test of a stored file saved before files were kept per test. */
 export function guessMode(l: LoadedFile): ExperimentMode {
-  if (l.cycles.some((c) => c.holdBlockIndex !== null)) return 'tack';
-  if (l.parsed.blocks.some((b) => isScriptBlock(b.type))) return 'peel';
-  return l.cycles.length ? 'lapShear' : 'tack';
+  return detectMode(l, l.cycles.length ? 'lapShear' : 'tack').mode;
 }

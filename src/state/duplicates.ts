@@ -105,13 +105,15 @@ export function planImport<T extends { parsed: { sha256: string; path: string };
   knownFiles: KnownFile[],
   knownRuns: Map<string, KnownRun>,
   incoming: T[],
-  mode: ExperimentMode,
+  /** Test the upload goes to, or the test of each file when one upload holds several tests. */
+  modeOf: ExperimentMode | ((f: T) => ExperimentMode),
   label: Record<ExperimentMode, string>,
 ): ImportPlanItem<T>[] {
   const files = new Map(knownFiles.map((k) => [k.sha256, k]));
   const runs = new Map(knownRuns);
-  const where = (k: { path: string; mode: ExperimentMode }) => `${k.path}${k.mode !== mode ? ` (${label[k.mode]})` : ''}`;
   return incoming.map((f) => {
+    const mode = typeof modeOf === 'function' ? modeOf(f) : modeOf;
+    const where = (k: { path: string; mode: ExperimentMode }) => `${k.path}${k.mode !== mode ? ` (${label[k.mode]})` : ''}`;
     const same = files.get(f.parsed.sha256);
     if (same) return { file: f, outcome: 'refused' as const, keep: [], skipped: [], message: `Already in project as ${where(same)}.` };
     const skipped: ImportPlanItem<T>['skipped'] = [];

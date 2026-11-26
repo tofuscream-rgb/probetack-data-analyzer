@@ -148,6 +148,10 @@ describe('run-level duplicate detection when adding files', () => {
     // The same data recorded at another time is a different run.
     const later = await parseSource({ path: 'c/glass.txt', bytes: enc(peelFile([{ f0: 1, time: '09:30:00.000' }])) });
     expect(planImport([], new Map(), [one, later], 'peel', MODE_LABEL).map((x) => x.outcome)).toEqual(['imported', 'imported']);
+    // Files of one upload going to different tests: a match in another test is named with that test.
+    const plan2 = planImport([], new Map(), [one, sameRun], (f) => (f === one ? 'tack' : 'peel'), MODE_LABEL);
+    expect(plan2[1].outcome).toBe('refused');
+    expect(plan2[1].message).toContain(`(${MODE_LABEL.tack})`);
   });
 
   it('saved projects keep the runs that were not imported', () => {

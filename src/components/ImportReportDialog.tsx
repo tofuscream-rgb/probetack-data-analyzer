@@ -5,12 +5,12 @@ import { Dialog } from './Dialog';
 export function ImportReportDialog() {
   const { importReport: r, closeImportReport } = useApp();
   if (!r) return null;
-  const section = (title: string, cls: string, items: { path: string; message: string }[], note: string) =>
+  const section = (title: string, cls: string, items: { path: string; message: string; test?: string }[], note: string) =>
     items.length > 0 && (
       <section className={`import-report-section ${cls}`}>
         <h3>{title} ({items.length})</h3>
         <p className="note">{note}</p>
-        <ul>{items.map((x) => <li key={x.path}><strong>{x.path}</strong> — {x.message}</li>)}</ul>
+        <ul>{items.map((x) => <li key={x.path}><strong>{x.path}</strong>{x.test && <small> ({x.test})</small>} — {x.message}</li>)}</ul>
       </section>
     );
   return (

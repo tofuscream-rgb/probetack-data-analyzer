@@ -6,7 +6,7 @@ A browser-based tool for analysing Biomomentum Mach-1 mechanical test files (TXT
 - **Lap Shear**: peak load, apparent nominal lap-shear strength, mechanical work and work per bonded area for every run, with editable specimen dimensions and failure modes (see [Lap Shear analysis](#lap-shear-analysis)).
 - **90° Peel**: average peel force (steady state), peel strength, peel energy, peak and initiation peak forces, area under the graph (work) and work per peeled area, with editable gel dimensions (see [90° peel analysis](#90-peel-analysis)).
 
-**Each test has its own files.** Files opened while Probe Tack is selected belong to Probe Tack only; switch to Lap Shear or 90° Peel and you start with an empty file list and import that test's files there. Each test's files, ticks and settings are kept separately in autosave and in saved projects. Remove files with × (one file or folder) or *Remove all*; the files on your computer are never changed.
+**Files are sorted into their tests automatically.** One folder or ZIP can hold Probe Tack, Lap Shear and 90° Peel data together, whichever test is open when you import it: each file goes to its own test, and the import message says how many went where. A file is sorted by its content first: a Script block means 90° Peel; otherwise a test named in its folder or file name (e.g. `lap-shear 2026 Oct/`, `90 peel/`, `tack/`) decides; otherwise Wait (holding) blocks or moves faster than 1 mm/s mean Probe Tack, and slower pulls (lap shear typically runs at 5 mm/min) mean Lap Shear. Files without runs (e.g. notes) go to the test that is open. Files a saved project is waiting for go back to the test they were saved in. Each test's files, ticks and settings are kept separately in autosave and in saved projects. Remove files with × (one file or folder) or *Remove all*; the files on your computer are never changed.
 
 Both export Excel workbooks with editable charts and save projects.
 
@@ -307,7 +307,7 @@ Project files carry a schema version, the app and algorithm versions, and are va
 | Two-step sidebar (open, choose experiment) and tabs (Graph, Data analysis, Compare charge ratios, Settings, Files) | Implemented; exercised in Chromium at 1280 px width |
 | Lap Shear mode: runs, dimensions, strength, work, failure endpoint, baseline, statistics, Excel | Implemented and tested (synthetic cases with known answers); exercised in the browser with a real two-run lap-shear file |
 | 90° Peel mode: Script-section runs, gel dimensions, average peel force, peel strength, peel energy, work, detachment, Excel | Implemented and tested (synthetic cases with known answers); exercised in the browser with a real peel file |
-| Separate files per test, remove files, per-test autosave and projects | Implemented and tested; older sessions are sorted into tests by file content |
+| Automatic sorting of imported files into tests, remove files, per-test autosave and projects | Implemented and tested; older sessions are sorted into tests the same way |
 | Grouped statistics with run- and repeat-level variation | Implemented and tested |
 | Excel export with native charts | Implemented and tested; **verify in Microsoft Excel** |
 | PNG / SVG / graph-data export | Implemented; exercised in the browser |

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzePeel } from '../src/analysis/peel';
-import { parseSource, guessMode } from '../src/parser/loader';
+import { parseSource, guessMode, detectMode, modeFromPath } from '../src/parser/loader';
 import { defaultPeel } from '../src/state/defaults';
 import { migrateState } from '../src/storage/project';
 import { GF_TO_N, type PeelRunMeta, type PeelSettings } from '../src/types';
@@ -172,6 +172,23 @@ describe('90° peel', () => {
     expect(guessMode(tack.find((l) => l.cycles.length)!)).toBe('tack');
     const lap = await parseSource({ path: 'SS.txt', bytes: enc(['<Mach-1 File>', '<Move Relative>', 'Amplitude, mm:\t-25', '<DATA>', 'Time, s\tPosition (z), mm\tFz, gf', '0\t0\t0', '0.01\t-0.1\t-5', '0.02\t-0.2\t-9', '<END DATA>'].join('\r\n')) });
     expect(guessMode(lap)).toBe('lapShear');
+  });
+
+  it('sorts each file of a mixed upload into its test, whichever test is open', async () => {
+    const moveFile = (velocity: number, path: string) => parseSource({ path, bytes: enc(['<Mach-1 File>', '<Move Relative>', 'Amplitude, mm:\t-25', `Velocity, mm/s:\t${velocity}`, '<DATA>', 'Time, s\tPosition (z), mm\tFz, gf', '0\t0\t0', '0.01\t-0.1\t-5', '0.02\t-0.2\t-9', '<END DATA>'].join('\r\n')) });
+    // By speed: lap shear pulls at 5 mm/min, probe tack retracts at 10 mm/s (also without a Wait block).
+    expect(detectMode(await moveFile(0.0833, 'data/0.25/PET.txt'), 'peel')).toEqual({ mode: 'lapShear', by: 'speed' });
+    expect(detectMode(await moveFile(10, 'data/0.25 2.1M/glass/1s.txt'), 'lapShear')).toEqual({ mode: 'tack', by: 'speed' });
+    // A test named in the closest folder or file name wins over the speed.
+    expect(detectMode(await moveFile(10, 'Oct/lap-shear 2026 Oct/0.25/SS.txt'), 'tack').mode).toBe('lapShear');
+    expect(detectMode(await moveFile(0.0833, 'probe tack/x/1s.txt'), 'lapShear').mode).toBe('tack');
+    expect(modeFromPath('90 peel 2026 Oct/0.25 2.5M/PET.txt')).toBe('peel');
+    expect(modeFromPath('lap shear vs peel/SS.txt')).toBeNull();
+    // Files without runs (notes) stay in the open test.
+    const note = await parseSource({ path: 'f=0.75/ss note.txt', bytes: enc('gel slipped on run 2') });
+    expect(detectMode(note, 'peel')).toEqual({ mode: 'peel', by: 'current' });
+    const tack = await loadSynthetic();
+    expect(detectMode(tack.find((l) => l.cycles.length)!, 'peel').mode).toBe('tack');
   });
 
   it('opens older projects with empty 90° peel state and keeps saved peel dimensions', () => {

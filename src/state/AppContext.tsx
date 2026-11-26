@@ -3,7 +3,7 @@ import type { ExperimentMeta, ExperimentMode, GraphConfig, ProjectState, SourceF
 import { EXPERIMENT_MODES } from '../types';
 import { dedupeByMode, duplicateReason, loadedDuplicateNotice, planImport } from './duplicates';
 import type { LoadedFile, SkippedEntry, SourceFile } from '../parser/loader';
-import { collectFromFileList, guessMode } from '../parser/loader';
+import { collectFromFileList, detectMode, guessMode } from '../parser/loader';
 import { parseInBackground } from '../parser/workerClient';
 import { applyOverride, groupSubstrates, inferMetadata } from '../parser/pathMetadata';
 import { computeDerived, type Derived } from '../analysis/engine';
@@ -63,10 +63,12 @@ interface Ctx {
 /** What an upload added: files imported whole, partly imported (some runs already loaded), or refused. */
 export interface ImportReport {
   test: string;
-  imported: { path: string; message: string }[];
-  partial: { path: string; message: string }[];
-  refused: { path: string; message: string }[];
+  imported: ImportReportItem[];
+  partial: ImportReportItem[];
+  refused: ImportReportItem[];
 }
+/** One file of an import summary; `test` is set when the upload went to more than one test. */
+export interface ImportReportItem { path: string; message: string; test?: string }
 
 const AppContext = createContext<Ctx | null>(null);
 
@@ -245,7 +247,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ---- import ----------------------------------------------------------------------
   const importSources = useCallback(
     async (sources: SourceFile[], skippedEntries: SkippedEntry[] = []) => {
-      const mode = modeRef.current;
+      const current = modeRef.current;
       if (sources.length === 0) {
         notify('warning', skippedEntries.length ? 'No .txt files were found in the selection.' : 'Nothing was selected.');
         return;
@@ -256,55 +258,88 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setBusy(`Reading ${i + 1} of ${sources.length}: ${sources[i].path}`);
         parsed.push(await parseInBackground(sources[i]));
       }
+      // One upload can hold files of every test: each file goes to the test it belongs to. A file a
+      // settings-only project is waiting for goes back to the test it was saved in.
+      const waitingFor = new Map(pendingAll.map((r) => [r.sha256, r.mode ?? current]));
+      const modeOf = new Map(parsed.map((l) => [l, waitingFor.get(l.parsed.sha256) ?? detectMode(l, current).mode]));
+      const testOf = (l: LoadedFile) => modeOf.get(l)!;
       // Nothing loaded is ever replaced: an identical file, or a file whose runs are all loaded already
       // (in any test, from any file), is refused; of a file with some loaded runs only the new runs are added.
       const knownFiles = EXPERIMENT_MODES.flatMap((m) => filesRef.current[m].map((l) => ({ sha256: l.parsed.sha256, path: l.parsed.path, mode: m })));
       const knownRuns = new Map(EXPERIMENT_MODES.flatMap((m) => filesRef.current[m].flatMap((l) => l.cycles.filter((c) => c.fingerprint).map((c) => [c.fingerprint!, { path: l.parsed.path, cycleNumber: c.cycleNumber, mode: m }] as const))));
-      const plan = planImport(knownFiles, knownRuns, parsed, mode, MODE_LABEL);
+      const plan = planImport(knownFiles, knownRuns, parsed, testOf, MODE_LABEL);
       const refused = plan.filter((p) => p.outcome === 'refused');
       const partial = plan.filter((p) => p.outcome === 'partial');
-      const out = plan.filter((p) => p.outcome !== 'refused').map((p) => withoutDuplicateRuns(p.file, p.skipped.map((x) => x.cycleNumber), p.outcome === 'partial' ? p.message.replace(/^Imported /, 'Only the new runs were imported: ') : undefined));
-      const dupEntries: SkippedEntry[] = refused.map((p) => ({ path: p.file.parsed.path, reason: `Not added: ${p.message}`, duplicate: true }));
-      setSkippedByMode((s) => ({ ...s, [mode]: [...s[mode], ...skippedEntries, ...dupEntries] }));
+      const accepted = plan.filter((p) => p.outcome !== 'refused');
+      const out = accepted.map((p) => withoutDuplicateRuns(p.file, p.skipped.map((x) => x.cycleNumber), p.outcome === 'partial' ? p.message.replace(/^Imported /, 'Only the new runs were imported: ') : undefined));
+      const outMode = new Map(out.map((l, i) => [l, testOf(accepted[i].file)]));
+      const modesHit = EXPERIMENT_MODES.filter((m) => parsed.some((l) => testOf(l) === m));
+      const several = modesHit.length > 1 || (modesHit.length === 1 && modesHit[0] !== current);
+      setSkippedByMode((s) => {
+        const next = { ...s, [current]: [...s[current], ...skippedEntries] };
+        for (const p of refused) next[testOf(p.file)] = [...next[testOf(p.file)], { path: p.file.parsed.path, reason: `Not added: ${p.message}`, duplicate: true }];
+        return next;
+      });
       if (partial.length) {
         setProject((p) => ({ ...p, duplicateRuns: { ...(p.duplicateRuns ?? {}), ...Object.fromEntries(partial.map((x) => [x.file.parsed.fileId, x.skipped.map((k) => k.cycleNumber)])) } }));
       }
       const duplicates = [...refused, ...partial];
       if (duplicates.length) {
+        const item = (p: (typeof plan)[number]) => ({ path: p.file.parsed.path, message: p.message, test: several ? MODE_LABEL[testOf(p.file)] : undefined });
         setImportReport({
-          test: MODE_LABEL[mode],
-          imported: plan.filter((p) => p.outcome === 'imported').map((p) => ({ path: p.file.parsed.path, message: p.message })),
-          partial: partial.map((p) => ({ path: p.file.parsed.path, message: p.message })),
-          refused: refused.map((p) => ({ path: p.file.parsed.path, message: p.message })),
+          test: several ? 'all tests' : MODE_LABEL[current],
+          imported: plan.filter((p) => p.outcome === 'imported').map(item),
+          partial: partial.map(item),
+          refused: refused.map(item),
         });
       }
       if (!out.length) {
         setBusy(null);
         return;
       }
-      storeFiles({ ...filesRef.current, [mode]: [...filesRef.current[mode], ...out].sort(byPath) });
+      const nextFiles = { ...filesRef.current };
+      for (const m of EXPERIMENT_MODES) {
+        const add = out.filter((l) => outMode.get(l) === m);
+        if (add.length) nextFiles[m] = [...nextFiles[m], ...add].sort(byPath);
+      }
+      storeFiles(nextFiles);
 
-      // Reconnect a settings-only project if one is waiting for its files.
-      const waiting = pendingOf(pendingAll, mode);
-      if (waiting.length) {
-        const m = matchSources(waiting, out.map((l) => toRecord(l)));
-        if (m.idMap.size) setProject((p) => remapState(p, m.idMap));
-        const stillMissing = waiting.filter((s) => !m.idMap.has(s.fileId));
-        setPending((all) => all.filter((r) => !waiting.includes(r) || stillMissing.includes(r)));
+      // Reconnect a settings-only project if it is waiting for its files.
+      let reconnected = 0;
+      let waitingTotal = 0;
+      let changed = 0;
+      const stillMissing: SourceFileRecord[] = [];
+      const idMap = new Map<string, string>();
+      for (const m of EXPERIMENT_MODES) {
+        const waiting = pendingAll.filter((r) => (r.mode ?? current) === m);
+        if (!waiting.length) continue;
+        const r = matchSources(waiting, out.filter((l) => outMode.get(l) === m).map((l) => toRecord(l, m)));
+        r.idMap.forEach((v, k) => idMap.set(k, v));
+        reconnected += r.idMap.size;
+        waitingTotal += waiting.length;
+        changed += r.changed.length;
+        stillMissing.push(...waiting.filter((x) => !r.idMap.has(x.fileId)));
+      }
+      if (waitingTotal) {
+        if (idMap.size) setProject((p) => remapState(p, idMap));
+        setPending((all) => all.filter((r) => !idMap.has(r.fileId)));
         notify(
           stillMissing.length ? 'warning' : 'success',
-          `Reconnected ${m.idMap.size} of ${waiting.length} project file(s).` +
-            (m.changed.length ? ` ${m.changed.length} file(s) have the same name but different content and were not reconnected.` : '') +
-            (stillMissing.length ? ` Still missing: ${stillMissing.slice(0, 4).map((s) => s.path).join(', ')}${stillMissing.length > 4 ? '…' : ''}` : ''),
+          `Reconnected ${reconnected} of ${waitingTotal} project file(s).` +
+            (changed ? ` ${changed} file(s) have the same name but different content and were not reconnected.` : '') +
+            (stillMissing.length ? ` Still missing: ${stillMissing.slice(0, 4).map((x) => x.path).join(', ')}${stillMissing.length > 4 ? '…' : ''}` : ''),
         );
       }
 
       const nCycles = out.reduce((s, l) => s + l.cycles.length, 0);
       const bad = out.filter((l) => l.parsed.status === 'error').length;
       const warn = out.filter((l) => l.parsed.status === 'warning').length;
-      if (!duplicates.length) notify(
+      const perTest = EXPERIMENT_MODES.map((m) => [m, out.filter((l) => outMode.get(l) === m).length] as const).filter(([, n]) => n > 0);
+      const sorted = several ? ` Sorted by test: ${perTest.map(([m, n]) => `${n} to ${MODE_LABEL[m]}`).join(', ')}.` : '';
+      const elsewhere = several && !perTest.some(([m]) => m === current) ? ` None are ${MODE_LABEL[current]} files; open ${perTest.map(([m]) => MODE_LABEL[m]).join(' or ')} to see them.` : '';
+      if (!duplicates.length || several) notify(
         bad || warn ? 'warning' : 'success',
-        `Imported ${out.length} file(s) with ${nCycles} run(s) for ${MODE_LABEL[mode]}.` +
+        `Imported ${out.length} file(s) with ${nCycles} run(s)${several ? '.' : ` for ${MODE_LABEL[current]}.`}` + sorted + elsewhere +
           (bad ? ` ${bad} file(s) had no usable data.` : '') +
           (warn ? ` ${warn} file(s) have warnings.` : '') +
           (bad || warn ? ' Details are in the Files tab.' : ''),

@@ -4,7 +4,7 @@ import { EXPERIMENT_MODES } from '../types';
 import { dedupeByMode, duplicateReason, loadedDuplicateNotice, planImport } from './duplicates';
 import { findMisfiled, moveBetweenTests, type Misfiled } from './misfiled';
 import type { LoadedFile, SkippedEntry, SourceFile } from '../parser/loader';
-import { collectFromFileList, detectMode, guessMode } from '../parser/loader';
+import { collectFromFileList, detectMode, guessMode, unpackSavedProjects } from '../parser/loader';
 import { parseInBackground } from '../parser/workerClient';
 import { applyOverride, groupSubstrates, inferMetadata } from '../parser/pathMetadata';
 import { computeDerived, type Derived } from '../analysis/engine';
@@ -275,7 +275,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // One upload can hold files of every test: each file goes to the test it belongs to. A file a
       // settings-only project is waiting for goes back to the test it was saved in.
       const waitingFor = new Map(pendingAll.map((r) => [r.sha256, r.mode ?? current]));
-      const modeOf = new Map(parsed.map((l) => [l, waitingFor.get(l.parsed.sha256) ?? detectMode(l, current).mode]));
+      const modeOf = new Map(parsed.map((l, i) => [l, waitingFor.get(l.parsed.sha256) ?? sources[i].mode ?? detectMode(l, current).mode]));
       const testOf = (l: LoadedFile) => modeOf.get(l)!;
       // Nothing loaded is ever replaced: an identical file, or a file whose runs are all loaded already
       // (in any test, from any file), is refused; of a file with some loaded runs only the new runs are added.
@@ -376,7 +376,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (list: ArrayLike<File>) => {
       setBusy('Collecting files…');
       try {
-        const { files: src, skipped: sk } = await collectFromFileList(list);
+        const collected = await collectFromFileList(list);
+        const { files: src, skipped: sk, projects } = unpackSavedProjects(collected.files, collected.skipped);
+        if (projects) notify('success', 'This is a saved project: its data files were imported into their tests. Use Load project to restore its settings and choices as well.');
         await importSources(src, sk);
       } catch (e) {
         notify('error', `Import failed: ${(e as Error).message}`);

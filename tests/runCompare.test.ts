@@ -54,6 +54,13 @@ describe('unique run labels', () => {
       { fileId: 'c', name: 'x.txt', path: 'Lap/0.5/glass/x.txt' },
     ]);
     expect([m.get('a'), m.get('b'), m.get('c')]).toEqual(['0.25 2.1M/ss/1s.txt', '0.25 2.5M/ss/1s.txt', 'x.txt']);
+    // Files from different uploads share no folders: only the end of each path that differs is kept.
+    const n = uniqueFileNames([
+      { fileId: 'a', name: 'PET.txt', path: '90 peel 2026 Oct 2/0.25 2.1M/PET.txt' },
+      { fileId: 'b', name: 'PET.txt', path: 'Hydrogel_Analysis_Project (most updated)/data/@peel/post conference/0.25 2.1M/PET.txt' },
+      { fileId: 'c', name: 'PET.txt', path: 'other/0.25 2.5M/PET.txt' },
+    ]);
+    expect([n.get('a'), n.get('b'), n.get('c')]).toEqual(['90 peel 2026 Oct 2/0.25 2.1M/PET.txt', 'post conference/0.25 2.1M/PET.txt', '0.25 2.5M/PET.txt']);
   });
 });
 

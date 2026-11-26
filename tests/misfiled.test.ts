@@ -49,3 +49,31 @@ describe('files in the wrong test', () => {
     expect(migrateState({}).keptInTest).toEqual({});
   });
 });
+
+describe('a saved project opened as data', () => {
+  it('takes the storage folders off the paths, tells the test from them and leaves out the README', async () => {
+    const { unpackSavedProjects } = await import('../src/parser/loader');
+    const b = new Uint8Array([1]);
+    const r = unpackSavedProjects(
+      [
+        { path: 'P (most updated)/README.txt', bytes: b },
+        { path: 'P (most updated)/data/@peel/post conference/0.25 2.1M/PET.txt', bytes: b },
+        { path: 'P (most updated)/data/@lapShear/lap-shear 2026 Oct/0.25/SS.txt', bytes: b },
+        { path: 'P (most updated)/data/Full data_nov.12/ss/1s.txt', bytes: b },
+        { path: 'other/data/x.txt', bytes: b },
+      ],
+      [{ path: 'upload.zip/P (most updated)/project.json', reason: 'Not a .txt file' }, { path: 'upload.zip/a.png', reason: 'Not a .txt file' }],
+    );
+    expect(r.projects).toBe(1);
+    expect(r.files.map((f) => [f.path, f.mode])).toEqual([
+      ['post conference/0.25 2.1M/PET.txt', 'peel'],
+      ['lap-shear 2026 Oct/0.25/SS.txt', 'lapShear'],
+      ['Full data_nov.12/ss/1s.txt', 'tack'],
+      ['other/data/x.txt', undefined],
+    ]);
+    expect(r.skipped.map((s) => s.path)).toEqual(['upload.zip/a.png']);
+    // Ordinary uploads are not changed.
+    const plain = [{ path: 'data/0.25/PET.txt', bytes: b }];
+    expect(unpackSavedProjects(plain, []).files).toBe(plain);
+  });
+});

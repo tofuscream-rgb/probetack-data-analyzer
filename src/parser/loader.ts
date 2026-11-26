@@ -10,6 +10,8 @@ import { extractCycles, isScriptBlock, parseMach1Text } from './mach1Parser';
 export interface SourceFile {
   path: string; // relative path with folders, "/"-separated
   bytes: Uint8Array;
+  /** Test the file was saved in, when it comes from a saved project's data folder ("data/@peel/…"). */
+  mode?: ExperimentMode;
 }
 
 export interface LoadedFile {
@@ -42,6 +44,30 @@ export function expandZip(zipName: string, bytes: Uint8Array): { files: SourceFi
   }
   files.sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
   return { files, skipped };
+}
+
+const STORED_MODE: Record<string, ExperimentMode> = { '@lapShear': 'lapShear', '@peel': 'peel' };
+
+/**
+ * A saved project (ZIP or unzipped folder) opened as data: its files sit in "<project>/data/",
+ * Lap Shear and 90° Peel files below "data/@lapShear/" and "data/@peel/". Those folders are
+ * storage only, so they are taken off the paths (the paths are then as originally imported) and
+ * tell the test of each file (directly in "data/" = Probe Tack); the project's README.txt is not data and is left out.
+ */
+export function unpackSavedProjects(files: SourceFile[], skipped: SkippedEntry[]): { files: SourceFile[]; skipped: SkippedEntry[]; projects: number } {
+  const dirs = skipped.map((s) => s.path).filter((p) => /(^|\/)project\.json$/.test(p)).map((p) => p.slice(0, -'project.json'.length));
+  if (!dirs.length) return { files, skipped, projects: 0 };
+  const inProject = (prefix: string) => dirs.some((d) => d.endsWith(prefix));
+  const out: SourceFile[] = [];
+  for (const f of files) {
+    if (/(^|\/)README\.txt$/.test(f.path) && inProject(f.path.slice(0, -'README.txt'.length))) continue;
+    const m = /^(.*\/)?data\/(.+)$/.exec(f.path);
+    if (!m || !inProject(m[1] ?? '')) { out.push(f); continue; }
+    const [first, ...rest] = m[2].split('/');
+    const mode = STORED_MODE[first];
+    out.push(mode && rest.length ? { ...f, path: rest.join('/'), mode } : { ...f, path: m[2], mode: 'tack' });
+  }
+  return { files: out, skipped: skipped.filter((s) => !/(^|\/)project\.json$/.test(s.path)), projects: dirs.length };
 }
 
 export async function parseSource(src: SourceFile): Promise<LoadedFile> {
@@ -86,7 +112,8 @@ export async function collectFromFileList(
       // Keep the archive's internal folder structure; add the archive name only if it has no top folder.
       const hasTop = z.files.length > 0 && z.files.every((x) => x.path.includes('/'));
       for (const x of z.files) files.push({ path: hasTop ? x.path : `${prefix}/${x.path}`, bytes: x.bytes });
-      skipped.push(...z.skipped);
+      // Other entries carry the same folder prefix as the TXT files (a saved project's project.json is found by it).
+      skipped.push(...z.skipped.map((x) => ({ ...x, path: (hasTop ? '' : `${prefix}/`) + x.path.slice(f.name.length + 1) })));
     } else if (isCandidateTxt(path)) {
       files.push({ path, bytes });
     } else if (!IGNORED.test(path)) {

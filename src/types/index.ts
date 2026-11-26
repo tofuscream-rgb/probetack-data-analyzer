@@ -488,6 +488,11 @@ export interface ProjectState {
    * (fileId → run numbers in the file). They stay out after reloading the project or session.
    */
   duplicateRuns?: Record<string, number[]>;
+  /**
+   * Files the user chose to keep in a test although their data look like another test's
+   * (file SHA-256 → that test). They are not offered for moving again while they stay there.
+   */
+  keptInTest?: Record<string, ExperimentMode>;
   name: string;
   settings: AnalysisSettings;
   overrides: Record<string, MetaOverride>;

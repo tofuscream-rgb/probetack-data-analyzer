@@ -1,4 +1,6 @@
-import { disabledOf, useApp } from '../state/AppContext';
+import { disabledOf, MODE_LABEL, useApp } from '../state/AppContext';
+import { testOfData } from '../state/misfiled';
+import { MoveToTest } from './MisfiledFiles';
 
 /** Import status of every file: OK, with warnings, or without usable data. Nothing is skipped silently. */
 export function ImportStatus() {
@@ -19,7 +21,7 @@ export function ImportStatus() {
       </p>
       <table className="grid">
         <thead>
-          <tr><th>Status</th><th>File</th><th>Runs</th><th>Blocks</th><th>Recorded</th><th>Messages</th></tr>
+          <tr><th>Status</th><th>File</th><th>Runs</th><th>Blocks</th><th>Recorded</th><th>Test of the data</th><th>Messages</th></tr>
         </thead>
         <tbody>
           {files.map((l) => (
@@ -29,6 +31,17 @@ export function ImportStatus() {
               <td className="num">{l.cycles.length}</td>
               <td className="num">{l.parsed.blocks.length}</td>
               <td>{l.parsed.header['Date'] ?? '—'}</td>
+              <td className="test-of-data">
+                {(() => {
+                  const t = testOfData(l);
+                  const wrong = t !== null && t.mode !== project.mode;
+                  return <>
+                    {t ? <span className={wrong ? 'warning-text' : ''} title={t.why}>{MODE_LABEL[t.mode]}{wrong && ' (not this test)'}</span> : <span className="note">not recognised</span>}
+                    {t && <div className="note">{t.why}</div>}
+                    <MoveToTest fileId={l.parsed.fileId} from={project.mode} name={l.parsed.name} />
+                  </>;
+                })()}
+              </td>
               <td className="msgs">{l.parsed.issues.length ? l.parsed.issues.map((i, k) => <div key={k} className={i.severity}>{i.message}</div>) : '—'}</td>
             </tr>
           ))}
@@ -36,14 +49,14 @@ export function ImportStatus() {
             <tr key={p.fileId} className="warning">
               <td><span className="status warning">Missing</span></td>
               <td>{p.path}</td>
-              <td colSpan={4}>Listed in the project but not selected yet.</td>
+              <td colSpan={5}>Listed in the project but not selected yet.</td>
             </tr>
           ))}
           {skipped.map((s, i) => (
             <tr key={`s${i}`} className={s.duplicate ? 'warning' : 'muted'}>
               <td>{s.duplicate ? <span className="status warning">Duplicate</span> : 'Skipped'}</td>
               <td>{s.path}</td>
-              <td colSpan={4}>{s.reason}</td>
+              <td colSpan={5}>{s.reason}</td>
             </tr>
           ))}
         </tbody>

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ExperimentMeta, ExperimentMode, GraphConfig, ProjectState, SourceFileRecord } from '../types';
 import { EXPERIMENT_MODES } from '../types';
 import { dedupeByMode, duplicateReason, loadedDuplicateNotice, planImport } from './duplicates';
+import { findMisfiled, moveBetweenTests, type Misfiled } from './misfiled';
 import type { LoadedFile, SkippedEntry, SourceFile } from '../parser/loader';
 import { collectFromFileList, detectMode, guessMode } from '../parser/loader';
 import { parseInBackground } from '../parser/workerClient';
@@ -32,6 +33,12 @@ interface Ctx {
   filesByMode: Record<ExperimentMode, LoadedFile[]>;
   /** Remove files from the shown test. */
   removeFiles: (fileIds: string[]) => void;
+  /** Loaded files whose data look like another test's than the one they are in (any test). */
+  misfiled: Misfiled[];
+  /** Move loaded files to another test, with a confirmation message. */
+  moveFiles: (moves: FileMove[]) => void;
+  /** Keep files in their test although their data look like another test's. */
+  keepInTest: (files: { sha256: string; mode: ExperimentMode }[]) => void;
   skipped: SkippedEntry[];
   /** Summary of the last upload that refused files or skipped runs (shown in a dialog); null = none. */
   importReport: ImportReport | null;
@@ -68,7 +75,14 @@ export interface ImportReport {
   refused: ImportReportItem[];
 }
 /** One file of an import summary; `test` is set when the upload went to more than one test. */
-export interface ImportReportItem { path: string; message: string; test?: string }
+export interface ImportReportItem {
+  path: string;
+  message: string;
+  test?: string;
+  /** Refused because the same file is loaded in another test, where it does not seem to belong: offer to move that copy. */
+  moveLoaded?: FileMove & { path: string };
+}
+export interface FileMove { fileId: string; from: ExperimentMode; to: ExperimentMode }
 
 const AppContext = createContext<Ctx | null>(null);
 
@@ -285,9 +299,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       const duplicates = [...refused, ...partial];
       if (duplicates.length) {
-        const item = (p: (typeof plan)[number]) => ({ path: p.file.parsed.path, message: p.message, test: several ? MODE_LABEL[testOf(p.file)] : undefined });
+        const item = (p: (typeof plan)[number]): ImportReportItem => {
+          const to = testOf(p.file);
+          const loaded = p.outcome === 'refused' ? EXPERIMENT_MODES.flatMap((m) => filesRef.current[m].filter((l) => l.parsed.sha256 === p.file.parsed.sha256).map((l) => ({ l, m })))[0] : undefined;
+          return {
+            path: p.file.parsed.path,
+            message: p.message,
+            test: several ? MODE_LABEL[to] : undefined,
+            moveLoaded: loaded && loaded.m !== to && detectMode(p.file, to).by !== 'current' ? { fileId: loaded.l.parsed.fileId, from: loaded.m, to, path: loaded.l.parsed.path } : undefined,
+          };
+        };
         setImportReport({
-          test: several ? 'all tests' : MODE_LABEL[current],
+          test: modesHit.length === 1 ? MODE_LABEL[modesHit[0]] : 'all tests',
           imported: plan.filter((p) => p.outcome === 'imported').map(item),
           partial: partial.map(item),
           refused: refused.map(item),
@@ -375,6 +398,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [storeFiles],
   );
+
+  const moveFiles = useCallback(
+    (moves: FileMove[]) => {
+      const real = moves.filter((m) => m.from !== m.to && filesRef.current[m.from].some((l) => l.parsed.fileId === m.fileId));
+      if (!real.length) return;
+      const paths = new Map(real.map((m) => [m.fileId, filesRef.current[m.from].find((l) => l.parsed.fileId === m.fileId)!.parsed.path]));
+      storeFiles(moveBetweenTests(filesRef.current, real, byPath));
+      setProject((p) => {
+        let next = p;
+        for (const from of EXPERIMENT_MODES) {
+          const gone = new Set(real.filter((m) => m.from === from).map((m) => m.fileId));
+          if (gone.size) next = withDisabled(next, from, disabledOf(next, from).filter((id) => !gone.has(id)));
+        }
+        return next;
+      });
+      // A copy refused earlier because this file was in the wrong test is no longer a duplicate to report.
+      setSkippedByMode((s) => {
+        const next = { ...s };
+        for (const m of real) next[m.to] = next[m.to].filter((x) => !(x.duplicate && x.reason.includes(paths.get(m.fileId)!)));
+        return next;
+      });
+      const per = EXPERIMENT_MODES.map((to) => [to, real.filter((m) => m.to === to).length] as const).filter(([, n]) => n > 0);
+      notify('success', `Moved ${per.map(([to, n]) => `${n} file(s) to ${MODE_LABEL[to]}`).join(', ')}. Their runs are analysed there now.`);
+    },
+    [notify, storeFiles],
+  );
+
+  const keepInTest = useCallback((list: { sha256: string; mode: ExperimentMode }[]) => {
+    setProject((p) => ({ ...p, keptInTest: { ...(p.keptInTest ?? {}), ...Object.fromEntries(list.map((x) => [x.sha256, x.mode])) } }));
+  }, []);
+
+  const misfiled = useMemo(() => findMisfiled(filesByMode, EXPERIMENT_MODES, project.keptInTest), [filesByMode, project.keptInTest]);
 
   const loadExample = useCallback(async () => {
     setBusy('Loading synthetic example…');
@@ -534,7 +589,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const value: Ctx = {
-    files, filesByMode, removeFiles, skipped, importReport, closeImportReport: () => setImportReport(null), project, update, meta, derived, ui, setUi, busy, notices, notify, dismiss, pending,
+    files, filesByMode, removeFiles, misfiled, moveFiles, keepInTest, skipped, importReport, closeImportReport: () => setImportReport(null), project, update, meta, derived, ui, setUi, busy, notices, notify, dismiss, pending,
     restorable, storageNote, importFiles, importSources, loadExample, removeAllData, restoreSession, discardSession,
     saveProject, loadProject, exportExcel,
   };

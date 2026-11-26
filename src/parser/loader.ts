@@ -107,10 +107,14 @@ const NAME_HINTS: [RegExp, ExperimentMode][] = [
 ];
 
 export function modeFromPath(path: string): ExperimentMode | null {
-  const parts = path.split('/').reverse();
-  for (const part of parts) {
+  return nameHint(path)?.mode ?? null;
+}
+
+/** The test named in the closest folder or file name, and that name. */
+function nameHint(path: string): { mode: ExperimentMode; part: string } | null {
+  for (const part of path.split('/').reverse()) {
     const hits = NAME_HINTS.filter(([re]) => re.test(part)).map(([, m]) => m);
-    if (hits.length === 1) return hits[0];
+    if (hits.length === 1) return { mode: hits[0], part };
   }
   return null;
 }
@@ -135,15 +139,18 @@ const TACK_MIN_SPEED = 1;
  *   4. moves faster than 1 mm/s → probe tack, slower → lap shear;
  *   5. otherwise (no runs, e.g. a note) the test that is open.
  */
-export function detectMode(l: LoadedFile, fallback: ExperimentMode): { mode: ExperimentMode; by: ModeSource } {
-  if (l.parsed.blocks.some((b) => isScriptBlock(b.type))) return { mode: 'peel', by: 'content' };
-  const named = modeFromPath(l.parsed.path);
-  if (named) return { mode: named, by: 'name' };
-  if (l.cycles.some((c) => c.holdBlockIndex !== null)) return { mode: 'tack', by: 'content' };
-  if (!l.cycles.length) return { mode: fallback, by: 'current' };
+export function detectMode(l: LoadedFile, fallback: ExperimentMode): { mode: ExperimentMode; by: ModeSource; why: string } {
+  if (l.parsed.blocks.some((b) => isScriptBlock(b.type))) return { mode: 'peel', by: 'content', why: 'Script block (the 90° peel protocol)' };
+  const named = nameHint(l.parsed.path);
+  if (named) return { mode: named.mode, by: 'name', why: `test named in “${named.part}”` };
+  if (l.cycles.some((c) => c.holdBlockIndex !== null)) return { mode: 'tack', by: 'content', why: 'holding (Wait) blocks before the moves' };
+  if (!l.cycles.length) return { mode: fallback, by: 'current', why: 'no runs to recognise' };
   const v = fastestMove(l);
-  if (v !== null) return { mode: v >= TACK_MIN_SPEED ? 'tack' : 'lapShear', by: 'speed' };
-  return { mode: fallback, by: 'current' };
+  if (v !== null) {
+    const fast = v >= TACK_MIN_SPEED;
+    return { mode: fast ? 'tack' : 'lapShear', by: 'speed', why: `stage speed ${+v.toPrecision(3)} mm/s (${fast ? 'probe tack moves at 1 mm/s or faster' : 'lap shear pulls slower than 1 mm/s'})` };
+  }
+  return { mode: fallback, by: 'current', why: 'no stage speed given' };
 }
 
 /** Test of a stored file saved before files were kept per test. */

@@ -17,6 +17,7 @@ import { LapShearSidebar } from './components/lapShear/LapShearSidebar';
 import { LapShearWorkspace } from './components/lapShear/LapShearWorkspace';
 import { PeelSidebar } from './components/peel/PeelSidebar';
 import { PeelWorkspace } from './components/peel/PeelWorkspace';
+import { MisfiledBanner } from './components/MisfiledFiles';
 
 const TABS: { id: MainTab; label: string; minor?: boolean }[] = [
   { id: 'graph', label: 'Graph' },
@@ -115,6 +116,7 @@ function Shell() {
           <button onClick={discardSession}>Start fresh</button>
         </div>
       )}
+      <MisfiledBanner />
       <main className="workspace">
         {project.mode === 'lapShear' ? (
           <>

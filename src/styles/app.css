@@ -622,3 +622,11 @@ table.area-table td.note { font-size: 11px; }
 .import-report-section ul { margin: 4px 0 0; padding-left: 18px; max-height: 180px; overflow: auto; font-size: 12px; }
 .import-report-section.refused h3 { color: var(--red); }
 .import-report-section.partial h3 { color: #8A4B00; }
+
+/* files that may be in the wrong test */
+.warning-text { color: #9a5400; font-weight: 600; }
+.test-of-data select { margin-top: 3px; font-size: 12px; }
+.test-of-data .note { font-size: 11.5px; }
+.misfiled-table td { vertical-align: top; }
+.misfiled-table .note { font-size: 11.5px; }
+.nowrap { white-space: nowrap; }

@@ -7,7 +7,7 @@
  *   README.txt        what the file contains
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import { RUN_TABS } from '../types';
+import { EXPERIMENT_MODES, RUN_TABS } from '../types';
 import type { RunGraphView, ExperimentMode, GroupKey, LapShearRunMeta, LapShearSettings, LapShearState, MainTab, PeelRunMeta, PeelSettings, PeelState, ProjectState, RunOverride, SourceFileRecord, TackMetricsState, DatasetExclusion, FailureMode, TackMorphology, TackObservation, TareCheckSettings, TareCorrection } from '../types';
 import { ALGORITHM_VERSION, APP_VERSION, PROJECT_SCHEMA_VERSION } from '../types';
 import { defaultCompare, defaultExperiment, defaultLapShear, defaultPeel, defaultProject, defaultSettings } from '../state/defaults';
@@ -290,6 +290,7 @@ export function migrateState(raw: Partial<ProjectState>): ProjectState {
     },
     overrides: raw.overrides ?? {},
     duplicateRuns: Object.fromEntries(Object.entries(raw.duplicateRuns ?? {}).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, (v as unknown[]).filter((n): n is number => typeof n === 'number' && Number.isInteger(n))])),
+    keptInTest: Object.fromEntries(Object.entries(raw.keptInTest ?? {}).filter(([, v]) => (EXPERIMENT_MODES as readonly unknown[]).includes(v))) as Record<string, ExperimentMode>,
     runOverrides,
     disabledFiles: Array.isArray(raw.disabledFiles) ? raw.disabledFiles : [],
     excludedPoints: raw.excludedPoints ?? {},
